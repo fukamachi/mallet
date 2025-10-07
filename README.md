@@ -115,9 +115,10 @@ Malvolio uses S-expression based configuration files (`.malvolio.lisp`). Place t
 
 ### Built-in Configurations
 
-- **`:recommended`** (default) - All rules enabled with sensible defaults
+- **`:recommended`** (default) - All rules enabled with sensible defaults (80 character lines)
 - **`:minimal`** - Only error-severity rules enabled
 - **`:strict`** - All rules enabled with warnings promoted to errors
+- **`:google`** - Google Common Lisp Style Guide (100 character lines)
 
 ## Rules
 

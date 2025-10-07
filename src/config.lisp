@@ -160,7 +160,7 @@
 ;;; Built-in configs
 
 (defun get-built-in-config (name)
-  "Get a built-in configuration by NAME (:recommended, :minimal, :strict)."
+  "Get a built-in configuration by NAME (:recommended, :minimal, :strict, :google)."
   (check-type name keyword)
 
   (case name
@@ -170,6 +170,8 @@
      (make-minimal-config))
     (:strict
      (make-strict-config))
+    (:google
+     (make-google-config))
     (otherwise
      (error "Unknown built-in config: ~A" name))))
 
@@ -205,6 +207,18 @@
             (:missing-otherwise :enabled t :severity :error)
             (:wrong-otherwise :enabled t :severity :error)
             (:unused-variables :enabled t :severity :error))))
+
+(defun make-google-config ()
+  "Create configuration based on Google Common Lisp Style Guide.
+Uses 100 character line length per Google's guidelines."
+  (make-config
+   :rules '((:line-length :enabled t :max-length 100)
+            (:comment-level :enabled t)
+            (:if-without-else :enabled t)
+            (:bare-progn-in-if :enabled t)
+            (:missing-otherwise :enabled t)
+            (:wrong-otherwise :enabled t)
+            (:unused-variables :enabled t))))
 
 ;;; Config file discovery
 

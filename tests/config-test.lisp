@@ -109,7 +109,16 @@
       ;; All rules enabled
       (ok (config:rule-enabled-p cfg :line-length))
       ;; All severities should be :error
-      (ok (eq :error (config:get-rule-option cfg :line-length :severity))))))
+      (ok (eq :error (config:get-rule-option cfg :line-length :severity)))))
+
+  (testing "Load google config"
+    (let ((cfg (config:get-built-in-config :google)))
+      (ok (not (null cfg)))
+      ;; All rules enabled like recommended
+      (ok (config:rule-enabled-p cfg :line-length))
+      (ok (config:rule-enabled-p cfg :comment-level))
+      ;; Google style uses 100 character line length
+      (ok (= 100 (config:get-rule-option cfg :line-length :max-length))))))
 
 ;;; Config extends tests
 
