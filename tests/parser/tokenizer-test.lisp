@@ -7,7 +7,7 @@
 (in-package #:malvolio/tests/parser/tokenizer)
 
 (deftest tokenize-simple-comment
-  (failing "Single semicolon inline comment"
+  (testing "Single semicolon inline comment"
     (let* ((text "; inline comment")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (= 1 (length tokens)))
@@ -16,21 +16,21 @@
       (ok (= 1 (parser:token-line (first tokens))))
       (ok (= 0 (parser:token-column (first tokens))))))
 
-  (failing "Double semicolon line comment"
+  (testing "Double semicolon line comment"
     (let* ((text ";; line comment")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (= 1 (length tokens)))
       (ok (eq :comment-line (parser:token-type (first tokens))))
       (ok (string= "line comment" (parser:token-value (first tokens))))))
 
-  (failing "Triple semicolon section comment"
+  (testing "Triple semicolon section comment"
     (let* ((text ";;; section comment")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (= 1 (length tokens)))
       (ok (eq :comment-section (parser:token-type (first tokens))))
       (ok (string= "section comment" (parser:token-value (first tokens))))))
 
-  (failing "Quadruple semicolon file comment"
+  (testing "Quadruple semicolon file comment"
     (let* ((text ";;;; file comment")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (= 1 (length tokens)))
@@ -38,7 +38,7 @@
       (ok (string= "file comment" (parser:token-value (first tokens)))))))
 
 (deftest tokenize-parentheses
-  (failing "Open and close parens"
+  (testing "Open and close parens"
     (let* ((text "()")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (= 2 (length tokens)))
@@ -46,7 +46,7 @@
       (ok (eq :close-paren (parser:token-type (second tokens)))))))
 
 (deftest tokenize-simple-form
-  (failing "Simple list"
+  (testing "Simple list"
     (let* ((text "(+ 1 2)")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (>= (length tokens) 5))
@@ -54,12 +54,12 @@
       (ok (eq :close-paren (parser:token-type (car (last tokens))))))))
 
 (deftest tokenize-with-comments
-  (failing "Code with inline comment"
+  (testing "Code with inline comment"
     (let* ((text "(defun foo () 42) ; inline")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (find :comment-inline tokens :key #'parser:token-type))))
 
-  (failing "Code with section comment"
+  (testing "Code with section comment"
     (let* ((text ";;; Section\n(defun foo ())")
            (tokens (tokenizer:tokenize text #P"test.lisp")))
       (ok (find :comment-section tokens :key #'parser:token-type)))))
