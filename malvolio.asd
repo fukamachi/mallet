@@ -48,6 +48,10 @@
     :components
     ((:file "registry-test")
      (:file "line-length-test")
-     (:file "comment-level-test"))))
+     (:file "comment-level-test")
+     (:file "if-without-else-test")
+     (:file "bare-progn-in-if-test")
+     (:file "missing-otherwise-test")
+     (:file "wrong-otherwise-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

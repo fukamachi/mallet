@@ -13,18 +13,43 @@
 (defun make-default-registry ()
   "Create a registry with all default rules enabled."
   (let ((registry (rules:make-registry)))
-    ;; Register line-length rule
+    ;; Text-level rules
     (rules:register-rule registry :line-length
                         :description "Lines should not exceed maximum length"
                         :severity :warning
                         :type :text
                         :enabled t)
 
-    ;; Register comment-level rule
+    ;; Token-level rules
     (rules:register-rule registry :comment-level
                         :description "Comments should use appropriate semicolon count"
                         :severity :warning
                         :type :token
+                        :enabled t)
+
+    ;; Form-level rules
+    (rules:register-rule registry :if-without-else
+                        :description "Use 'when' or 'unless' instead of 'if' without else"
+                        :severity :warning
+                        :type :form
+                        :enabled t)
+
+    (rules:register-rule registry :bare-progn-in-if
+                        :description "Use 'cond' instead of 'if' with bare 'progn'"
+                        :severity :warning
+                        :type :form
+                        :enabled t)
+
+    (rules:register-rule registry :missing-otherwise
+                        :description "case/typecase should have 'otherwise' clause"
+                        :severity :warning
+                        :type :form
+                        :enabled t)
+
+    (rules:register-rule registry :wrong-otherwise
+                        :description "ecase/etypecase should not have 'otherwise' or 't'"
+                        :severity :error
+                        :type :form
                         :enabled t)
 
     registry))
@@ -58,12 +83,23 @@ Returns a list of VIOLATION objects."
             (setf violations
                   (nconc violations (rules:check-tokens rule-impl tokens file)))))))
 
-    ;; TODO: Run form-level rules when implemented
-    ;; (let ((forms (parser:parse-forms text file)))
-    ;;   (dolist (rule (rules:list-rules registry))
-    ;;     (when (and (rules:rule-enabled-p rule)
-    ;;                (eq (rules:rule-type rule) :form))
-    ;;       ...)))
+    ;; Run form-level rules
+    (let ((forms (parser:parse-forms text file)))
+      (dolist (form forms)
+        (dolist (rule (rules:list-rules registry))
+          (when (and (rules:rule-enabled-p rule)
+                     (eq (rules:rule-type rule) :form))
+            (let ((rule-impl
+                   (case (rules:rule-name rule)
+                     (:if-without-else (make-instance 'rules:if-without-else-rule))
+                     (:bare-progn-in-if (make-instance 'rules:bare-progn-in-if-rule))
+                     (:missing-otherwise (make-instance 'rules:missing-otherwise-rule))
+                     (:wrong-otherwise (make-instance 'rules:wrong-otherwise-rule))
+                     (t nil))))
+              (when rule-impl
+                (setf violations
+                      (nconc violations
+                             (rules:check-form rule-impl form file)))))))))
 
     violations))
 
