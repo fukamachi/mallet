@@ -1,10 +1,4 @@
-(defpackage #:malvolio/parser/reader
-  (:use #:cl)
-  (:local-nicknames
-   (#:parser #:malvolio/parser)
-   (#:a #:alexandria))
-  (:export #:parse-forms))
-(in-package #:malvolio/parser/reader)
+(in-package #:malvolio/parser)
 
 (defun count-newlines (text start end)
   "Count newlines in TEXT from START to END."
@@ -162,7 +156,7 @@ Returns a list of FORM objects."
                                      (find-column text end-pos))))
 
                 ;; Create form object
-                (push (make-instance 'parser:form
+                (push (make-instance 'form
                                      :expr expr
                                      :file file
                                      :line start-line

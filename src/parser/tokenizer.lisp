@@ -1,14 +1,8 @@
-(defpackage #:malvolio/parser/tokenizer
-  (:use #:cl)
-  (:local-nicknames
-   (#:parser #:malvolio/parser)
-   (#:a #:alexandria))
-  (:export #:tokenize))
-(in-package #:malvolio/parser/tokenizer)
+(in-package #:malvolio/parser)
 
 (defun make-token (type value file line column raw)
   "Create a token object."
-  (make-instance 'parser:token
+  (make-instance 'token
                  :type type
                  :value value
                  :file file

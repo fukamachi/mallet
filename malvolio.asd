@@ -23,6 +23,9 @@
      (:file "tokenizer")
      (:file "reader")))
 
+   ;; Rule system
+   (:file "rules")
+
    (:file "main")))
 
 (defsystem "malvolio/tests"
@@ -34,6 +37,13 @@
     :pathname "parser"
     :components
     ((:file "tokenizer-test")
-     (:file "reader-test"))))
+     (:file "reader-test")))
+
+   (:module "rules"
+    :pathname "rules"
+    :components
+    ((:file "registry-test")
+     (:file "line-length-test")
+     (:file "comment-level-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

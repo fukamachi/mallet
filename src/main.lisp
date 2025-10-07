@@ -1,7 +1,8 @@
 (defpackage #:malvolio
   (:use #:cl
         #:malvolio/violation
-        #:malvolio/parser)
+        #:malvolio/parser
+        #:malvolio/rules)
   (:local-nicknames
    (#:a #:alexandria))
   (:export #:main
@@ -9,14 +10,22 @@
            #:lint-files
            ;; Public API for library use
            #:*rule-registry*
+           #:make-registry
            #:register-rule
            #:find-rule
            #:list-rules
+           #:enable-rule
+           #:disable-rule
            ;; Configuration
            #:load-config
            #:make-config
            ;; Core classes (for extensibility)
            #:rule
+           #:rule-name
+           #:rule-description
+           #:rule-severity
+           #:rule-type
+           #:rule-enabled-p
            #:config
            ;; Re-exported from malvolio/violation
            #:violation
