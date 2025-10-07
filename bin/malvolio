@@ -1,0 +1,19 @@
+#!/bin/sh
+# Malvolio CLI wrapper script
+
+# Find the script directory
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+PROJECT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+
+# Build arguments list for Lisp
+ARGS=""
+for arg in "$@"; do
+    # Escape quotes in the argument
+    escaped=$(printf '%s\n' "$arg" | sed 's/"/\\"/g')
+    ARGS="$ARGS \"$escaped\""
+done
+
+# Run with SBCL
+exec qlot exec sbcl --noinform --non-interactive \
+    --eval "(asdf:load-system :malvolio)" \
+    --eval "(malvolio:main (list $ARGS))"

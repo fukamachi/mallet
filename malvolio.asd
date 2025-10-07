@@ -26,6 +26,10 @@
    ;; Rule system
    (:file "rules")
 
+   ;; Linting engine and formatters
+   (:file "engine")
+   (:file "formatter")
+
    (:file "main")))
 
 (defsystem "malvolio/tests"

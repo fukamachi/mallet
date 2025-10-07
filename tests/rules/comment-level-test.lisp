@@ -8,7 +8,7 @@
 (in-package #:malvolio/tests/rules/comment-level)
 
 (deftest inline-comments
-  (failing "Single semicolon inline comment is correct"
+  (testing "Single semicolon inline comment is correct"
     (let ((text "(defun foo () 42) ; inline comment")
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:comment-level-rule)))
@@ -16,7 +16,7 @@
         (let ((violations (rules:check-tokens rule tokens file)))
           (ok (null violations))))))
 
-  (failing "Two semicolons inline is incorrect"
+  (testing "Two semicolons inline is incorrect"
     (let ((text "(defun foo () 42) ;; wrong inline comment")
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:comment-level-rule)))
@@ -27,7 +27,7 @@
             (ok (eq :comment-level (violation:violation-rule v)))))))))
 
 (deftest line-comments
-  (failing "Two semicolons for line comment is correct"
+  (testing "Two semicolons for line comment is correct"
     (let ((text "(defun foo ()
   ;; This is a line comment
   42)")
@@ -37,7 +37,7 @@
         (let ((violations (rules:check-tokens rule tokens file)))
           (ok (null violations))))))
 
-  (failing "Single semicolon for line comment is incorrect"
+  (testing "Single semicolon for line comment is incorrect"
     (let ((text "(defun foo ()
   ; wrong line comment
   42)")
@@ -50,7 +50,7 @@
             (ok (eq :comment-level (violation:violation-rule v)))))))))
 
 (deftest section-comments
-  (failing "Three semicolons for section comment is correct"
+  (testing "Three semicolons for section comment is correct"
     (let ((text ";;; Section comment
 
 (defun foo () 42)")
@@ -60,7 +60,7 @@
         (let ((violations (rules:check-tokens rule tokens file)))
           (ok (null violations))))))
 
-  (failing "Two semicolons for section comment is incorrect"
+  (testing "Two semicolons for section comment is incorrect"
     (let ((text ";; wrong section comment
 
 (defun foo () 42)")
@@ -71,7 +71,7 @@
           (ok (= 1 (length violations))))))))
 
 (deftest file-level-comments
-  (failing "Four semicolons for file-level comment is correct"
+  (testing "Four semicolons for file-level comment is correct"
     (let ((text ";;;; File-level comment
 
 (defpackage #:foo (:use #:cl))")
