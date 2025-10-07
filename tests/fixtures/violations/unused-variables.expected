@@ -1,0 +1,9 @@
+tests/fixtures/violations/unused-variables.lisp:3:0 WARNING: Comment should use 3 or 4 semicolons (found 2)
+tests/fixtures/violations/unused-variables.lisp:4:0 WARNING: Variable 'Y' is unused
+tests/fixtures/violations/unused-variables.lisp:7:0 WARNING: Comment should use 3 or 4 semicolons (found 2)
+tests/fixtures/violations/unused-variables.lisp:8:0 WARNING: Variable 'B' is unused
+tests/fixtures/violations/unused-variables.lisp:11:0 WARNING: Comment should use 3 or 4 semicolons (found 2)
+tests/fixtures/violations/unused-variables.lisp:12:0 WARNING: Loop variable 'INDEX' is unused
+tests/fixtures/violations/unused-variables.lisp:16:0 WARNING: Comment should use 3 or 4 semicolons (found 2)
+tests/fixtures/violations/unused-variables.lisp:20:0 WARNING: Comment should use 3 or 4 semicolons (found 2)
+tests/fixtures/violations/unused-variables.lisp:24:0 WARNING: Comment should use 3 or 4 semicolons (found 2)

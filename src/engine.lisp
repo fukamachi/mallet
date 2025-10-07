@@ -52,6 +52,12 @@
                         :type :form
                         :enabled t)
 
+    (rules:register-rule registry :unused-variables
+                        :description "Variables should be used or explicitly ignored"
+                        :severity :warning
+                        :type :form
+                        :enabled t)
+
     registry))
 
 (defun lint-file (file &key (registry (make-default-registry)))
@@ -95,6 +101,7 @@ Returns a list of VIOLATION objects."
                      (:bare-progn-in-if (make-instance 'rules:bare-progn-in-if-rule))
                      (:missing-otherwise (make-instance 'rules:missing-otherwise-rule))
                      (:wrong-otherwise (make-instance 'rules:wrong-otherwise-rule))
+                     (:unused-variables (make-instance 'rules:unused-variables-rule))
                      (t nil))))
               (when rule-impl
                 (setf violations

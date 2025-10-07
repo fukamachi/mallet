@@ -24,6 +24,7 @@
            #:bare-progn-in-if-rule
            #:missing-otherwise-rule
            #:wrong-otherwise-rule
+           #:unused-variables-rule
            ;; Check functions
            #:check-text
            #:check-tokens
@@ -301,74 +302,6 @@ Returns a list of VIOLATION objects."))
 
     (nreverse violations)))
 
-;;; Wrong-otherwise rule
-
-(defclass wrong-otherwise-rule (rule)
-  ()
-  (:default-initargs
-   :name :wrong-otherwise
-   :description "ecase/etypecase should not have 'otherwise' or 't' clause"
-   :severity :error
-   :type :form)
-  (:documentation "Rule to detect otherwise/t in ecase/etypecase."))
-
-(defmethod check-form ((rule wrong-otherwise-rule) form file)
-  "Check that ECASE and ETYPECASE forms don't have otherwise or t clause."
-  (check-type form parser:form)
-  (check-type file pathname)
-
-  (let ((violations '()))
-    (labels ((has-catch-all-clause-p (clauses)
-               "Check if clauses list has an otherwise or t clause."
-               (some (lambda (clause)
-                       (when (consp clause)
-                         (let ((key (first clause)))
-                           (and (symbolp key)
-                                (or (string= (symbol-name key) "OTHERWISE")
-                                    (eq key t))))))
-                     clauses))
-
-             (check-expr (expr line column)
-               "Recursively check expression for wrong otherwise."
-               (when (consp expr)
-                 (let ((head (first expr))
-                       (rest-args (rest expr)))
-                   ;; Check if this is an ECASE or ETYPECASE form
-                   (when (and (symbolp head)
-                              (member (symbol-name head)
-                                      '("ECASE" "ETYPECASE")
-                                      :test #'string=))
-                     (let* ((form-name (symbol-name head))
-                            (keyform (first rest-args))
-                            (clauses (rest rest-args)))
-                       (declare (ignore keyform))
-
-                       ;; Check if it has OTHERWISE or T clause
-                       (when (has-catch-all-clause-p clauses)
-                         (push (make-instance 'violation:violation
-                                              :rule :wrong-otherwise
-                                              :file file
-                                              :line line
-                                              :column column
-                                              :severity (rule-severity rule)
-                                              :message
-                                              (format nil
-                                                      "'~A' should not have 'otherwise' or 't' clause"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))))
-
-                   ;; Recursively check nested forms
-                   (dolist (subexpr rest-args)
-                     (check-expr subexpr line column))))))
-
-      ;; Start checking from the form's expression
-      (check-expr (parser:form-expr form)
-                  (parser:form-line form)
-                  (parser:form-column form)))
-
-    (nreverse violations)))
-
 ;;; Bare-progn-in-if rule
 
 (defclass bare-progn-in-if-rule (rule)
@@ -430,74 +363,6 @@ Returns a list of VIOLATION objects."))
                                                 "Use 'cond' instead of 'if' with bare 'progn'"
                                                 :fix nil)
                                  violations)))))
-
-                   ;; Recursively check nested forms
-                   (dolist (subexpr rest-args)
-                     (check-expr subexpr line column))))))
-
-      ;; Start checking from the form's expression
-      (check-expr (parser:form-expr form)
-                  (parser:form-line form)
-                  (parser:form-column form)))
-
-    (nreverse violations)))
-
-;;; Wrong-otherwise rule
-
-(defclass wrong-otherwise-rule (rule)
-  ()
-  (:default-initargs
-   :name :wrong-otherwise
-   :description "ecase/etypecase should not have 'otherwise' or 't' clause"
-   :severity :error
-   :type :form)
-  (:documentation "Rule to detect otherwise/t in ecase/etypecase."))
-
-(defmethod check-form ((rule wrong-otherwise-rule) form file)
-  "Check that ECASE and ETYPECASE forms don't have otherwise or t clause."
-  (check-type form parser:form)
-  (check-type file pathname)
-
-  (let ((violations '()))
-    (labels ((has-catch-all-clause-p (clauses)
-               "Check if clauses list has an otherwise or t clause."
-               (some (lambda (clause)
-                       (when (consp clause)
-                         (let ((key (first clause)))
-                           (and (symbolp key)
-                                (or (string= (symbol-name key) "OTHERWISE")
-                                    (eq key t))))))
-                     clauses))
-
-             (check-expr (expr line column)
-               "Recursively check expression for wrong otherwise."
-               (when (consp expr)
-                 (let ((head (first expr))
-                       (rest-args (rest expr)))
-                   ;; Check if this is an ECASE or ETYPECASE form
-                   (when (and (symbolp head)
-                              (member (symbol-name head)
-                                      '("ECASE" "ETYPECASE")
-                                      :test #'string=))
-                     (let* ((form-name (symbol-name head))
-                            (keyform (first rest-args))
-                            (clauses (rest rest-args)))
-                       (declare (ignore keyform))
-
-                       ;; Check if it has OTHERWISE or T clause
-                       (when (has-catch-all-clause-p clauses)
-                         (push (make-instance 'violation:violation
-                                              :rule :wrong-otherwise
-                                              :file file
-                                              :line line
-                                              :column column
-                                              :severity (rule-severity rule)
-                                              :message
-                                              (format nil
-                                                      "'~A' should not have 'otherwise' or 't' clause"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))))
 
                    ;; Recursively check nested forms
                    (dolist (subexpr rest-args)
@@ -661,6 +526,174 @@ Returns a list of VIOLATION objects."))
                    ;; Recursively check nested forms
                    (dolist (subexpr rest-args)
                      (check-expr subexpr line column))))))
+
+      ;; Start checking from the form's expression
+      (check-expr (parser:form-expr form)
+                  (parser:form-line form)
+                  (parser:form-column form)))
+
+    (nreverse violations)))
+
+;;; Unused-variables rule
+
+(defclass unused-variables-rule (rule)
+  ()
+  (:default-initargs
+   :name :unused-variables
+   :description "Variables should be used or explicitly ignored"
+   :severity :warning
+   :type :form)
+  (:documentation "Rule to detect unused variables in bindings."))
+
+(defmethod check-form ((rule unused-variables-rule) form file)
+  "Check that all bound variables are either used or explicitly ignored."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  (let ((violations '()))
+    (labels ((ignored-var-p (var-name ignored-vars)
+               "Check if variable should be ignored (in ignore list or starts with _)."
+               (or (member var-name ignored-vars :test #'string=)
+                   (and (> (length var-name) 0)
+                        (char= (char var-name 0) #\_))))
+
+             (extract-bindings (binding-form)
+               "Extract variable names from binding form (supports simple and destructured)."
+               (cond
+                 ;; Simple symbol
+                 ((symbolp binding-form)
+                  (list (symbol-name binding-form)))
+                 ;; (var value) form
+                 ((and (consp binding-form)
+                       (symbolp (first binding-form)))
+                  (list (symbol-name (first binding-form))))
+                 ;; Nested destructuring - collect all symbols
+                 ((consp binding-form)
+                  (loop for item in binding-form
+                        when (symbolp item)
+                        collect (symbol-name item)))
+                 (t nil)))
+
+             (find-references (var-name body)
+               "Find if VAR-NAME is referenced in BODY (simple text search)."
+               (labels ((search-expr (expr)
+                          (cond
+                            ((null expr) nil)
+                            ((symbolp expr)
+                             (string= (symbol-name expr) var-name))
+                            ((consp expr)
+                             (or (search-expr (car expr))
+                                 (search-expr (cdr expr))))
+                            (t nil))))
+                 (some #'search-expr body)))
+
+             (extract-ignored-vars (body)
+               "Extract variable names from (declare (ignore ...)) forms."
+               (let ((ignored '()))
+                 (dolist (form body)
+                   (when (and (consp form)
+                              (symbolp (first form))
+                              (string= (symbol-name (first form)) "DECLARE"))
+                     (dolist (decl-spec (rest form))
+                       (when (and (consp decl-spec)
+                                  (symbolp (first decl-spec))
+                                  (string= (symbol-name (first decl-spec)) "IGNORE"))
+                         (dolist (var (rest decl-spec))
+                           (when (symbolp var)
+                             (push (symbol-name var) ignored)))))))
+                 ignored))
+
+             (check-bindings (bindings body line column)
+               "Check bindings for unused variables."
+               (let ((ignored-vars (extract-ignored-vars body))
+                     (body-without-declares (remove-if
+                                             (lambda (form)
+                                               (and (consp form)
+                                                    (symbolp (first form))
+                                                    (string= (symbol-name (first form)) "DECLARE")))
+                                             body)))
+                 (dolist (binding bindings)
+                   (let ((var-names (extract-bindings binding)))
+                     (dolist (var-name var-names)
+                       (unless (or (ignored-var-p var-name ignored-vars)
+                                   (find-references var-name body-without-declares))
+                         (push (make-instance 'violation:violation
+                                              :rule :unused-variables
+                                              :file file
+                                              :line line
+                                              :column column
+                                              :severity (rule-severity rule)
+                                              :message
+                                              (format nil "Variable '~A' is unused" var-name)
+                                              :fix nil)
+                               violations)))))))
+
+             (check-expr (expr line column)
+               "Recursively check expression for unused variables."
+               (when (consp expr)
+                 (let ((head (first expr))
+                       (rest-args (rest expr)))
+                   ;; Check DEFUN
+                   (when (and (symbolp head)
+                              (string= (symbol-name head) "DEFUN"))
+                     (when (>= (length rest-args) 3)
+                       (let* ((lambda-list (second rest-args))
+                              (body (cddr rest-args))
+                              (param-names (loop for param in lambda-list
+                                                 when (and (symbolp param)
+                                                           (not (char= (char (symbol-name param) 0) #\&)))
+                                                 collect (list param))))
+                         (check-bindings param-names body line column))))
+
+                   ;; Check LAMBDA
+                   (when (and (symbolp head)
+                              (string= (symbol-name head) "LAMBDA"))
+                     (when (>= (length rest-args) 2)
+                       (let* ((lambda-list (first rest-args))
+                              (body (rest rest-args))
+                              (param-names (loop for param in lambda-list
+                                                 when (and (symbolp param)
+                                                           (not (char= (char (symbol-name param) 0) #\&)))
+                                                 collect (list param))))
+                         (check-bindings param-names body line column))))
+
+                   ;; Check LET/LET*
+                   (when (and (symbolp head)
+                              (member (symbol-name head) '("LET" "LET*") :test #'string=))
+                     (when (>= (length rest-args) 2)
+                       (let ((bindings (first rest-args))
+                             (body (rest rest-args)))
+                         (check-bindings bindings body line column))))
+
+                   ;; Check LOOP
+                   (when (and (symbolp head)
+                              (string= (symbol-name head) "LOOP"))
+                     ;; Simple loop variable detection (for, as, with keywords)
+                     (loop for i from 0 below (length rest-args)
+                           for arg = (nth i rest-args)
+                           when (and (symbolp arg)
+                                     (member (symbol-name arg) '("FOR" "AS" "WITH") :test #'string=)
+                                     (< (1+ i) (length rest-args)))
+                           do (let ((var (nth (1+ i) rest-args)))
+                                (when (symbolp var)
+                                  (let ((var-name (symbol-name var)))
+                                    (unless (or (ignored-var-p var-name '())
+                                                (find-references var-name (nthcdr (+ i 2) rest-args)))
+                                      (push (make-instance 'violation:violation
+                                                           :rule :unused-variables
+                                                           :file file
+                                                           :line line
+                                                           :column column
+                                                           :severity (rule-severity rule)
+                                                           :message
+                                                           (format nil "Loop variable '~A' is unused" var-name)
+                                                           :fix nil)
+                                            violations)))))))
+
+                   ;; Recursively check nested forms
+                   (dolist (subexpr rest-args)
+                     (when (consp subexpr)
+                       (check-expr subexpr line column)))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)

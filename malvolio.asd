@@ -52,6 +52,7 @@
      (:file "if-without-else-test")
      (:file "bare-progn-in-if-test")
      (:file "missing-otherwise-test")
-     (:file "wrong-otherwise-test"))))
+     (:file "wrong-otherwise-test")
+     (:file "unused-variables-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
