@@ -1,0 +1,6 @@
+# Expected violations for comment-level.lisp
+# Format: line:column rule-name severity
+
+7:0 comment-level warning
+9:2 comment-level warning
+22:0 comment-level warning

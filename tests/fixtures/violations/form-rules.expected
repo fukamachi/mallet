@@ -1,0 +1,11 @@
+# Expected violations for form-rules.lisp
+# Format: line:column rule-name severity
+
+8:0 if-without-else warning
+14:0 bare-progn-in-if warning
+14:0 bare-progn-in-if warning
+25:0 missing-otherwise warning
+31:0 missing-otherwise warning
+38:0 missing-otherwise warning
+44:0 wrong-otherwise error
+51:0 wrong-otherwise error
