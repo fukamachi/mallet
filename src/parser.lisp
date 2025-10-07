@@ -1,0 +1,109 @@
+(defpackage #:malvolio/parser
+  (:use #:cl)
+  (:local-nicknames
+   (#:a #:alexandria))
+  (:export #:analyze-text
+           ;; Token
+           #:token
+           #:token-type
+           #:token-value
+           #:token-line
+           #:token-column
+           #:token-file
+           #:token-raw
+           ;; Tokenizer
+           #:tokenize
+           ;; Form
+           #:form
+           #:form-expr
+           #:form-line
+           #:form-column
+           #:form-end-line
+           #:form-end-column
+           #:form-file
+           #:form-source
+           ;; Reader
+           #:parse-forms
+           ;; Form utilities
+           #:walk-form
+           #:if-form-p
+           #:if-without-else-p
+           #:case-form-p
+           #:defpackage-form-p
+           #:defun-form-p))
+(in-package #:malvolio/parser)
+
+;;; Token data structure
+
+(defclass token ()
+  ((type
+    :initarg :type
+    :reader token-type
+    :type keyword
+    :documentation "Token type (e.g., :symbol, :string, :comment-line)")
+   (value
+    :initarg :value
+    :reader token-value
+    :documentation "Token value (string or parsed)")
+   (file
+    :initarg :file
+    :reader token-file
+    :type pathname
+    :documentation "Source file")
+   (line
+    :initarg :line
+    :reader token-line
+    :type (integer 1)
+    :documentation "Line number where token appears")
+   (column
+    :initarg :column
+    :reader token-column
+    :type (integer 0)
+    :documentation "Column number (0-based)")
+   (raw
+    :initarg :raw
+    :reader token-raw
+    :type string
+    :documentation "Raw source text for this token"))
+  (:documentation
+   "Represents a token in the source code with position information."))
+
+;;; Form data structure
+
+(defclass form ()
+  ((expr
+    :initarg :expr
+    :reader form-expr
+    :documentation "The actual s-expression")
+   (file
+    :initarg :file
+    :reader form-file
+    :type pathname
+    :documentation "Source file")
+   (line
+    :initarg :line
+    :reader form-line
+    :type (integer 1)
+    :documentation "Starting line number")
+   (column
+    :initarg :column
+    :reader form-column
+    :type (integer 0)
+    :documentation "Starting column number (0-based)")
+   (end-line
+    :initarg :end-line
+    :reader form-end-line
+    :type (integer 1)
+    :documentation "Ending line number")
+   (end-column
+    :initarg :end-column
+    :reader form-end-column
+    :type (integer 0)
+    :documentation "Ending column number (0-based)")
+   (source
+    :initarg :source
+    :reader form-source
+    :type string
+    :documentation "Raw source text for this form"))
+  (:documentation
+   "Represents a parsed form (s-expression) with source location information."))
