@@ -1,0 +1,4 @@
+# Format: line:column rule-name severity
+12:0 no-tabs warning
+18:0 consecutive-blank-lines warning
+22:0 final-newline warning

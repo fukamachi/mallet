@@ -122,11 +122,11 @@ Malvolio uses S-expression based configuration files (`.malvolio.lisp`). Place t
 
 ## Rules
 
-Malvolio includes rules for checking code style, best practices, and potential issues:
+Malvolio includes **11 rules** for checking code style, best practices, and potential issues:
 
-- **Text-Level Rules**: `line-length`
-- **Token-Level Rules**: `comment-level`
-- **Form-Level Rules**: `if-without-else`, `bare-progn-in-if`, `missing-otherwise`, `wrong-otherwise`, `unused-variables`
+- **Text-Level Rules (5)**: `line-length`, `trailing-whitespace`, `no-tabs`, `final-newline`, `consecutive-blank-lines`
+- **Token-Level Rules (1)**: `comment-level`
+- **Form-Level Rules (5)**: `if-without-else`, `bare-progn-in-if`, `missing-otherwise`, `wrong-otherwise`, `unused-variables`
 
 For detailed documentation of each rule with examples, see [RULES.md](./RULES.md).
 

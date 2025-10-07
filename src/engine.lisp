@@ -27,6 +27,22 @@
               :description "Lines should not exceed maximum length"
               :default-severity :warning
               :type :text)
+             (:trailing-whitespace
+              :description "Lines should not have trailing whitespace"
+              :default-severity :warning
+              :type :text)
+             (:no-tabs
+              :description "Use spaces instead of tab characters"
+              :default-severity :warning
+              :type :text)
+             (:final-newline
+              :description "Files must end with a newline"
+              :default-severity :warning
+              :type :text)
+             (:consecutive-blank-lines
+              :description "Limit consecutive blank lines"
+              :default-severity :warning
+              :type :text)
              (:comment-level
               :description "Comments should use appropriate semicolon count"
               :default-severity :warning
@@ -105,6 +121,16 @@ Returns a list of VIOLATION objects."
                              (let ((max-length (or (config:get-rule-option config :line-length :max-length)
                                                    80)))
                                (make-instance 'rules:line-length-rule :max-length max-length)))
+                            (:trailing-whitespace
+                             (make-instance 'rules:trailing-whitespace-rule))
+                            (:no-tabs
+                             (make-instance 'rules:no-tabs-rule))
+                            (:final-newline
+                             (make-instance 'rules:final-newline-rule))
+                            (:consecutive-blank-lines
+                             (let ((max-consecutive (or (config:get-rule-option config :consecutive-blank-lines :max-consecutive)
+                                                        2)))
+                               (make-instance 'rules:consecutive-blank-lines-rule :max-consecutive max-consecutive)))
                             (t nil))))
           (when rule-impl
             (setf violations

@@ -179,6 +179,10 @@
   "Create the recommended default configuration."
   (make-config
    :rules '((:line-length :enabled t :max-length 80)
+            (:trailing-whitespace :enabled t)
+            (:no-tabs :enabled t)
+            (:final-newline :enabled t)
+            (:consecutive-blank-lines :enabled t :max-consecutive 2)
             (:comment-level :enabled t)
             (:if-without-else :enabled t)
             (:bare-progn-in-if :enabled t)
@@ -190,6 +194,10 @@
   "Create a minimal configuration with only error-severity rules."
   (make-config
    :rules '((:line-length :enabled nil)
+            (:trailing-whitespace :enabled nil)
+            (:no-tabs :enabled nil)
+            (:final-newline :enabled nil)
+            (:consecutive-blank-lines :enabled nil)
             (:comment-level :enabled nil)
             (:if-without-else :enabled nil)
             (:bare-progn-in-if :enabled nil)
@@ -201,6 +209,10 @@
   "Create a strict configuration promoting all rules to errors."
   (make-config
    :rules '((:line-length :enabled t :max-length 80 :severity :error)
+            (:trailing-whitespace :enabled t :severity :error)
+            (:no-tabs :enabled t :severity :error)
+            (:final-newline :enabled t :severity :error)
+            (:consecutive-blank-lines :enabled t :max-consecutive 2 :severity :error)
             (:comment-level :enabled t :severity :error)
             (:if-without-else :enabled t :severity :error)
             (:bare-progn-in-if :enabled t :severity :error)
@@ -213,6 +225,10 @@
 Uses 100 character line length per Google's guidelines."
   (make-config
    :rules '((:line-length :enabled t :max-length 100)
+            (:trailing-whitespace :enabled t)
+            (:no-tabs :enabled t)
+            (:final-newline :enabled t)
+            (:consecutive-blank-lines :enabled t :max-consecutive 2)
             (:comment-level :enabled t)
             (:if-without-else :enabled t)
             (:bare-progn-in-if :enabled t)

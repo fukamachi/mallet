@@ -26,6 +26,92 @@ Checks that lines do not exceed a maximum length.
 (:line-length :enabled t :max-length 120)
 ```
 
+### `trailing-whitespace`
+
+Checks that lines do not have trailing whitespace.
+
+- **Severity**: Warning
+- **Maturity**: ⭐ CORE
+
+```lisp
+;; Bad: Line has trailing spaces
+(defun foo ()
+  (+ 1 2))
+
+;; Good: No trailing whitespace
+(defun foo ()
+  (+ 1 2))
+```
+
+### `no-tabs`
+
+Use spaces instead of tab characters for indentation.
+
+- **Severity**: Warning
+- **Maturity**: ⭐ CORE
+
+```lisp
+;; Bad: Tab character used for indentation
+(defun foo ()
+	(+ 1 2))
+
+;; Good: Spaces used for indentation
+(defun foo ()
+  (+ 1 2))
+```
+
+### `final-newline`
+
+Files must end with a newline character.
+
+- **Severity**: Warning
+- **Maturity**: ⭐ CORE
+
+```lisp
+;; Bad: File ends without newline
+(defun foo ()
+  (+ 1 2))
+;; Good: File ends with newline
+(defun foo ()
+  (+ 1 2))
+
+```
+
+**Note**: This follows POSIX convention that text files should end with a newline.
+
+### `consecutive-blank-lines`
+
+Limit the number of consecutive blank lines.
+
+- **Severity**: Warning
+- **Options**:
+  - `:max-consecutive` - Maximum consecutive blank lines (default: 2)
+- **Maturity**: ⭐ CORE
+
+```lisp
+;; Bad: More than 2 consecutive blank lines
+(defun foo ()
+  (+ 1 2))
+
+
+
+(defun bar ()
+  (+ 3 4))
+
+;; Good: At most 2 consecutive blank lines
+(defun foo ()
+  (+ 1 2))
+
+
+(defun bar ()
+  (+ 3 4))
+```
+
+**Configuration**:
+```lisp
+(:consecutive-blank-lines :enabled t :max-consecutive 1)
+```
+
 ## Token-Level Rules
 
 ### `comment-level`

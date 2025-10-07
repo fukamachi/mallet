@@ -3,10 +3,7 @@
   :description "A relentless guardian of code integrity for Common Lisp"
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
   :license "MIT"
-  :depends-on ("alexandria"
-               "cl-ppcre"
-               "split-sequence"
-               "yason")
+  :depends-on ("alexandria")
   :in-order-to ((test-op (test-op "malvolio/tests")))
   :pathname "src"
   :serial t
@@ -37,6 +34,7 @@
 
 (defsystem "malvolio/tests"
   :depends-on ("malvolio"
+               "cl-ppcre"
                "rove")
   :pathname "tests"
   :components
@@ -58,6 +56,7 @@
      (:file "bare-progn-in-if-test")
      (:file "missing-otherwise-test")
      (:file "wrong-otherwise-test")
-     (:file "unused-variables-test"))))
+     (:file "unused-variables-test")
+     (:file "text-formatting-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
