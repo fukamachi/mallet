@@ -6,6 +6,7 @@
   (:local-nicknames
    (#:a #:alexandria)
    (#:engine #:malvolio/engine)
+   (#:config #:malvolio/config)
    (#:formatter #:malvolio/formatter))
   (:export #:main
            #:lint-file
@@ -63,8 +64,9 @@
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format files)."
+Returns (values format config-path files)."
   (let ((format :text)
+        (config-path nil)
         (files '()))
     (loop while args do
       (let ((arg (pop args)))
@@ -77,6 +79,11 @@ Returns (values format files)."
                             ((string= fmt "text") :text)
                             ((string= fmt "json") :json)
                             (t (error "Unknown format: ~A (must be 'text' or 'json')" fmt))))))
+          ((string= arg "--config")
+           (let ((path (pop args)))
+             (unless path
+               (error "Missing value for --config"))
+             (setf config-path path)))
           ((string= arg "--help")
            (print-help)
            (uiop:quit 0))
@@ -87,7 +94,7 @@ Returns (values format files)."
            (error "Unknown option: ~A" arg))
           (t
            (push arg files)))))
-    (values format (nreverse files))))
+    (values format config-path (nreverse files))))
 
 (defun print-help ()
   "Print CLI usage information."
@@ -98,12 +105,14 @@ Usage: malvolio [options] <file>...
 
 Options:
   --format <format>   Output format (text or json, default: text)
+  --config <path>     Path to config file (default: auto-discover .malvolio.lisp)
   --help              Show this help message
   --version           Show version information
 
 Examples:
   malvolio src/main.lisp
   malvolio --format json src/*.lisp
+  malvolio --config .malvolio.lisp src/
   malvolio src/
 "))
 
@@ -144,7 +153,7 @@ Handles wildcards and directories."
   "Main entry point for the Malvolio CLI.
 Lints files specified in ARGS and exits with appropriate status code."
   (handler-case
-      (multiple-value-bind (format file-args)
+      (multiple-value-bind (format config-path file-args)
           (parse-args args)
 
         ;; Validate we have files to lint
@@ -153,10 +162,24 @@ Lints files specified in ARGS and exits with appropriate status code."
           (print-help)
           (uiop:quit 3))
 
-        ;; Expand file arguments
-        (let* ((files (expand-file-args file-args))
-               (registry (engine:make-default-registry))
-               (results (engine:lint-files files :registry registry)))
+        ;; Load or discover config
+        (let* ((cfg (cond
+                      ;; Explicit config path provided
+                      (config-path
+                       (config:load-config config-path))
+                      ;; Auto-discover from current directory
+                      (t
+                       (let ((found-config (config:find-config-file (uiop:getcwd))))
+                         (if found-config
+                             (config:load-config found-config)
+                             ;; No config found, use recommended defaults
+                             (config:get-built-in-config :recommended))))))
+               ;; Expand file arguments
+               (files (expand-file-args file-args))
+               ;; Create registry from config
+               (registry (engine:make-registry-from-config cfg))
+               ;; Lint files
+               (results (engine:lint-files files :registry registry :config cfg)))
 
           ;; Format output
           (ecase format

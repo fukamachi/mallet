@@ -4,67 +4,90 @@
    (#:a #:alexandria)
    (#:parser #:malvolio/parser)
    (#:rules #:malvolio/rules)
+   (#:config #:malvolio/config)
    (#:violation #:malvolio/violation))
   (:export #:lint-file
            #:lint-files
+           #:make-registry-from-config
            #:make-default-registry))
 (in-package #:malvolio/engine)
 
 (defun make-default-registry ()
   "Create a registry with all default rules enabled."
+  (make-registry-from-config (config:get-built-in-config :recommended)))
+
+(defun make-registry-from-config (cfg)
+  "Create a registry based on CONFIG."
+  (check-type cfg config:config)
+
   (let ((registry (rules:make-registry)))
-    ;; Text-level rules
-    (rules:register-rule registry :line-length
-                        :description "Lines should not exceed maximum length"
-                        :severity :warning
-                        :type :text
-                        :enabled t)
+    ;; Define all available rules with their metadata
+    (let ((rule-definitions
+           '((:line-length
+              :description "Lines should not exceed maximum length"
+              :default-severity :warning
+              :type :text)
+             (:comment-level
+              :description "Comments should use appropriate semicolon count"
+              :default-severity :warning
+              :type :token)
+             (:if-without-else
+              :description "Use 'when' or 'unless' instead of 'if' without else"
+              :default-severity :warning
+              :type :form)
+             (:bare-progn-in-if
+              :description "Use 'cond' instead of 'if' with bare 'progn'"
+              :default-severity :warning
+              :type :form)
+             (:missing-otherwise
+              :description "case/typecase should have 'otherwise' clause"
+              :default-severity :warning
+              :type :form)
+             (:wrong-otherwise
+              :description "ecase/etypecase should not have 'otherwise' or 't'"
+              :default-severity :error
+              :type :form)
+             (:unused-variables
+              :description "Variables should be used or explicitly ignored"
+              :default-severity :warning
+              :type :form))))
 
-    ;; Token-level rules
-    (rules:register-rule registry :comment-level
-                        :description "Comments should use appropriate semicolon count"
-                        :severity :warning
-                        :type :token
-                        :enabled t)
-
-    ;; Form-level rules
-    (rules:register-rule registry :if-without-else
-                        :description "Use 'when' or 'unless' instead of 'if' without else"
-                        :severity :warning
-                        :type :form
-                        :enabled t)
-
-    (rules:register-rule registry :bare-progn-in-if
-                        :description "Use 'cond' instead of 'if' with bare 'progn'"
-                        :severity :warning
-                        :type :form
-                        :enabled t)
-
-    (rules:register-rule registry :missing-otherwise
-                        :description "case/typecase should have 'otherwise' clause"
-                        :severity :warning
-                        :type :form
-                        :enabled t)
-
-    (rules:register-rule registry :wrong-otherwise
-                        :description "ecase/etypecase should not have 'otherwise' or 't'"
-                        :severity :error
-                        :type :form
-                        :enabled t)
-
-    (rules:register-rule registry :unused-variables
-                        :description "Variables should be used or explicitly ignored"
-                        :severity :warning
-                        :type :form
-                        :enabled t)
+      ;; Register each rule with config-based settings
+      (dolist (rule-def rule-definitions)
+        (let* ((rule-name (first rule-def))
+               (description (getf (rest rule-def) :description))
+               (default-severity (getf (rest rule-def) :default-severity))
+               (type (getf (rest rule-def) :type))
+               (enabled (config:rule-enabled-p cfg rule-name))
+               (severity (or (config:get-rule-option cfg rule-name :severity)
+                             default-severity)))
+          (rules:register-rule registry rule-name
+                              :description description
+                              :severity severity
+                              :type type
+                              :enabled enabled))))
 
     registry))
 
-(defun lint-file (file &key (registry (make-default-registry)))
-  "Lint a single FILE using REGISTRY rules.
+(defun lint-file (file &key registry config)
+  "Lint a single FILE using REGISTRY rules and CONFIG.
 Returns a list of VIOLATION objects."
   (check-type file pathname)
+
+  ;; If neither registry nor config provided, use default
+  (when (and (not registry) (not config))
+    (setf config (config:get-built-in-config :recommended)))
+
+  ;; Create registry from config if not provided
+  (when (and config (not registry))
+    (setf registry (make-registry-from-config config)))
+
+  ;; If no config but have registry, create default config for options
+  (when (and registry (not config))
+    (setf config (config:get-built-in-config :recommended)))
+
   (check-type registry rules:registry)
+  (check-type config config:config)
 
   (unless (probe-file file)
     (error "File not found: ~A" file))
@@ -76,9 +99,16 @@ Returns a list of VIOLATION objects."
     (dolist (rule (rules:list-rules registry))
       (when (and (rules:rule-enabled-p rule)
                  (eq (rules:rule-type rule) :text))
-        (let ((rule-impl (make-instance 'rules:line-length-rule)))
-          (setf violations
-                (nconc violations (rules:check-text rule-impl text file))))))
+        (let* ((rule-name (rules:rule-name rule))
+               (rule-impl (case rule-name
+                            (:line-length
+                             (let ((max-length (or (config:get-rule-option config :line-length :max-length)
+                                                   80)))
+                               (make-instance 'rules:line-length-rule :max-length max-length)))
+                            (t nil))))
+          (when rule-impl
+            (setf violations
+                  (nconc violations (rules:check-text rule-impl text file)))))))
 
     ;; Run token-level rules
     (let ((tokens (parser:tokenize text file)))
@@ -110,12 +140,19 @@ Returns a list of VIOLATION objects."
 
     violations))
 
-(defun lint-files (files &key (registry (make-default-registry)))
-  "Lint multiple FILES using REGISTRY rules.
+(defun lint-files (files &key registry config)
+  "Lint multiple FILES using REGISTRY rules and CONFIG.
 Returns an alist mapping file paths to violation lists."
   (check-type files list)
-  (check-type registry rules:registry)
+
+  ;; Setup registry and config if not provided
+  (when (and (not registry) (not config))
+    (setf config (config:get-built-in-config :recommended)))
+  (when (and config (not registry))
+    (setf registry (make-registry-from-config config)))
+  (when (and registry (not config))
+    (setf config (config:get-built-in-config :recommended)))
 
   (loop for file in files
-        for violations = (lint-file file :registry registry)
+        for violations = (lint-file file :registry registry :config config)
         collect (cons file violations)))

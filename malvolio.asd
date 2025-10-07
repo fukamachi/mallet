@@ -26,6 +26,9 @@
    ;; Rule system
    (:file "rules")
 
+   ;; Configuration
+   (:file "config")
+
    ;; Linting engine and formatters
    (:file "engine")
    (:file "formatter")
@@ -37,7 +40,9 @@
                "rove")
   :pathname "tests"
   :components
-  ((:module "parser"
+  ((:file "config-test")
+
+   (:module "parser"
     :pathname "parser"
     :components
     ((:file "tokenizer-test")
