@@ -33,6 +33,7 @@
   ((:module "parser"
     :pathname "parser"
     :components
-    ((:file "tokenizer-test"))))
+    ((:file "tokenizer-test")
+     (:file "reader-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
