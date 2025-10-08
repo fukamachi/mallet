@@ -25,9 +25,10 @@
 
   (let ((violations '()))
     (labels ((ignored-var-p (var-name ignored-vars)
-               "Check if variable should be ignored (in ignore list or starts with _)."
+               "Check if variable should be ignored (in ignore list, starts with _, or is NIL)."
                (let ((name (base:symbol-name-from-string var-name)))
                  (or (member name ignored-vars :test #'string=)
+                     (string-equal name "NIL")
                      (and (> (length name) 0)
                           (char= (char name 0) #\_)))))
 
@@ -268,7 +269,7 @@ Returns (values bindings body-clauses)."
                    (some #'search-expr body))))
 
              (extract-ignored-vars (body)
-               "Extract variable names from (declare (ignore ...)) forms."
+               "Extract variable names from (declare (ignore ...)) and (declare (ignorable ...)) forms."
                (let ((ignored '()))
                  (dolist (form body)
                    (when (and (consp form)
@@ -276,7 +277,8 @@ Returns (values bindings body-clauses)."
                      (when (listp (rest form))
                        (dolist (decl-spec (rest form))
                          (when (and (consp decl-spec)
-                                    (base:symbol-matches-p (first decl-spec) "IGNORE"))
+                                    (or (base:symbol-matches-p (first decl-spec) "IGNORE")
+                                        (base:symbol-matches-p (first decl-spec) "IGNORABLE")))
                            (when (listp (rest decl-spec))
                              (dolist (var (rest decl-spec))
                                (when (stringp var)
