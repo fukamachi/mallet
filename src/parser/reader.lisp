@@ -27,17 +27,22 @@ This avoids package resolution issues when linting code with unknown packages."
     ;; Keyword
     ((eq package-indicator :keyword)
      (concatenate 'string ":" symbol-name))
+    ;; Unqualified symbol (no package indicator or in current package)
+    ((or (null package-indicator)
+         (eq package-indicator *package*)
+         ;; Check if it's the CURRENT package used during parsing
+         (and (packagep package-indicator)
+              (or (string-equal (package-name package-indicator) "CURRENT")
+                  (string-equal (package-name package-indicator) "COMMON-LISP-USER"))))
+     symbol-name)
     ;; Qualified symbol (e.g., config:load-config)
-    (package-indicator
+    (t
      (concatenate 'string
                   (if (packagep package-indicator)
                       (package-name package-indicator)
                       (string package-indicator))
                   ":"
-                  symbol-name))
-    ;; Unqualified symbol
-    (t
-     symbol-name)))
+                  symbol-name))))
 
 (defmethod eclector.reader:check-feature-expression ((client string-parse-result-client) feature-expression)
   "Evaluate feature expressions for reader conditionals.

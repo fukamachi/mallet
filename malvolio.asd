@@ -27,7 +27,6 @@
     :components
     ((:file "base")
      (:file "text")
-     (:file "tokens")
      (:module "forms"
       :pathname "forms"
       :components
@@ -63,7 +62,6 @@
     :components
     ((:file "registry-test")
      (:file "line-length-test")
-     (:file "comment-level-test")
      (:file "if-without-else-test")
      (:file "bare-progn-in-if-test")
      (:file "missing-otherwise-test")

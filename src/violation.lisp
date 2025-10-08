@@ -34,7 +34,7 @@
    (severity
     :initarg :severity
     :reader violation-severity
-    :type (member :error :warning :info)
+    :type (member :error :warning :convention :format :info)
     :documentation "Severity level of the violation")
    (message
     :initarg :message

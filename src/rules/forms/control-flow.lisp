@@ -26,32 +26,40 @@
   (check-type form parser:form)
   (check-type file pathname)
 
-  (let ((violations '()))
-    (labels ((check-expr (expr line column)
+  (let ((violations '())
+        (position-map (parser:form-position-map form)))
+    (labels ((check-expr (expr fallback-line fallback-column)
                "Recursively check expression for if-without-else violations."
                (when (consp expr)
-                 (let ((head (first expr))
-                       (rest-args (rest expr)))
-                   ;; Check if this is an IF form
-                   (when (base:symbol-matches-p head "IF")
-                     ;; IF should have 3 args (condition then else)
-                     ;; If it has only 2 args, it's missing else clause
-                     (when (= (length rest-args) 2)
-                       (push (make-instance 'violation:violation
-                                            :rule :if-without-else
-                                            :file file
-                                            :line line
-                                            :column column
-                                            :severity (base:rule-severity rule)
-                                            :message
-                                            "Use 'when' or 'unless' instead of 'if' without else clause"
-                                            :fix nil)
-                             violations)))
+                 ;; Get actual position of this expression
+                 (multiple-value-bind (line column)
+                     (parser:find-position expr position-map fallback-line fallback-column)
+                   (let ((head (first expr))
+                         (rest-args (rest expr)))
+                     ;; Check if this is an IF form
+                     (when (base:symbol-matches-p head "IF")
+                       ;; IF should have 3 args (condition then else)
+                       ;; If it has only 2 args, it's missing else clause
+                       (when (= (length rest-args) 2)
+                         (push (make-instance 'violation:violation
+                                              :rule :if-without-else
+                                              :file file
+                                              :line line
+                                              :column column
+                                              :severity (base:rule-severity rule)
+                                              :message
+                                              "Use 'when' or 'unless' instead of 'if' without else clause"
+                                              :fix nil)
+                               violations)))
 
-                   ;; Recursively check nested forms
-                   (when (listp rest-args)
-                     (dolist (subexpr rest-args)
-                       (check-expr subexpr line column)))))))
+                     ;; Recursively check head if it's a cons
+                     (when (consp head)
+                       (check-expr head line column))
+
+                     ;; Recursively check rest-args
+                     (when (listp rest-args)
+                       (dolist (subexpr rest-args)
+                         (check-expr subexpr line column))))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)
@@ -76,54 +84,62 @@
   (check-type form parser:form)
   (check-type file pathname)
 
-  (let ((violations '()))
+  (let ((violations '())
+        (position-map (parser:form-position-map form)))
     (labels ((is-progn-p (expr)
                "Check if expression is a bare progn form."
                (and (consp expr)
                     (base:symbol-matches-p (first expr) "PROGN")))
 
-             (check-expr (expr line column)
+             (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for bare progn in if."
                (when (consp expr)
-                 (let ((head (first expr))
-                       (rest-args (rest expr)))
-                   ;; Check if this is an IF form
-                   (when (base:symbol-matches-p head "IF")
-                     ;; IF should have 2 or 3 args (condition then [else])
-                     (when (>= (length rest-args) 2)
-                       (let ((then-clause (second rest-args))
-                             (else-clause (when (>= (length rest-args) 3)
-                                            (third rest-args))))
-                         ;; Check if then clause is a bare progn
-                         (when (is-progn-p then-clause)
-                           (push (make-instance 'violation:violation
-                                                :rule :bare-progn-in-if
-                                                :file file
-                                                :line line
-                                                :column column
-                                                :severity (base:rule-severity rule)
-                                                :message
-                                                "Use 'cond' instead of 'if' with bare 'progn'"
-                                                :fix nil)
-                                 violations))
+                 ;; Get actual position of this expression
+                 (multiple-value-bind (line column)
+                     (parser:find-position expr position-map fallback-line fallback-column)
+                   (let ((head (first expr))
+                         (rest-args (rest expr)))
+                     ;; Check if this is an IF form
+                     (when (base:symbol-matches-p head "IF")
+                       ;; IF should have 2 or 3 args (condition then [else])
+                       (when (>= (length rest-args) 2)
+                         (let ((then-clause (second rest-args))
+                               (else-clause (when (>= (length rest-args) 3)
+                                              (third rest-args))))
+                           ;; Check if then clause is a bare progn
+                           (when (is-progn-p then-clause)
+                             (push (make-instance 'violation:violation
+                                                  :rule :bare-progn-in-if
+                                                  :file file
+                                                  :line line
+                                                  :column column
+                                                  :severity (base:rule-severity rule)
+                                                  :message
+                                                  "Use 'cond' instead of 'if' with bare 'progn'"
+                                                  :fix nil)
+                                   violations))
 
-                         ;; Check if else clause is a bare progn
-                         (when (is-progn-p else-clause)
-                           (push (make-instance 'violation:violation
-                                                :rule :bare-progn-in-if
-                                                :file file
-                                                :line line
-                                                :column column
-                                                :severity (base:rule-severity rule)
-                                                :message
-                                                "Use 'cond' instead of 'if' with bare 'progn'"
-                                                :fix nil)
-                                 violations)))))
+                           ;; Check if else clause is a bare progn
+                           (when (is-progn-p else-clause)
+                             (push (make-instance 'violation:violation
+                                                  :rule :bare-progn-in-if
+                                                  :file file
+                                                  :line line
+                                                  :column column
+                                                  :severity (base:rule-severity rule)
+                                                  :message
+                                                  "Use 'cond' instead of 'if' with bare 'progn'"
+                                                  :fix nil)
+                                   violations)))))
 
-                   ;; Recursively check nested forms
-                   (when (listp rest-args)
-                     (dolist (subexpr rest-args)
-                       (check-expr subexpr line column)))))))
+                     ;; Recursively check head if it's a cons
+                     (when (consp head)
+                       (check-expr head line column))
+
+                     ;; Recursively check rest-args
+                     (when (listp rest-args)
+                       (dolist (subexpr rest-args)
+                         (check-expr subexpr line column))))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)
@@ -148,7 +164,8 @@
   (check-type form parser:form)
   (check-type file pathname)
 
-  (let ((violations '()))
+  (let ((violations '())
+        (position-map (parser:form-position-map form)))
     (labels ((has-otherwise-clause-p (clauses)
                "Check if clauses list has an otherwise clause."
                (some (lambda (clause)
@@ -165,55 +182,62 @@
                            (base:symbol-matches-p key "T"))))
                      clauses))
 
-             (check-expr (expr line column)
+             (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for missing otherwise."
                (when (consp expr)
-                 (let ((head (first expr))
-                       (rest-args (rest expr)))
-                   ;; Check if this is a CASE or TYPECASE form
-                   (when (and (stringp head)
-                              (member (base:symbol-name-from-string head)
-                                      '("CASE" "TYPECASE")
-                                      :test #'string-equal))
-                     (let* ((form-name (base:symbol-name-from-string head))
-                            (keyform (first rest-args))
-                            (clauses (rest rest-args)))
-                       (declare (ignore keyform))
+                 ;; Get actual position of this expression
+                 (multiple-value-bind (line column)
+                     (parser:find-position expr position-map fallback-line fallback-column)
+                   (let ((head (first expr))
+                         (rest-args (rest expr)))
+                     ;; Check if this is a CASE or TYPECASE form
+                     (when (and (stringp head)
+                                (member (base:symbol-name-from-string head)
+                                        '("CASE" "TYPECASE")
+                                        :test #'string-equal))
+                       (let* ((form-name (base:symbol-name-from-string head))
+                              (keyform (first rest-args))
+                              (clauses (rest rest-args)))
+                         (declare (ignore keyform))
 
-                       ;; Check if it has T instead of OTHERWISE
-                       (when (has-t-clause-p clauses)
-                         (push (make-instance 'violation:violation
-                                              :rule :missing-otherwise
-                                              :file file
-                                              :line line
-                                              :column column
-                                              :severity (base:rule-severity rule)
-                                              :message
-                                              (format nil
-                                                      "Use 'otherwise' instead of 't' in '~A'"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))
+                         ;; Check if it has T instead of OTHERWISE
+                         (when (has-t-clause-p clauses)
+                           (push (make-instance 'violation:violation
+                                                :rule :missing-otherwise
+                                                :file file
+                                                :line line
+                                                :column column
+                                                :severity (base:rule-severity rule)
+                                                :message
+                                                (format nil
+                                                        "Use 'otherwise' instead of 't' in '~A'"
+                                                        (string-downcase form-name))
+                                                :fix nil)
+                                 violations))
 
-                       ;; Check if it has OTHERWISE clause
-                       (unless (or (has-otherwise-clause-p clauses)
-                                   (has-t-clause-p clauses))
-                         (push (make-instance 'violation:violation
-                                              :rule :missing-otherwise
-                                              :file file
-                                              :line line
-                                              :column column
-                                              :severity (base:rule-severity rule)
-                                              :message
-                                              (format nil "'~A' should have 'otherwise' clause"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))))
+                         ;; Check if it has OTHERWISE clause
+                         (unless (or (has-otherwise-clause-p clauses)
+                                     (has-t-clause-p clauses))
+                           (push (make-instance 'violation:violation
+                                                :rule :missing-otherwise
+                                                :file file
+                                                :line line
+                                                :column column
+                                                :severity (base:rule-severity rule)
+                                                :message
+                                                (format nil "'~A' should have 'otherwise' clause"
+                                                        (string-downcase form-name))
+                                                :fix nil)
+                                 violations))))
 
-                   ;; Recursively check nested forms
-                   (when (listp rest-args)
-                     (dolist (subexpr rest-args)
-                       (check-expr subexpr line column)))))))
+                     ;; Recursively check head if it's a cons
+                     (when (consp head)
+                       (check-expr head line column))
+
+                     ;; Recursively check rest-args
+                     (when (listp rest-args)
+                       (dolist (subexpr rest-args)
+                         (check-expr subexpr line column))))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)
@@ -238,7 +262,8 @@
   (check-type form parser:form)
   (check-type file pathname)
 
-  (let ((violations '()))
+  (let ((violations '())
+        (position-map (parser:form-position-map form)))
     (labels ((has-catch-all-clause-p (clauses)
                "Check if clauses list has an otherwise or t clause."
                (some (lambda (clause)
@@ -248,40 +273,47 @@
                                (base:symbol-matches-p key "T")))))
                      clauses))
 
-             (check-expr (expr line column)
+             (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for wrong otherwise."
                (when (consp expr)
-                 (let ((head (first expr))
-                       (rest-args (rest expr)))
-                   ;; Check if this is an ECASE or ETYPECASE form
-                   (when (and (stringp head)
-                              (member (base:symbol-name-from-string head)
-                                      '("ECASE" "ETYPECASE")
-                                      :test #'string-equal))
-                     (let* ((form-name (base:symbol-name-from-string head))
-                            (keyform (first rest-args))
-                            (clauses (rest rest-args)))
-                       (declare (ignore keyform))
+                 ;; Get actual position of this expression
+                 (multiple-value-bind (line column)
+                     (parser:find-position expr position-map fallback-line fallback-column)
+                   (let ((head (first expr))
+                         (rest-args (rest expr)))
+                     ;; Check if this is an ECASE or ETYPECASE form
+                     (when (and (stringp head)
+                                (member (base:symbol-name-from-string head)
+                                        '("ECASE" "ETYPECASE")
+                                        :test #'string-equal))
+                       (let* ((form-name (base:symbol-name-from-string head))
+                              (keyform (first rest-args))
+                              (clauses (rest rest-args)))
+                         (declare (ignore keyform))
 
-                       ;; Check if it has OTHERWISE or T clause
-                       (when (has-catch-all-clause-p clauses)
-                         (push (make-instance 'violation:violation
-                                              :rule :wrong-otherwise
-                                              :file file
-                                              :line line
-                                              :column column
-                                              :severity (base:rule-severity rule)
-                                              :message
-                                              (format nil
-                                                      "'~A' should not have 'otherwise' or 't' clause"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))))
+                         ;; Check if it has OTHERWISE or T clause
+                         (when (has-catch-all-clause-p clauses)
+                           (push (make-instance 'violation:violation
+                                                :rule :wrong-otherwise
+                                                :file file
+                                                :line line
+                                                :column column
+                                                :severity (base:rule-severity rule)
+                                                :message
+                                                (format nil
+                                                        "'~A' should not have 'otherwise' or 't' clause"
+                                                        (string-downcase form-name))
+                                                :fix nil)
+                                 violations))))
 
-                   ;; Recursively check nested forms
-                   (when (listp rest-args)
-                     (dolist (subexpr rest-args)
-                       (check-expr subexpr line column)))))))
+                     ;; Recursively check head if it's a cons (e.g., in let bindings)
+                     (when (consp head)
+                       (check-expr head line column))
+
+                     ;; Recursively check rest-args
+                     (when (listp rest-args)
+                       (dolist (subexpr rest-args)
+                         (check-expr subexpr line column))))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)

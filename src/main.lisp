@@ -145,6 +145,13 @@ Handles wildcards and directories."
                         (eq (violation-severity v) :error))
                       violations)))
 
+(defun has-warnings-p (results)
+  "Check if RESULTS contain any :warning severity violations."
+  (loop for (file . violations) in results
+        thereis (some (lambda (v)
+                        (eq (violation-severity v) :warning))
+                      violations)))
+
 (defun has-violations-p (results)
   "Check if RESULTS contain any violations at all."
   (loop for (file . violations) in results
@@ -188,9 +195,12 @@ Lints files specified in ARGS and exits with appropriate status code."
             (:json (formatter:format-json results)))
 
           ;; Exit with appropriate status
+          ;; Exit 2: ERROR severity (objectively wrong)
+          ;; Exit 1: WARNING severity (likely bugs)
+          ;; Exit 0: CONVENTION/FORMAT/INFO (style/preferences) or no violations
           (cond
             ((has-errors-p results) (uiop:quit 2))
-            ((has-violations-p results) (uiop:quit 1))
+            ((has-warnings-p results) (uiop:quit 1))
             (t (uiop:quit 0)))))
 
     (error (e)

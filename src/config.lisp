@@ -183,7 +183,6 @@
             (:no-tabs :enabled t)
             (:final-newline :enabled t)
             (:consecutive-blank-lines :enabled t :max-consecutive 2)
-            (:comment-level :enabled t)
             (:if-without-else :enabled t)
             (:bare-progn-in-if :enabled t)
             (:missing-otherwise :enabled t)
@@ -198,7 +197,6 @@
             (:no-tabs :enabled nil)
             (:final-newline :enabled nil)
             (:consecutive-blank-lines :enabled nil)
-            (:comment-level :enabled nil)
             (:if-without-else :enabled nil)
             (:bare-progn-in-if :enabled nil)
             (:missing-otherwise :enabled nil)
@@ -206,16 +204,16 @@
             (:unused-variables :enabled nil))))
 
 (defun make-strict-config ()
-  "Create a strict configuration promoting all rules to errors."
+  "Create a strict configuration promoting rules for CI enforcement.
+WARNING → ERROR, CONVENTION → WARNING, FORMAT → ERROR, INFO → WARNING."
   (make-config
-   :rules '((:line-length :enabled t :max-length 80 :severity :error)
+   :rules '((:line-length :enabled t :max-length 80 :severity :warning)
             (:trailing-whitespace :enabled t :severity :error)
             (:no-tabs :enabled t :severity :error)
             (:final-newline :enabled t :severity :error)
-            (:consecutive-blank-lines :enabled t :max-consecutive 2 :severity :error)
-            (:comment-level :enabled t :severity :error)
-            (:if-without-else :enabled t :severity :error)
-            (:bare-progn-in-if :enabled t :severity :error)
+            (:consecutive-blank-lines :enabled t :max-consecutive 2 :severity :warning)
+            (:if-without-else :enabled t :severity :warning)
+            (:bare-progn-in-if :enabled t :severity :warning)
             (:missing-otherwise :enabled t :severity :error)
             (:wrong-otherwise :enabled t :severity :error)
             (:unused-variables :enabled t :severity :error))))
@@ -229,7 +227,6 @@ Uses 100 character line length per Google's guidelines."
             (:no-tabs :enabled t)
             (:final-newline :enabled t)
             (:consecutive-blank-lines :enabled t :max-consecutive 2)
-            (:comment-level :enabled t)
             (:if-without-else :enabled t)
             (:bare-progn-in-if :enabled t)
             (:missing-otherwise :enabled t)

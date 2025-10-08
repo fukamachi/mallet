@@ -39,7 +39,7 @@
    (severity
     :initarg :severity
     :reader rule-severity
-    :type (member :error :warning :info)
+    :type (member :error :warning :convention :format :info)
     :documentation "Default severity level")
    (type
     :initarg :type
@@ -82,7 +82,7 @@
   (check-type registry registry)
   (check-type name keyword)
   (check-type description string)
-  (check-type severity (member :error :warning :info))
+  (check-type severity (member :error :warning :convention :format :info))
   (check-type type (member :text :token :form :pattern))
   (check-type enabled boolean)
 

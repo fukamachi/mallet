@@ -23,50 +23,51 @@
   (let ((registry (rules:make-registry)))
     ;; Define all available rules with their metadata
     (let ((rule-definitions
-           '((:line-length
-              :description "Lines should not exceed maximum length"
-              :default-severity :warning
-              :type :text)
-             (:trailing-whitespace
-              :description "Lines should not have trailing whitespace"
-              :default-severity :warning
-              :type :text)
-             (:no-tabs
-              :description "Use spaces instead of tab characters"
-              :default-severity :warning
-              :type :text)
-             (:final-newline
-              :description "Files must end with a newline"
-              :default-severity :warning
-              :type :text)
-             (:consecutive-blank-lines
-              :description "Limit consecutive blank lines"
-              :default-severity :warning
-              :type :text)
-             (:comment-level
-              :description "Comments should use appropriate semicolon count"
-              :default-severity :warning
-              :type :token)
-             (:if-without-else
-              :description "Use 'when' or 'unless' instead of 'if' without else"
-              :default-severity :warning
+           '(;; ERROR: Objectively wrong code
+             (:wrong-otherwise
+              :description "ecase/etypecase should not have 'otherwise' or 't'"
+              :default-severity :error
               :type :form)
-             (:bare-progn-in-if
-              :description "Use 'cond' instead of 'if' with bare 'progn'"
+             ;; WARNING: Likely bugs or dangerous patterns
+             (:unused-variables
+              :description "Variables should be used or explicitly ignored"
               :default-severity :warning
               :type :form)
              (:missing-otherwise
               :description "case/typecase should have 'otherwise' clause"
               :default-severity :warning
               :type :form)
-             (:wrong-otherwise
-              :description "ecase/etypecase should not have 'otherwise' or 't'"
-              :default-severity :error
+             ;; CONVENTION: Style/idiom suggestions
+             (:if-without-else
+              :description "Use 'when' or 'unless' instead of 'if' without else"
+              :default-severity :convention
               :type :form)
-             (:unused-variables
-              :description "Variables should be used or explicitly ignored"
-              :default-severity :warning
-              :type :form))))
+             (:bare-progn-in-if
+              :description "Use 'cond' instead of 'if' with bare 'progn'"
+              :default-severity :convention
+              :type :form)
+             ;; FORMAT: Consensus formatting (Emacs/SLIME standards)
+             (:no-tabs
+              :description "Use spaces instead of tab characters"
+              :default-severity :format
+              :type :text)
+             (:trailing-whitespace
+              :description "Lines should not have trailing whitespace"
+              :default-severity :format
+              :type :text)
+             (:final-newline
+              :description "Files must end with a newline"
+              :default-severity :format
+              :type :text)
+             ;; INFO: Subjective preferences
+             (:line-length
+              :description "Lines should not exceed maximum length"
+              :default-severity :info
+              :type :text)
+             (:consecutive-blank-lines
+              :description "Limit consecutive blank lines"
+              :default-severity :info
+              :type :text))))
 
       ;; Register each rule with config-based settings
       (dolist (rule-def rule-definitions)
@@ -116,34 +117,26 @@ Returns a list of VIOLATION objects."
       (when (and (rules:rule-enabled-p rule)
                  (eq (rules:rule-type rule) :text))
         (let* ((rule-name (rules:rule-name rule))
+               (severity (rules:rule-severity rule))
                (rule-impl (case rule-name
                             (:line-length
                              (let ((max-length (or (config:get-rule-option config :line-length :max-length)
                                                    80)))
-                               (make-instance 'rules:line-length-rule :max-length max-length)))
+                               (make-instance 'rules:line-length-rule :max-length max-length :severity severity)))
                             (:trailing-whitespace
-                             (make-instance 'rules:trailing-whitespace-rule))
+                             (make-instance 'rules:trailing-whitespace-rule :severity severity))
                             (:no-tabs
-                             (make-instance 'rules:no-tabs-rule))
+                             (make-instance 'rules:no-tabs-rule :severity severity))
                             (:final-newline
-                             (make-instance 'rules:final-newline-rule))
+                             (make-instance 'rules:final-newline-rule :severity severity))
                             (:consecutive-blank-lines
                              (let ((max-consecutive (or (config:get-rule-option config :consecutive-blank-lines :max-consecutive)
                                                         2)))
-                               (make-instance 'rules:consecutive-blank-lines-rule :max-consecutive max-consecutive)))
+                               (make-instance 'rules:consecutive-blank-lines-rule :max-consecutive max-consecutive :severity severity)))
                             (t nil))))
           (when rule-impl
             (setf violations
                   (nconc violations (rules:check-text rule-impl text file)))))))
-
-    ;; Run token-level rules
-    (let ((tokens (parser:tokenize text file)))
-      (dolist (rule (rules:list-rules registry))
-        (when (and (rules:rule-enabled-p rule)
-                   (eq (rules:rule-type rule) :token))
-          (let ((rule-impl (make-instance 'rules:comment-level-rule)))
-            (setf violations
-                  (nconc violations (rules:check-tokens rule-impl tokens file)))))))
 
     ;; Run form-level rules
     (let ((forms (parser:parse-forms text file)))
@@ -151,14 +144,16 @@ Returns a list of VIOLATION objects."
         (dolist (rule (rules:list-rules registry))
           (when (and (rules:rule-enabled-p rule)
                      (eq (rules:rule-type rule) :form))
-            (let ((rule-impl
-                   (case (rules:rule-name rule)
-                     (:if-without-else (make-instance 'rules:if-without-else-rule))
-                     (:bare-progn-in-if (make-instance 'rules:bare-progn-in-if-rule))
-                     (:missing-otherwise (make-instance 'rules:missing-otherwise-rule))
-                     (:wrong-otherwise (make-instance 'rules:wrong-otherwise-rule))
-                     (:unused-variables (make-instance 'rules:unused-variables-rule))
-                     (t nil))))
+            (let* ((rule-name (rules:rule-name rule))
+                   (severity (rules:rule-severity rule))
+                   (rule-impl
+                    (case rule-name
+                      (:if-without-else (make-instance 'rules:if-without-else-rule :severity severity))
+                      (:bare-progn-in-if (make-instance 'rules:bare-progn-in-if-rule :severity severity))
+                      (:missing-otherwise (make-instance 'rules:missing-otherwise-rule :severity severity))
+                      (:wrong-otherwise (make-instance 'rules:wrong-otherwise-rule :severity severity))
+                      (:unused-variables (make-instance 'rules:unused-variables-rule :severity severity))
+                      (t nil))))
               (when rule-impl
                 (setf violations
                       (nconc violations

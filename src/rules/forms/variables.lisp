@@ -24,11 +24,18 @@
   (check-type file pathname)
 
   (let ((violations '()))
-    (labels ((ignored-var-p (var-name ignored-vars)
-               "Check if variable should be ignored (in ignore list, starts with _, or is NIL)."
+    (labels ((special-variable-p (name)
+               "Check if NAME follows special variable convention (*name*)."
+               (and (> (length name) 2)
+                    (char= (char name 0) #\*)
+                    (char= (char name (1- (length name))) #\*)))
+
+             (ignored-var-p (var-name ignored-vars)
+               "Check if variable should be ignored (in ignore list, starts with _, is NIL, or is a special variable)."
                (let ((name (base:symbol-name-from-string var-name)))
                  (or (member name ignored-vars :test #'string=)
                      (string-equal name "NIL")
+                     (special-variable-p name)
                      (and (> (length name) 0)
                           (char= (char name 0) #\_)))))
 
@@ -64,9 +71,7 @@
                          (not (null (cdr binding-form)))
                          (not (cddr binding-form)))  ; exactly 2 elements
                     (extract-from-pattern (first binding-form)))
-                   ;; Other cases - try to extract from the whole pattern
-                   ((consp binding-form)
-                    (extract-from-pattern binding-form))
+                   ;; Anything else is not a valid binding form
                    (t nil))))
 
              (parse-loop-clauses (clauses)

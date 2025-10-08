@@ -35,7 +35,7 @@
         (max-length (line-length-rule-max-length rule)))
 
     (with-input-from-string (stream text)
-      (loop for line-number from 0
+      (loop for line-number from 1
             for line = (read-line stream nil nil)
             while line
             do (let ((line-len (length line)))
@@ -72,7 +72,7 @@
   (let ((violations '()))
 
     (with-input-from-string (stream text)
-      (loop for line-number from 0
+      (loop for line-number from 1
             for line = (read-line stream nil nil)
             while line do
               ;; Check if line ends with whitespace (space or tab)
@@ -109,7 +109,7 @@
   (let ((violations '()))
 
     (with-input-from-string (stream text)
-      (loop for line-number from 0
+      (loop for line-number from 1
             for line = (read-line stream nil nil)
             while line
             do ;; Check if line contains tab character
@@ -185,7 +185,7 @@
         (violation-line nil))
 
     (with-input-from-string (stream text)
-      (loop for line-number from 0
+      (loop for line-number from 1
             for line = (read-line stream nil nil)
             while line
             do ;; A line is blank if it's empty or contains only whitespace
