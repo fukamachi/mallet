@@ -51,14 +51,14 @@ Returns a list of TOKEN objects."
            (let* ((start-pos pos)
                   (start-column column)
                   (semicolon-count
-                   (count-leading-semicolons text pos))
+                   (count-leading-semicolons text start-pos))
                   (comment-type
                    (case semicolon-count
                      (1 :comment-inline)
                      (2 :comment-line)
                      (3 :comment-section)
                      (otherwise :comment-file)))
-                  (comment-start (+ pos semicolon-count))
+                  (comment-start (+ start-pos semicolon-count))
                   (comment-text (read-until-newline text comment-start))
                   (comment-value (string-trim '(#\Space #\Tab) comment-text))
                   (raw (concatenate 'string
