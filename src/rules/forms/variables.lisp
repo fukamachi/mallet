@@ -8,6 +8,13 @@
   (:export #:unused-variables-rule))
 (in-package #:malvolio/rules/forms/variables)
 
+;;; Utilities
+
+(defun debug-mode-p ()
+  "Check if debug mode is enabled."
+  (and (find-symbol "*DEBUG-MODE*" "MALVOLIO")
+       (symbol-value (find-symbol "*DEBUG-MODE*" "MALVOLIO"))))
+
 ;;; Unused-variables rule
 
 (defclass unused-variables-rule (base:rule)
@@ -24,8 +31,9 @@
   (check-type form parser:form)
   (check-type file pathname)
 
-  (let ((violations '()))
-    (labels ((special-variable-p (name)
+  (handler-case
+      (let ((violations '()))
+        (labels ((special-variable-p (name)
                "Check if NAME follows special variable convention (*name*)."
                (and (> (length name) 2)
                     (char= (char name 0) #\*)
@@ -56,11 +64,12 @@
                              (append (extract-from-pattern (car pattern))
                                      (extract-from-pattern (cdr pattern))))
                             ;; Proper list - recurse on each element
+                            ;; Only recurse on cdr if it's a cons (to avoid errors on improper lists)
                             ((consp pattern)
                              (append (extract-from-pattern (car pattern))
-                                     (when (cdr pattern)
+                                     (when (consp (cdr pattern))
                                        (extract-from-pattern (cdr pattern)))))
-                            ;; Anything else (NIL, numbers, etc.)
+                            ;; Anything else (NIL, numbers, keywords, etc.)
                             (t nil))))
                  (cond
                    ;; Simple string (variable name)
@@ -458,9 +467,14 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                    (when (and (stringp head)
                               (string-equal (base:symbol-name-from-string head) "LET"))
                      (when (>= (length rest-args) 2)
-                       (let ((bindings (first rest-args))
-                             (body (rest rest-args)))
-                         (check-binding-form :let bindings body line column position-map))))
+                       (handler-case
+                           (let ((bindings (first rest-args))
+                                 (body (rest rest-args)))
+                             (check-binding-form :let bindings body line column position-map))
+                         (type-error (e)
+                           (format *error-output* "~%Warning: Skipping LET form at ~A:~A due to unexpected structure: ~A~%"
+                                   file line e)
+                           nil))))
 
                    ;; Check LET* (sequential bindings)
                    (when (and (stringp head)
@@ -607,11 +621,19 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                          (when (consp subexpr)
                            (check-expr subexpr line column position-map)))))))))
 
-      ;; Start checking from the form's expression with position-map
-      (let ((position-map (parser:form-position-map form)))
-        (check-expr (parser:form-expr form)
-                    (parser:form-line form)
-                    (parser:form-column form)
-                    position-map)))
+        ;; Start checking from the form's expression with position-map
+        (let ((position-map (parser:form-position-map form)))
+          (check-expr (parser:form-expr form)
+                      (parser:form-line form)
+                      (parser:form-column form)
+                      position-map)))
 
-    (nreverse violations)))
+        (nreverse violations))
+    (type-error (e)
+      ;; Print warning message (detailed in debug mode)
+      (if (debug-mode-p)
+          (format *error-output* "~%Warning: Skipping unused-variables check for form at ~A:~A~%  Error: ~A~%"
+                  file (parser:form-line form) e)
+          (format *error-output* "~%Warning: Skipping unused-variables check for form at ~A:~A (unexpected structure)~%"
+                  file (parser:form-line form)))
+      nil)))

@@ -88,126 +88,23 @@ allowing future linting rules to distinguish between variants like #\\Esc vs #\\
   (or (call-next-method)
       ;; If not found, try SBCL extensions
       (cond
-          ;; Unicode character: #\uXX, #\uXXX, #\uXXXX, #\UXXXXXXXX
-          ;; Must check that ALL remaining chars are hex digits to avoid matching "Us"
-          ((and (> (length designator) 1)
-                (or (char= (char designator 0) #\u)
-                    (char= (char designator 0) #\U))
-                ;; Check if all remaining characters are valid hex digits
-                (let ((hex-string (subseq designator 1)))
-                  (and (> (length hex-string) 0)
-                       (every (lambda (c)
-                                (or (char<= #\0 c #\9)
-                                    (char<= #\a c #\f)
-                                    (char<= #\A c #\F)))
-                              hex-string))))
+        ;; Unicode character: #\uXX, #\uXXX, #\uXXXX, #\UXXXXXXXX
+        ;; Must check that ALL remaining chars are hex digits to avoid matching "Us"
+        ((and (> (length designator) 1)
+              (or (char= (char designator 0) #\u)
+                  (char= (char designator 0) #\U))
+              ;; Check if all remaining characters are valid hex digits
+              (let ((hex-string (subseq designator 1)))
+                (and (> (length hex-string) 0)
+                     (every (lambda (c)
+                              (or (char<= #\0 c #\9)
+                                  (char<= #\a c #\f)
+                                  (char<= #\A c #\F)))
+                            hex-string))))
          (let* ((hex-string (subseq designator 1))
                 (code-point (parse-integer hex-string :radix 16)))
            (code-char code-point)))
-        ;; ESC character: both #\Esc and #\Escape map to code 27
-        ((or (string-equal designator "Esc")
-             (string-equal designator "Escape"))
-         (code-char 27))
-        ;; NUL character: both #\Nul and #\Null map to code 0
-        ((or (string-equal designator "Nul")
-             (string-equal designator "Null"))
-         (code-char 0))
-        ;; SOH (Start of Heading) character
-        ((string-equal designator "Soh")
-         (code-char 1))
-        ;; STX (Start of Text) character
-        ((string-equal designator "Stx")
-         (code-char 2))
-        ;; ETX (End of Text) character
-        ((string-equal designator "Etx")
-         (code-char 3))
-        ;; EOT (End of Transmission) character
-        ((string-equal designator "Eot")
-         (code-char 4))
-        ;; ENQ (Enquiry) character
-        ((string-equal designator "Enq")
-         (code-char 5))
-        ;; ACK (Acknowledge) character
-        ((string-equal designator "Ack")
-         (code-char 6))
-        ;; BEL character
-        ((string-equal designator "Bel")
-         (code-char 7))
-        ;; VT (Vertical Tab) character
-        ((string-equal designator "Vt")
-         (code-char 11))
-        ;; FF (Form Feed) character
-        ((string-equal designator "Ff")
-         (code-char 12))
-        ;; CR (Carriage Return) character
-        ((string-equal designator "Cr")
-         (code-char 13))
-        ;; SO (Shift Out) character
-        ((string-equal designator "So")
-         (code-char 14))
-        ;; SI (Shift In) character
-        ((string-equal designator "Si")
-         (code-char 15))
-        ;; DLE (Data Link Escape) character
-        ((string-equal designator "Dle")
-         (code-char 16))
-        ;; DC1-DC4 (Device Control) characters
-        ((string-equal designator "Dc1")
-         (code-char 17))
-        ((string-equal designator "Dc2")
-         (code-char 18))
-        ((string-equal designator "Dc3")
-         (code-char 19))
-        ((string-equal designator "Dc4")
-         (code-char 20))
-        ;; NAK (Negative Acknowledge) character
-        ((string-equal designator "Nak")
-         (code-char 21))
-        ;; SYN (Synchronous Idle) character
-        ((string-equal designator "Syn")
-         (code-char 22))
-        ;; ETB (End of Transmission Block) character
-        ((string-equal designator "Etb")
-         (code-char 23))
-        ;; CAN (Cancel) character
-        ((string-equal designator "Can")
-         (code-char 24))
-        ;; EM (End of Medium) character
-        ((string-equal designator "Em")
-         (code-char 25))
-        ;; SUB (Substitute) character
-        ((string-equal designator "Sub")
-         (code-char 26))
-        ;; FS (File Separator) character
-        ((string-equal designator "Fs")
-         (code-char 28))
-        ;; GS (Group Separator) character
-        ((string-equal designator "Gs")
-         (code-char 29))
-        ;; RS (Record Separator) character
-        ((string-equal designator "Rs")
-         (code-char 30))
-        ;; US (Unit Separator) character
-        ((string-equal designator "Us")
-         (code-char 31))
-        ;; Other SBCL names that might already be in standard set
-        ;; but we list them for completeness
-        ((string-equal designator "Backspace")
-         (code-char 8))
-        ((string-equal designator "Tab")
-         (code-char 9))
-        ((string-equal designator "Newline")
-         (code-char 10))
-        ((string-equal designator "Page")
-         (code-char 12))
-        ((string-equal designator "Return")
-         (code-char 13))
-        ((string-equal designator "Space")
-         (code-char 32))
-        ((string-equal designator "Rubout")
-         (code-char 127))
-        ;; Try Unicode character names (e.g., HIRAGANA_LETTER_A)
-        ;; Use name-char which looks up characters by their Unicode names
+        ;; Use name-char which looks up characters by their names
         (t (name-char designator)))))
 
 (defmethod eclector.parse-result:make-expression-result

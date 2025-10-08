@@ -11,6 +11,8 @@
   (:export #:main
            #:lint-file
            #:lint-files
+           ;; Debug mode
+           #:*debug-mode*
            ;; Public API for library use
            #:*rule-registry*
            #:make-registry
@@ -60,13 +62,19 @@
            #:analyze-text))
 (in-package #:malvolio)
 
+;;; Special variables
+
+(defvar *debug-mode* nil
+  "When T, enable detailed diagnostic output.")
+
 ;;; CLI Implementation
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path files)."
+Returns (values format config-path debug files)."
   (let ((format :text)
         (config-path nil)
+        (debug nil)
         (files '()))
     (loop while args do
       (let ((arg (pop args)))
@@ -84,6 +92,8 @@ Returns (values format config-path files)."
              (unless path
                (error "Missing value for --config"))
              (setf config-path path)))
+          ((string= arg "--debug")
+           (setf debug t))
           ((string= arg "--help")
            (print-help)
            (uiop:quit 0))
@@ -94,7 +104,7 @@ Returns (values format config-path files)."
            (error "Unknown option: ~A" arg))
           (t
            (push arg files)))))
-    (values format config-path (nreverse files))))
+    (values format config-path debug (nreverse files))))
 
 (defun print-help ()
   "Print CLI usage information."
@@ -106,6 +116,7 @@ Usage: malvolio [options] <file>...
 Options:
   --format <format>   Output format (text or json, default: text)
   --config <path>     Path to config file (default: auto-discover .malvolio.lisp)
+  --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
 
@@ -113,7 +124,7 @@ Examples:
   malvolio src/main.lisp
   malvolio --format json src/*.lisp
   malvolio --config .malvolio.lisp src/
-  malvolio src/
+  malvolio --debug src/
 "))
 
 (defun expand-file-args (file-args)
@@ -168,49 +179,51 @@ Handles wildcards and directories, excluding common non-source directories."
 (defun main (&optional (args (uiop:command-line-arguments)))
   "Main entry point for the Malvolio CLI.
 Lints files specified in ARGS and exits with appropriate status code."
-  (handler-case
-      (multiple-value-bind (format config-path file-args)
-          (parse-args args)
+  (handler-bind ((error (lambda (e)
+                          (format *error-output* "Fatal error: ~A~%" e)
+                          (uiop:print-condition-backtrace e)
+                          (uiop:quit 3))))
+    (multiple-value-bind (format config-path debug file-args)
+        (parse-args args)
 
-        ;; Validate we have files to lint
-        (when (null file-args)
-          (format *error-output* "Error: No files specified~%~%")
-          (print-help)
-          (uiop:quit 3))
+      ;; Enable debug mode if requested
+      (setf *debug-mode* debug)
 
-        ;; Load or discover config
-        (let* ((cfg (cond
-                      ;; Explicit config path provided
-                      (config-path
-                       (config:load-config config-path))
-                      ;; Auto-discover from current directory
-                      (t
-                       (let ((found-config (config:find-config-file (uiop:getcwd))))
-                         (if found-config
-                             (config:load-config found-config)
-                             ;; No config found, use recommended defaults
-                             (config:get-built-in-config :recommended))))))
-               ;; Expand file arguments
-               (files (expand-file-args file-args))
-               ;; Create registry from config
-               (registry (engine:make-registry-from-config cfg))
-               ;; Lint files
-               (results (engine:lint-files files :registry registry :config cfg)))
+      ;; Validate we have files to lint
+      (when (null file-args)
+        (format *error-output* "Error: No files specified~%~%")
+        (print-help)
+        (uiop:quit 3))
 
-          ;; Format output
-          (ecase format
-            (:text (formatter:format-text results))
-            (:json (formatter:format-json results)))
+      ;; Load or discover config
+      (let* ((cfg (cond
+                    ;; Explicit config path provided
+                    (config-path
+                     (config:load-config config-path))
+                    ;; Auto-discover from current directory
+                    (t
+                     (let ((found-config (config:find-config-file (uiop:getcwd))))
+                       (if found-config
+                           (config:load-config found-config)
+                           ;; No config found, use recommended defaults
+                           (config:get-built-in-config :recommended))))))
+             ;; Expand file arguments
+             (files (expand-file-args file-args))
+             ;; Create registry from config
+             (registry (engine:make-registry-from-config cfg))
+             ;; Lint files
+             (results (engine:lint-files files :registry registry :config cfg)))
 
-          ;; Exit with appropriate status
-          ;; Exit 2: ERROR severity (objectively wrong)
-          ;; Exit 1: WARNING severity (likely bugs)
-          ;; Exit 0: CONVENTION/FORMAT/INFO (style/preferences) or no violations
-          (cond
-            ((has-errors-p results) (uiop:quit 2))
-            ((has-warnings-p results) (uiop:quit 1))
-            (t (uiop:quit 0)))))
+        ;; Format output
+        (ecase format
+          (:text (formatter:format-text results))
+          (:json (formatter:format-json results)))
 
-    (error (e)
-      (format *error-output* "Fatal error: ~A~%" e)
-      (uiop:quit 3))))
+        ;; Exit with appropriate status
+        ;; Exit 2: ERROR severity (objectively wrong)
+        ;; Exit 1: WARNING severity (likely bugs)
+        ;; Exit 0: CONVENTION/FORMAT/INFO (style/preferences) or no violations
+        (cond
+          ((has-errors-p results) (uiop:quit 2))
+          ((has-warnings-p results) (uiop:quit 1))
+          (t (uiop:quit 0)))))))
