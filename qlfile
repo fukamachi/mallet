@@ -5,6 +5,4 @@ github rove fukamachi/rove
 
 # Other dependencies available via Quicklisp
 # - alexandria
-# - cl-ppcre
-# - split-sequence
-# - yason
+# - eclector

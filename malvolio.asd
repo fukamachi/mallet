@@ -3,7 +3,8 @@
   :description "A relentless guardian of code integrity for Common Lisp"
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
   :license "MIT"
-  :depends-on ("alexandria")
+  :depends-on ("alexandria"
+               "eclector")
   :in-order-to ((test-op (test-op "malvolio/tests")))
   :pathname "src"
   :serial t

@@ -118,6 +118,25 @@
   (check-type registry registry)
   (a:hash-table-values (registry-rules registry)))
 
+;;; Helper functions for string-based symbol handling
+
+(defun symbol-name-from-string (str)
+  "Extract the symbol name from a string representation.
+Handles qualified symbols like \"PACKAGE:NAME\" → \"NAME\"
+and unqualified symbols like \"NAME\" → \"NAME\"."
+  (if (stringp str)
+      (let ((colon-pos (position #\: str :from-end t)))
+        (if colon-pos
+            (subseq str (1+ colon-pos))
+            str))
+      str))
+
+(defun symbol-matches-p (str name)
+  "Check if string-based symbol STR matches NAME (case-insensitive).
+Works with both qualified (\"PACKAGE:IF\") and unqualified (\"IF\") symbols."
+  (and (stringp str)
+       (string-equal (symbol-name-from-string str) name)))
+
 ;;; Generic functions for rule checking
 
 (defgeneric check-text (rule text file)
@@ -154,25 +173,24 @@ Returns a list of VIOLATION objects."))
   (check-type file pathname)
 
   (let ((violations '())
-        (max-length (line-length-rule-max-length rule))
-        (line-number 0))
+        (max-length (line-length-rule-max-length rule)))
 
     (with-input-from-string (stream text)
-      (loop for line = (read-line stream nil nil)
-            while line do
-              (incf line-number)
-              (let ((line-len (length line)))
-                (when (> line-len max-length)
-                  (push (make-instance 'violation:violation
-                                       :rule :line-length
-                                       :file file
-                                       :line line-number
-                                       :column 0
-                                       :severity (rule-severity rule)
-                                       :message (format nil "Line exceeds maximum length of ~A (~A characters)"
-                                                       max-length line-len)
-                                       :fix nil)
-                        violations)))))
+      (loop for line-number from 0
+            for line = (read-line stream nil nil)
+            while line
+            do (let ((line-len (length line)))
+                 (when (> line-len max-length)
+                   (push (make-instance 'violation:violation
+                                        :rule :line-length
+                                        :file file
+                                        :line line-number
+                                        :column 0
+                                        :severity (rule-severity rule)
+                                        :message (format nil "Line exceeds maximum length of ~A (~A characters)"
+                                                         max-length line-len)
+                                        :fix nil)
+                         violations)))))
 
     (nreverse violations)))
 
@@ -192,13 +210,12 @@ Returns a list of VIOLATION objects."))
   (check-type text string)
   (check-type file pathname)
 
-  (let ((violations '())
-        (line-number 0))
+  (let ((violations '()))
 
     (with-input-from-string (stream text)
-      (loop for line = (read-line stream nil nil)
+      (loop for line-number from 0
+            for line = (read-line stream nil nil)
             while line do
-              (incf line-number)
               ;; Check if line ends with whitespace (space or tab)
               (when (and (plusp (length line))
                          (member (char line (1- (length line))) '(#\Space #\Tab)))
@@ -230,14 +247,13 @@ Returns a list of VIOLATION objects."))
   (check-type text string)
   (check-type file pathname)
 
-  (let ((violations '())
-        (line-number 0))
+  (let ((violations '()))
 
     (with-input-from-string (stream text)
-      (loop for line = (read-line stream nil nil)
-            while line do
-              (incf line-number)
-              ;; Check if line contains tab character
+      (loop for line-number from 0
+            for line = (read-line stream nil nil)
+            while line
+            do ;; Check if line contains tab character
               (when (find #\Tab line)
                 (push (make-instance 'violation:violation
                                      :rule :no-tabs
@@ -305,16 +321,15 @@ Returns a list of VIOLATION objects."))
   (check-type file pathname)
 
   (let ((violations '())
-        (line-number 0)
         (blank-count 0)
         (max-consecutive (consecutive-blank-lines-rule-max rule))
         (violation-line nil))
 
     (with-input-from-string (stream text)
-      (loop for line = (read-line stream nil nil)
-            while line do
-              (incf line-number)
-              ;; A line is blank if it's empty or contains only whitespace
+      (loop for line-number from 0
+            for line = (read-line stream nil nil)
+            while line
+            do ;; A line is blank if it's empty or contains only whitespace
               (if (or (zerop (length line))
                       (every (lambda (ch) (member ch '(#\Space #\Tab))) line))
                   (progn
@@ -444,8 +459,7 @@ Returns a list of VIOLATION objects."))
                  (let ((head (first expr))
                        (rest-args (rest expr)))
                    ;; Check if this is an IF form
-                   (when (and (symbolp head)
-                              (string= (symbol-name head) "IF"))
+                   (when (symbol-matches-p head "IF")
                      ;; IF should have 3 args (condition then else)
                      ;; If it has only 2 args, it's missing else clause
                      (when (= (length rest-args) 2)
@@ -461,8 +475,9 @@ Returns a list of VIOLATION objects."))
                              violations)))
 
                    ;; Recursively check nested forms
-                   (dolist (subexpr rest-args)
-                     (check-expr subexpr line column))))))
+                   (when (listp rest-args)
+                     (dolist (subexpr rest-args)
+                       (check-expr subexpr line column)))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)
@@ -491,8 +506,7 @@ Returns a list of VIOLATION objects."))
     (labels ((is-progn-p (expr)
                "Check if expression is a bare progn form."
                (and (consp expr)
-                    (symbolp (first expr))
-                    (string= (symbol-name (first expr)) "PROGN")))
+                    (symbol-matches-p (first expr) "PROGN")))
 
              (check-expr (expr line column)
                "Recursively check expression for bare progn in if."
@@ -500,8 +514,7 @@ Returns a list of VIOLATION objects."))
                  (let ((head (first expr))
                        (rest-args (rest expr)))
                    ;; Check if this is an IF form
-                   (when (and (symbolp head)
-                              (string= (symbol-name head) "IF"))
+                   (when (symbol-matches-p head "IF")
                      ;; IF should have 2 or 3 args (condition then [else])
                      (when (>= (length rest-args) 2)
                        (let ((then-clause (second rest-args))
@@ -534,8 +547,9 @@ Returns a list of VIOLATION objects."))
                                  violations)))))
 
                    ;; Recursively check nested forms
-                   (dolist (subexpr rest-args)
-                     (check-expr subexpr line column))))))
+                   (when (listp rest-args)
+                     (dolist (subexpr rest-args)
+                       (check-expr subexpr line column)))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)
@@ -566,8 +580,7 @@ Returns a list of VIOLATION objects."))
                (some (lambda (clause)
                        (when (consp clause)
                          (let ((key (first clause)))
-                           (and (symbolp key)
-                                (string= (symbol-name key) "OTHERWISE")))))
+                           (symbol-matches-p key "OTHERWISE"))))
                      clauses))
 
              (has-t-clause-p (clauses)
@@ -575,8 +588,7 @@ Returns a list of VIOLATION objects."))
                (some (lambda (clause)
                        (when (consp clause)
                          (let ((key (first clause)))
-                           (and (symbolp key)
-                                (eq key t)))))
+                           (symbol-matches-p key "T"))))
                      clauses))
 
              (check-expr (expr line column)
@@ -585,11 +597,11 @@ Returns a list of VIOLATION objects."))
                  (let ((head (first expr))
                        (rest-args (rest expr)))
                    ;; Check if this is a CASE or TYPECASE form
-                   (when (and (symbolp head)
-                              (member (symbol-name head)
+                   (when (and (stringp head)
+                              (member (symbol-name-from-string head)
                                       '("CASE" "TYPECASE")
-                                      :test #'string=))
-                     (let* ((form-name (symbol-name head))
+                                      :test #'string-equal))
+                     (let* ((form-name (symbol-name-from-string head))
                             (keyform (first rest-args))
                             (clauses (rest rest-args)))
                        (declare (ignore keyform))
@@ -625,8 +637,9 @@ Returns a list of VIOLATION objects."))
                                violations))))
 
                    ;; Recursively check nested forms
-                   (dolist (subexpr rest-args)
-                     (check-expr subexpr line column))))))
+                   (when (listp rest-args)
+                     (dolist (subexpr rest-args)
+                       (check-expr subexpr line column)))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)
@@ -657,9 +670,8 @@ Returns a list of VIOLATION objects."))
                (some (lambda (clause)
                        (when (consp clause)
                          (let ((key (first clause)))
-                           (and (symbolp key)
-                                (or (string= (symbol-name key) "OTHERWISE")
-                                    (eq key t))))))
+                           (or (symbol-matches-p key "OTHERWISE")
+                               (symbol-matches-p key "T")))))
                      clauses))
 
              (check-expr (expr line column)
@@ -668,11 +680,11 @@ Returns a list of VIOLATION objects."))
                  (let ((head (first expr))
                        (rest-args (rest expr)))
                    ;; Check if this is an ECASE or ETYPECASE form
-                   (when (and (symbolp head)
-                              (member (symbol-name head)
+                   (when (and (stringp head)
+                              (member (symbol-name-from-string head)
                                       '("ECASE" "ETYPECASE")
-                                      :test #'string=))
-                     (let* ((form-name (symbol-name head))
+                                      :test #'string-equal))
+                     (let* ((form-name (symbol-name-from-string head))
                             (keyform (first rest-args))
                             (clauses (rest rest-args)))
                        (declare (ignore keyform))
@@ -693,8 +705,9 @@ Returns a list of VIOLATION objects."))
                                violations))))
 
                    ;; Recursively check nested forms
-                   (dolist (subexpr rest-args)
-                     (check-expr subexpr line column))))))
+                   (when (listp rest-args)
+                     (dolist (subexpr rest-args)
+                       (check-expr subexpr line column)))))))
 
       ;; Start checking from the form's expression
       (check-expr (parser:form-expr form)
@@ -722,151 +735,172 @@ Returns a list of VIOLATION objects."))
   (let ((violations '()))
     (labels ((ignored-var-p (var-name ignored-vars)
                "Check if variable should be ignored (in ignore list or starts with _)."
-               (or (member var-name ignored-vars :test #'string=)
-                   (and (> (length var-name) 0)
-                        (char= (char var-name 0) #\_))))
+               (let ((name (symbol-name-from-string var-name)))
+                 (or (member name ignored-vars :test #'string=)
+                     (and (> (length name) 0)
+                          (char= (char name 0) #\_)))))
 
              (extract-bindings (binding-form)
                "Extract variable names from binding form (supports simple and destructured)."
                (cond
-                 ;; Simple symbol
-                 ((symbolp binding-form)
-                  (list (symbol-name binding-form)))
-                 ;; (var value) form
+                 ;; Simple string (variable name)
+                 ((stringp binding-form)
+                  (list binding-form))
+                 ;; (var value) or (var . value) form
                  ((and (consp binding-form)
-                       (symbolp (first binding-form)))
-                  (list (symbol-name (first binding-form))))
-                 ;; Nested destructuring - collect all symbols
-                 ((consp binding-form)
+                       (stringp (first binding-form))
+                       (or (null (rest binding-form))   ; just (var)
+                           (not (stringp (rest binding-form)))))  ; not dotted to a string
+                  (list (first binding-form)))
+                 ;; Dotted pair like (file . violations) - extract both
+                 ((and (consp binding-form)
+                       (stringp (car binding-form))
+                       (stringp (cdr binding-form)))
+                  (list (car binding-form) (cdr binding-form)))
+                 ;; Nested destructuring - collect all strings (proper list)
+                 ((and (consp binding-form)
+                       (listp (cdr binding-form)))  ; proper list, not dotted
                   (loop for item in binding-form
-                        when (symbolp item)
-                        collect (symbol-name item)))
+                        when (stringp item)
+                        collect item))
                  (t nil)))
 
              (find-references (var-name body)
                "Find if VAR-NAME is referenced in BODY (simple text search)."
-               (labels ((search-expr (expr)
-                          (cond
-                            ((null expr) nil)
-                            ((symbolp expr)
-                             (string= (symbol-name expr) var-name))
-                            ((consp expr)
-                             (or (search-expr (car expr))
-                                 (search-expr (cdr expr))))
-                            (t nil))))
-                 (some #'search-expr body)))
+               (let ((target-name (symbol-name-from-string var-name)))
+                 (labels ((search-expr (expr)
+                            (cond
+                              ((null expr) nil)
+                              ((stringp expr)
+                               (string-equal (symbol-name-from-string expr) target-name))
+                              ((consp expr)
+                               (or (search-expr (car expr))
+                                   (search-expr (cdr expr))))
+                              (t nil))))
+                   (some #'search-expr body))))
 
              (extract-ignored-vars (body)
                "Extract variable names from (declare (ignore ...)) forms."
                (let ((ignored '()))
                  (dolist (form body)
                    (when (and (consp form)
-                              (symbolp (first form))
-                              (string= (symbol-name (first form)) "DECLARE"))
-                     (dolist (decl-spec (rest form))
-                       (when (and (consp decl-spec)
-                                  (symbolp (first decl-spec))
-                                  (string= (symbol-name (first decl-spec)) "IGNORE"))
-                         (dolist (var (rest decl-spec))
-                           (when (symbolp var)
-                             (push (symbol-name var) ignored)))))))
+                              (symbol-matches-p (first form) "DECLARE"))
+                     (when (listp (rest form))
+                       (dolist (decl-spec (rest form))
+                         (when (and (consp decl-spec)
+                                    (symbol-matches-p (first decl-spec) "IGNORE"))
+                           (when (listp (rest decl-spec))
+                             (dolist (var (rest decl-spec))
+                               (when (stringp var)
+                                 (push (symbol-name-from-string var) ignored)))))))))
                  ignored))
 
-             (check-bindings (bindings body line column)
+             (check-bindings (bindings body fallback-line fallback-column position-map)
                "Check bindings for unused variables."
                (let ((ignored-vars (extract-ignored-vars body))
                      (body-without-declares (remove-if
                                              (lambda (form)
                                                (and (consp form)
-                                                    (symbolp (first form))
-                                                    (string= (symbol-name (first form)) "DECLARE")))
+                                                    (symbol-matches-p (first form) "DECLARE")))
                                              body)))
                  (dolist (binding bindings)
                    (let ((var-names (extract-bindings binding)))
                      (dolist (var-name var-names)
                        (unless (or (ignored-var-p var-name ignored-vars)
                                    (find-references var-name body-without-declares))
-                         (push (make-instance 'violation:violation
-                                              :rule :unused-variables
-                                              :file file
-                                              :line line
-                                              :column column
-                                              :severity (rule-severity rule)
-                                              :message
-                                              (format nil "Variable '~A' is unused" var-name)
-                                              :fix nil)
-                               violations)))))))
+                         ;; Find position for this binding or variable name
+                         (multiple-value-bind (var-line var-column)
+                             (if position-map
+                                 (parser:find-position binding position-map fallback-line fallback-column)
+                                 (values fallback-line fallback-column))
+                           (push (make-instance 'violation:violation
+                                                :rule :unused-variables
+                                                :file file
+                                                :line var-line
+                                                :column var-column
+                                                :severity (rule-severity rule)
+                                                :message
+                                                (format nil "Variable '~A' is unused"
+                                                        (symbol-name-from-string var-name))
+                                                :fix nil)
+                                 violations))))))))
 
-             (check-expr (expr line column)
+             (check-expr (expr line column position-map)
                "Recursively check expression for unused variables."
                (when (consp expr)
                  (let ((head (first expr))
                        (rest-args (rest expr)))
                    ;; Check DEFUN
-                   (when (and (symbolp head)
-                              (string= (symbol-name head) "DEFUN"))
+                   (when (symbol-matches-p head "DEFUN")
                      (when (>= (length rest-args) 3)
                        (let* ((lambda-list (second rest-args))
                               (body (cddr rest-args))
                               (param-names (loop for param in lambda-list
-                                                 when (and (symbolp param)
-                                                           (not (char= (char (symbol-name param) 0) #\&)))
+                                                 when (and (stringp param)
+                                                           (not (char= (char (symbol-name-from-string param) 0) #\&)))
                                                  collect (list param))))
-                         (check-bindings param-names body line column))))
+                         (check-bindings param-names body line column position-map))))
 
                    ;; Check LAMBDA
-                   (when (and (symbolp head)
-                              (string= (symbol-name head) "LAMBDA"))
+                   (when (symbol-matches-p head "LAMBDA")
                      (when (>= (length rest-args) 2)
                        (let* ((lambda-list (first rest-args))
                               (body (rest rest-args))
                               (param-names (loop for param in lambda-list
-                                                 when (and (symbolp param)
-                                                           (not (char= (char (symbol-name param) 0) #\&)))
+                                                 when (and (stringp param)
+                                                           (not (char= (char (symbol-name-from-string param) 0) #\&)))
                                                  collect (list param))))
-                         (check-bindings param-names body line column))))
+                         (check-bindings param-names body line column position-map))))
 
                    ;; Check LET/LET*
-                   (when (and (symbolp head)
-                              (member (symbol-name head) '("LET" "LET*") :test #'string=))
+                   (when (and (stringp head)
+                              (member (symbol-name-from-string head) '("LET" "LET*") :test #'string-equal))
                      (when (>= (length rest-args) 2)
                        (let ((bindings (first rest-args))
                              (body (rest rest-args)))
-                         (check-bindings bindings body line column))))
+                         (check-bindings bindings body line column position-map))))
 
                    ;; Check LOOP
-                   (when (and (symbolp head)
-                              (string= (symbol-name head) "LOOP"))
+                   (when (symbol-matches-p head "LOOP")
                      ;; Simple loop variable detection (for, as, with keywords)
                      (loop for i from 0 below (length rest-args)
                            for arg = (nth i rest-args)
-                           when (and (symbolp arg)
-                                     (member (symbol-name arg) '("FOR" "AS" "WITH") :test #'string=)
+                           when (and (stringp arg)
+                                     (member (symbol-name-from-string arg) '("FOR" "AS" "WITH") :test #'string-equal)
                                      (< (1+ i) (length rest-args)))
                            do (let ((var (nth (1+ i) rest-args)))
-                                (when (symbolp var)
-                                  (let ((var-name (symbol-name var)))
+                                (when (stringp var)
+                                  (let ((var-name var))
                                     (unless (or (ignored-var-p var-name '())
                                                 (find-references var-name (nthcdr (+ i 2) rest-args)))
-                                      (push (make-instance 'violation:violation
-                                                           :rule :unused-variables
-                                                           :file file
-                                                           :line line
-                                                           :column column
-                                                           :severity (rule-severity rule)
-                                                           :message
-                                                           (format nil "Loop variable '~A' is unused" var-name)
-                                                           :fix nil)
-                                            violations)))))))
+                                      ;; Find position for loop variable
+                                      (multiple-value-bind (var-line var-column)
+                                          (if position-map
+                                              (parser:find-position var position-map line column)
+                                              (values line column))
+                                        (push (make-instance 'violation:violation
+                                                             :rule :unused-variables
+                                                             :file file
+                                                             :line var-line
+                                                             :column var-column
+                                                             :severity (rule-severity rule)
+                                                             :message
+                                                             (format nil "Loop variable '~A' is unused"
+                                                                     (symbol-name-from-string var-name))
+                                                             :fix nil)
+                                              violations))))))))
 
                    ;; Recursively check nested forms
-                   (dolist (subexpr rest-args)
-                     (when (consp subexpr)
-                       (check-expr subexpr line column)))))))
+                   (when (listp rest-args)
+                     (dolist (subexpr rest-args)
+                       (when (consp subexpr)
+                         (check-expr subexpr line column position-map))))))))
 
-      ;; Start checking from the form's expression
-      (check-expr (parser:form-expr form)
-                  (parser:form-line form)
-                  (parser:form-column form)))
+      ;; Start checking from the form's expression with position-map
+      (let ((position-map (parser:form-position-map form)))
+        (check-expr (parser:form-expr form)
+                    (parser:form-line form)
+                    (parser:form-column form)
+                    position-map)))
 
     (nreverse violations)))

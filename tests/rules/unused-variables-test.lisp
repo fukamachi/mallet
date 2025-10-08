@@ -68,7 +68,7 @@
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
               :unused-variables))
-      (ok (search "Variable 'Y' is unused"
+      (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations))))))
 
   (testing "Invalid: multiple unused parameters"
@@ -89,7 +89,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (search "Variable 'Y' is unused"
+      (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations))))))
 
   (testing "Invalid: unused let binding"
@@ -99,7 +99,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (search "Variable 'Y' is unused"
+      (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations))))))
 
   (testing "Invalid: unused let* binding"
@@ -109,7 +109,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (search "Variable 'Y' is unused"
+      (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations))))))
 
   (testing "Invalid: unused loop variable"
@@ -120,7 +120,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (search "Loop variable 'INDEX' is unused"
+      (ok (search "Loop variable 'index' is unused"
                   (violation:violation-message (first violations))))))
 
   (testing "Invalid: nested unused variable"
@@ -131,5 +131,5 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (search "Variable 'Y' is unused"
+      (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations)))))))

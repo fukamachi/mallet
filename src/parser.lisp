@@ -22,8 +22,10 @@
            #:form-end-column
            #:form-file
            #:form-source
+           #:form-position-map
            ;; Reader
            #:parse-forms
+           #:find-position
            ;; Form utilities
            #:walk-form
            #:if-form-p
@@ -104,6 +106,11 @@
     :initarg :source
     :reader form-source
     :type string
-    :documentation "Raw source text for this form"))
+    :documentation "Raw source text for this form")
+   (position-map
+    :initarg :position-map
+    :initform nil
+    :reader form-position-map
+    :documentation "Hash table mapping expressions to (line . column) positions"))
   (:documentation
    "Represents a parsed form (s-expression) with source location information."))

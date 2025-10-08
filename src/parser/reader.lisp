@@ -1,178 +1,213 @@
 (in-package #:malvolio/parser)
 
-(defun count-newlines (text start end)
-  "Count newlines in TEXT from START to END."
-  (loop for i from start below end
-        count (char= (char text i) #\Newline)))
+;;; Eclector parse-result based parser for precise source tracking
+;;;
+;;; This parser uses Eclector's parse-result protocol to track source positions
+;;; for ALL expressions (including nested ones), not just top-level forms.
+;;; This enables accurate violation reporting.
 
-(defun find-column (text pos)
-  "Find column number (0-based) for position POS in TEXT."
-  (if (zerop pos)
-      0
-      (loop for i downfrom (1- pos) downto 0
-            until (char= (char text i) #\Newline)
-            count 1)))
+;;; Custom client for string-based parsing with source tracking
 
-(defun find-form-end (text start)
-  "Find the end position of a form starting at START.
-This is a simple heuristic based on balanced parentheses and whitespace."
-  (let ((len (length text))
-        (depth 0)
-        (in-string nil)
-        (in-comment nil)
-        (pos start))
+(defclass string-parse-result-client (eclector.parse-result:parse-result-client)
+  ()
+  (:documentation "Parse-result client that returns string representations of symbols."))
 
-    ;; Skip leading whitespace and comments
-    (loop while (and (< pos len)
-                     (or (member (char text pos) '(#\Space #\Tab #\Newline))
-                         (char= (char text pos) #\;)))
-          do (cond
-               ((char= (char text pos) #\;)
-                ;; Skip to end of line
-                (loop while (and (< pos len)
-                                 (char/= (char text pos) #\Newline))
-                      do (incf pos))
-                (when (< pos len) (incf pos)))
-               (t (incf pos))))
+(defmethod eclector.reader:interpret-symbol
+    ((client string-parse-result-client) input-stream package-indicator symbol-name internp)
+  "Return a string representation of a symbol without interning.
 
-    (when (>= pos len)
-      (return-from find-form-end len))
+Symbols are represented as strings:
+- Keywords: \":NAME\"
+- Qualified: \"PACKAGE:NAME\"
+- Unqualified: \"NAME\"
 
-    ;; Now find the end of the form
-    (let ((start-char (char text pos)))
-      (cond
-        ;; List form
-        ((char= start-char #\()
-         (setf depth 1)
-         (incf pos)
-         (loop while (and (< pos len) (> depth 0))
-               do (let ((ch (char text pos)))
-                    (cond
-                      ;; Handle strings
-                      ((and (char= ch #\") (not in-string))
-                       (setf in-string t)
-                       (incf pos))
-                      ((and (char= ch #\") in-string)
-                       (setf in-string nil)
-                       (incf pos))
-                      ;; Handle escape in strings
-                      ((and (char= ch #\\) in-string)
-                       (incf pos 2))
-                      ;; Handle parens when not in string
-                      ((and (char= ch #\() (not in-string))
-                       (incf depth)
-                       (incf pos))
-                      ((and (char= ch #\)) (not in-string))
-                       (decf depth)
-                       (incf pos))
-                      (t (incf pos)))))
-         pos)
+This avoids package resolution issues when linting code with unknown packages."
+  (declare (ignore input-stream internp))
+  (cond
+    ;; Keyword
+    ((eq package-indicator :keyword)
+     (concatenate 'string ":" symbol-name))
+    ;; Qualified symbol (e.g., config:load-config)
+    (package-indicator
+     (concatenate 'string
+                  (if (packagep package-indicator)
+                      (package-name package-indicator)
+                      (string package-indicator))
+                  ":"
+                  symbol-name))
+    ;; Unqualified symbol
+    (t
+     symbol-name)))
 
-        ;; String
-        ((char= start-char #\")
-         (incf pos)
-         (loop while (and (< pos len)
-                          (or (char/= (char text pos) #\")
-                              (and (> pos 0)
-                                   (char= (char text (1- pos)) #\\))))
-               do (incf pos))
-         (when (< pos len) (incf pos))
-         pos)
+(defmethod eclector.reader:check-feature-expression ((client string-parse-result-client) feature-expression)
+  "Evaluate feature expressions for reader conditionals.
+Always returns T to include all conditional code during linting."
+  (declare (ignore feature-expression))
+  ;; Always return T to include all conditional code
+  ;; This ensures we lint all code regardless of features
+  t)
 
-        ;; Quoted form
-        ((or (char= start-char #\')
-             (char= start-char #\`)
-             (char= start-char #\,))
-         (let ((next-pos (1+ pos)))
-           (when (and (char= start-char #\,)
-                      (< next-pos len)
-                      (char= (char text next-pos) #\@))
-             (incf next-pos))
-           (find-form-end text next-pos)))
+(defmethod eclector.reader:evaluate-expression ((client string-parse-result-client) expression)
+  "Handle read-time evaluation (#. reader macro).
+Returns a placeholder string since we cannot evaluate expressions with string-based symbols."
+  (declare (ignore expression))
+  ;; Return a placeholder for read-time evaluated expressions
+  ;; We can't actually evaluate since symbols are strings
+  :read-time-eval-placeholder)
 
-        ;; Atom (symbol or number)
-        (t
-         (loop while (and (< pos len)
-                          (not (member (char text pos) '(#\Space #\Tab #\Newline
-                                                         #\( #\) #\; #\"))))
-               do (incf pos))
-         pos)))))
+(defmethod eclector.reader:interpret-token ((client string-parse-result-client)
+                                            input-stream
+                                            token
+                                            escape-ranges)
+  "Interpret tokens including character names.
+Handles unknown character names gracefully for linting purposes."
+  ;; Try default interpretation first
+  (handler-case
+      (call-next-method)
+    ;; If character name is not recognized, return a placeholder character
+    (eclector.reader:unknown-character-name (condition)
+      (declare (ignore condition input-stream token escape-ranges))
+      ;; Return a placeholder character for unknown names
+      #\?)))
 
-(defun skip-whitespace-and-comments (text pos)
-  "Skip whitespace and comments starting at POS, returning new position."
+(defmethod eclector.parse-result:make-expression-result
+    ((client string-parse-result-client) expression children source)
+  "Create a parse result wrapping EXPRESSION with source location.
+
+The result is a plist with :expr, :children, and :source keys.
+SOURCE is a cons cell (start . end) of character positions."
+  (list :expr expression :children children :source source))
+
+;;; Helper functions for position conversion
+
+(defun build-line-starts (text)
+  "Build a vector of line start positions in TEXT.
+Returns a vector where element N is the character position of line N (0-based)."
   (let ((len (length text)))
-    (loop while (< pos len) do
-      (let ((ch (char text pos)))
-        (cond
-          ;; Whitespace
-          ((member ch '(#\Space #\Tab #\Newline #\Return))
-           (incf pos))
-          ;; Comment
-          ((char= ch #\;)
-           ;; Skip to end of line
-           (loop while (and (< pos len)
-                            (char/= (char text pos) #\Newline))
-                 do (incf pos))
-           (when (< pos len) (incf pos)))
-          ;; Not whitespace or comment, stop
-          (t (loop-finish))))
-          finally (return pos))))
+    (coerce
+      (cons 0
+            (loop for i from 0 below len
+                  when (char= (char text i) #\Newline)
+                  collect (1+ i)))
+      'vector)))
+
+(defun char-pos-to-line-column (char-pos line-starts)
+  "Convert character position CHAR-POS to (line . column).
+LINE-STARTS is a vector from BUILD-LINE-STARTS.
+Returns 1-based line and 0-based column."
+  (let ((line-count (length line-starts)))
+    (loop for line-num from 1 below line-count
+          for line-start = (aref line-starts line-num)
+          when (< char-pos line-start)
+          do (let ((prev-line-start (aref line-starts (1- line-num))))
+               (return (values line-num (- char-pos prev-line-start))))
+          finally
+          (return (values line-count
+                          (- char-pos (aref line-starts (1- line-count))))))))
+
+(defun extract-source (text source)
+  "Extract source text from TEXT using SOURCE range (start . end)."
+  (when (and source (consp source))
+    (let ((start (car source))
+          (end (cdr source)))
+      (when (and (numberp start) (numberp end)
+                 (<= 0 start end (length text)))
+        (subseq text start end)))))
+
+;;; Position map - stores source positions for expressions
+
+(defvar *position-map* nil
+  "Hash table mapping expressions to source positions.")
+
+(defun make-position-map ()
+  "Create a new position map."
+  (make-hash-table :test 'equal))
+
+(defun build-position-map (parse-result line-starts)
+  "Build a position map from PARSE-RESULT.
+Returns a hash table mapping expressions to (line . column) positions."
+  (let ((position-map (make-position-map)))
+    (labels ((process-result (result)
+               (when (and result (listp result))
+                 (let ((expr (getf result :expr))
+                       (source (getf result :source))
+                       (children (getf result :children)))
+                   ;; Map this expression to its position
+                   (when source
+                     (multiple-value-bind (line column)
+                         (char-pos-to-line-column (car source) line-starts)
+                       (setf (gethash expr position-map) (cons line column))))
+                   ;; Process children
+                   (when children
+                     (dolist (child children)
+                       (process-result child)))))))
+      (process-result parse-result))
+    position-map))
+
+(defun find-position (expr position-map fallback-line fallback-column)
+  "Find position for EXPR in POSITION-MAP.
+Returns (values line column). If not found, returns fallback values."
+  (let ((pos (gethash expr position-map)))
+    (if pos
+        (values (car pos) (cdr pos))
+        (values fallback-line fallback-column))))
+
+;;; Main parsing function
 
 (defun parse-forms (text file)
-  "Parse forms from TEXT in FILE using SBCL reader with source tracking.
-Returns a list of FORM objects."
+  "Parse forms from TEXT in FILE using Eclector parse-result.
+Returns a list of FORM objects with source location information and position maps.
+
+Uses eclector.parse-result to track positions for all nested expressions,
+enabling accurate violation reporting."
   (check-type text string)
   (check-type file pathname)
 
   (let ((forms '())
+        (client (make-instance 'string-parse-result-client))
         (stream (make-string-input-stream text))
-        (pos 0)
-        (len (length text)))
+        (line-starts (build-line-starts text)))
 
-    (loop while (< pos len) do
-      ;; Skip whitespace and comments first
-      (setf pos (skip-whitespace-and-comments text pos))
-      (when (>= pos len)
-        (return))
+    ;; Set readtable case to :preserve to maintain original case
+    (setf (eclector.readtable:readtable-case eclector.readtable:*readtable*) :preserve)
 
+    ;; Read all forms
+    (loop
       (handler-case
-          (let* ((start-pos pos)
-                 (start-line (1+ (count-newlines text 0 pos)))
-                 (start-column (find-column text pos)))
+          (let ((result (eclector.parse-result:read client stream nil :eof)))
+            (when (eq result :eof)
+              (return))
 
-            ;; Try to read a form
-            (file-position stream pos)
-            (let ((expr (read stream nil :eof)))
-              (when (eq expr :eof)
-                (return))
+            (let* ((expr (getf result :expr))
+                   (source (getf result :source))
+                   (start-pos (car source))
+                   (end-pos (cdr source)))
 
-              ;; Find actual end of form in source
-              (let* ((end-pos (find-form-end text start-pos))
-                     (source (subseq text start-pos end-pos))
-                     (newlines (count-newlines text start-pos end-pos))
-                     (end-line (+ start-line newlines))
-                     (end-column (if (zerop newlines)
-                                     (+ start-column (- end-pos start-pos))
-                                     (find-column text end-pos))))
+              (multiple-value-bind (start-line start-column)
+                  (char-pos-to-line-column start-pos line-starts)
+                (multiple-value-bind (end-line end-column)
+                    (char-pos-to-line-column end-pos line-starts)
 
-                ;; Create form object
-                (push (make-instance 'form
-                                     :expr expr
-                                     :file file
-                                     :line start-line
-                                     :column start-column
-                                     :end-line end-line
-                                     :end-column end-column
-                                     :source (string-trim '(#\Space #\Tab #\Newline)
-                                                          source))
-                      forms)
+                  ;; Build position map for this form
+                  (let ((position-map (build-position-map result line-starts)))
 
-                ;; Update position
-                (setf pos end-pos))))
+                    ;; Create form object
+                    (push (make-instance 'form
+                                         :expr expr
+                                         :file file
+                                         :line start-line
+                                         :column start-column
+                                         :end-line end-line
+                                         :end-column end-column
+                                         :source (extract-source text source)
+                                         :position-map position-map)
+                          forms))))))
 
         (end-of-file ()
           (return))
         (error (e)
-          (error "Parse error at position ~A: ~A" pos e))))
+          ;; Try to provide helpful error message
+          (let ((pos (file-position stream)))
+            (error "Parse error at position ~A: ~A" pos e)))))
 
     (nreverse forms)))
