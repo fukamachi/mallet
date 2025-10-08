@@ -66,7 +66,7 @@ Returns a list to ensure it can be safely processed by recursive form-checking c
   "Find character by name, supporting SBCL character name extensions.
 
 SBCL supports these character name extensions:
-- Nul (code 0)
+- Nul, Null (code 0) - both variants accepted
 - Bel (code 7)
 - Esc, Escape (code 27) - both variants accepted
 - Backspace (code 8)
@@ -76,6 +76,8 @@ SBCL supports these character name extensions:
 - Return (code 13)
 - Space (code 32)
 - Rubout (code 127)
+- uXXXX - Unicode character with 4-digit hex code point (e.g., u2602 = ☂)
+- UXXXXXXXX - Unicode character with 8-digit hex code point
 
 The DESIGNATOR parameter contains the exact character name as written in source,
 allowing future linting rules to distinguish between variants like #\\Esc vs #\\Escape."
@@ -83,12 +85,21 @@ allowing future linting rules to distinguish between variants like #\\Esc vs #\\
   (or (call-next-method)
       ;; If not found, try SBCL extensions
       (cond
+        ;; Unicode character: #\uXXXX (4 hex digits) or #\UXXXXXXXX (8 hex digits)
+        ((and (> (length designator) 1)
+              (or (char= (char designator 0) #\u)
+                  (char= (char designator 0) #\U)))
+         (let* ((hex-string (subseq designator 1))
+                (code-point (parse-integer hex-string :radix 16 :junk-allowed t)))
+           (when code-point
+             (code-char code-point))))
         ;; ESC character: both #\Esc and #\Escape map to code 27
         ((or (string-equal designator "Esc")
              (string-equal designator "Escape"))
          (code-char 27))
-        ;; NUL character
-        ((string-equal designator "Nul")
+        ;; NUL character: both #\Nul and #\Null map to code 0
+        ((or (string-equal designator "Nul")
+             (string-equal designator "Null"))
          (code-char 0))
         ;; BEL character
         ((string-equal designator "Bel")

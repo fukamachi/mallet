@@ -1,6 +1,7 @@
 (defpackage #:malvolio/rules/forms/variables
   (:use #:cl)
   (:local-nicknames
+   (#:a #:alexandria)
    (#:base #:malvolio/rules/base)
    (#:parser #:malvolio/parser)
    (#:violation #:malvolio/violation))
@@ -66,11 +67,17 @@
                    ((stringp binding-form)
                     (list binding-form))
                    ;; (var value) form - extract from var part only
+                   ;; Must check it's a proper list before calling cddr to avoid error on dotted pairs
                    ((and (consp binding-form)
                          (not (null binding-form))
+                         (a:proper-list-p binding-form)  ; Must be proper list to safely call cddr
                          (not (null (cdr binding-form)))
                          (not (cddr binding-form)))  ; exactly 2 elements
                     (extract-from-pattern (first binding-form)))
+                   ;; Arbitrary destructuring pattern (including dotted pairs)
+                   ;; This handles patterns like (a . b) or nested patterns
+                   ((consp binding-form)
+                    (extract-from-pattern binding-form))
                    ;; Anything else is not a valid binding form
                    (t nil))))
 
@@ -186,13 +193,13 @@ Returns (values bindings body-clauses)."
                                              (string-equal (base:symbol-name-from-string head) "MULTIPLE-VALUE-BIND")))
                                     (if (>= (length rest-args) 2)
                                         (let ((vars (first rest-args)))
-                                          (if (and (listp vars)
-                                                   (some (lambda (v)
-                                                           (and (stringp v)
-                                                                (string-equal (base:symbol-name-from-string v) target-name)))
-                                                         vars))
-                                              nil  ; Shadowed
-                                              (search-expr rest-args)))
+                                          ;; Extract all vars from pattern (handles dotted pairs, nested destructuring)
+                                          (let ((all-vars (extract-bindings vars)))
+                                            (if (some (lambda (v)
+                                                        (string-equal (base:symbol-name-from-string v) target-name))
+                                                      all-vars)
+                                                nil  ; Shadowed
+                                                (search-expr rest-args))))
                                         (search-expr rest-args)))
 
                                    ;; DOLIST, DOTIMES
@@ -279,12 +286,14 @@ Returns (values bindings body-clauses)."
                  (dolist (form body)
                    (when (and (consp form)
                               (base:symbol-matches-p (first form) "DECLARE"))
-                     (when (listp (rest form))
+                     ;; Only iterate if it's a proper list (not a dotted pair)
+                     (when (a:proper-list-p (rest form))
                        (dolist (decl-spec (rest form))
                          (when (and (consp decl-spec)
                                     (or (base:symbol-matches-p (first decl-spec) "IGNORE")
                                         (base:symbol-matches-p (first decl-spec) "IGNORABLE")))
-                           (when (listp (rest decl-spec))
+                           ;; Only iterate if it's a proper list (not a dotted pair)
+                           (when (a:proper-list-p (rest decl-spec))
                              (dolist (var (rest decl-spec))
                                (when (stringp var)
                                  (push (base:symbol-name-from-string var) ignored)))))))))
@@ -467,10 +476,9 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                        (let* ((lambda-list (first rest-args))
                               ;; Second arg is the value form, skip it
                               (body (cddr rest-args))
-                              ;; Convert lambda-list to binding format for check-binding-form
-                              (bindings (if (listp lambda-list)
-                                            (mapcar #'list lambda-list)
-                                            (list (list lambda-list)))))
+                              ;; Pass lambda-list as a single binding - extract-bindings will handle
+                              ;; arbitrary destructuring patterns including dotted pairs
+                              (bindings (list lambda-list)))
                          (check-binding-form :let bindings body line column position-map))))
 
                    ;; Check MULTIPLE-VALUE-BIND (parallel bindings like LET)
@@ -479,10 +487,8 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                        (let* ((vars (first rest-args))
                               ;; Second arg is the values form, skip it
                               (body (cddr rest-args))
-                              ;; Convert var list to binding format
-                              (bindings (if (listp vars)
-                                            (mapcar #'list vars)
-                                            (list (list vars)))))
+                              ;; Pass vars as a single binding - extract-bindings handles patterns
+                              (bindings (list vars)))
                          (check-binding-form :let bindings body line column position-map))))
 
                    ;; Check DEFMACRO (like DEFUN with &aux support)
@@ -581,17 +587,22 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                          (check-expr (second expr) line column position-map)))
                                       ;; Other forms - recursively look for unquotes
                                       (t
-                                       (dolist (subexpr expr)
-                                         (check-quasi subexpr))))))))
-                       (dolist (arg rest-args)
-                         (check-quasi arg))))
+                                       ;; Only iterate if it's a proper list (not a dotted pair)
+                                       (when (a:proper-list-p expr)
+                                         (dolist (subexpr expr)
+                                           (check-quasi subexpr)))))))))
+                       ;; Only iterate if it's a proper list (not a dotted pair)
+                       (when (a:proper-list-p rest-args)
+                         (dolist (arg rest-args)
+                           (check-quasi arg)))))
 
                    ;; Recursively check nested forms (skip if we already handled it above)
                    (unless (or (eq head 'eclector.reader:quasiquote)
                                (and (symbolp head)
                                     (string-equal (symbol-name head) "QUASIQUOTE")
                                     (string-equal (package-name (symbol-package head)) "ECLECTOR.READER")))
-                     (when (listp rest-args)
+                     ;; Only iterate if it's a proper list (not a dotted pair)
+                     (when (a:proper-list-p rest-args)
                        (dolist (subexpr rest-args)
                          (when (consp subexpr)
                            (check-expr subexpr line column position-map)))))))))

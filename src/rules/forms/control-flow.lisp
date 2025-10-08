@@ -1,6 +1,7 @@
 (defpackage #:malvolio/rules/forms/control-flow
   (:use #:cl)
   (:local-nicknames
+   (#:a #:alexandria)
    (#:base #:malvolio/rules/base)
    (#:parser #:malvolio/parser)
    (#:violation #:malvolio/violation))
@@ -57,7 +58,8 @@
                        (check-expr head line column))
 
                      ;; Recursively check rest-args
-                     (when (listp rest-args)
+                     ;; Only iterate if it's a proper list (not a dotted pair like (a . b))
+                     (when (a:proper-list-p rest-args)
                        (dolist (subexpr rest-args)
                          (check-expr subexpr line column))))))))
 
@@ -137,7 +139,8 @@
                        (check-expr head line column))
 
                      ;; Recursively check rest-args
-                     (when (listp rest-args)
+                     ;; Only iterate if it's a proper list (not a dotted pair like (a . b))
+                     (when (a:proper-list-p rest-args)
                        (dolist (subexpr rest-args)
                          (check-expr subexpr line column))))))))
 
@@ -235,7 +238,8 @@
                        (check-expr head line column))
 
                      ;; Recursively check rest-args
-                     (when (listp rest-args)
+                     ;; Only iterate if it's a proper list (not a dotted pair like (a . b))
+                     (when (a:proper-list-p rest-args)
                        (dolist (subexpr rest-args)
                          (check-expr subexpr line column))))))))
 
@@ -311,7 +315,8 @@
                        (check-expr head line column))
 
                      ;; Recursively check rest-args
-                     (when (listp rest-args)
+                     ;; Only iterate if it's a proper list (not a dotted pair like (a . b))
+                     (when (a:proper-list-p rest-args)
                        (dolist (subexpr rest-args)
                          (check-expr subexpr line column))))))))
 
