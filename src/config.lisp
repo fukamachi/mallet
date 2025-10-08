@@ -178,7 +178,7 @@
 (defun make-recommended-config ()
   "Create the recommended default configuration."
   (make-config
-   :rules '((:line-length :enabled t :max-length 80)
+   :rules '((:line-length :enabled t :max-length 100)
             (:trailing-whitespace :enabled t)
             (:no-tabs :enabled t)
             (:final-newline :enabled t)
