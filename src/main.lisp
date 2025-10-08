@@ -118,24 +118,32 @@ Examples:
 
 (defun expand-file-args (file-args)
   "Expand FILE-ARGS into a list of Lisp file pathnames.
-Handles wildcards and directories."
-  (let ((files '()))
-    (dolist (arg file-args)
-      (let ((path (uiop:parse-native-namestring arg)))
-        (cond
-          ;; Directory - recursively find .lisp files
-          ((uiop:directory-exists-p path)
-           (let ((dir-path (uiop:ensure-directory-pathname path)))
-             (setf files (nconc files
-                                (uiop:directory-files dir-path "**/*.lisp")))))
-          ;; Wildcard pattern - expand using directory
-          ((or (find #\* arg) (find #\? arg))
-           (setf files (nconc files (directory path))))
-          ;; Regular file
-          ((probe-file path)
-           (push path files))
-          (t
-           (error "File not found: ~A" arg)))))
+Handles wildcards and directories, excluding common non-source directories."
+  (let ((files '())
+        (excluded-dirs '(".qlot" ".git" ".svn" ".hg" "node_modules" "_build")))
+    (labels ((should-exclude-p (path)
+               "Check if PATH is in an excluded directory."
+               (let ((path-string (namestring path)))
+                 (some (lambda (excluded)
+                         (search (concatenate 'string "/" excluded "/") path-string))
+                       excluded-dirs))))
+      (dolist (arg file-args)
+        (let ((path (uiop:parse-native-namestring arg)))
+          (cond
+            ;; Directory - recursively find .lisp files, excluding common directories
+            ((uiop:directory-exists-p path)
+             (let* ((dir-path (uiop:ensure-directory-pathname path))
+                    (all-files (uiop:directory-files dir-path "**/*.lisp"))
+                    (filtered-files (remove-if #'should-exclude-p all-files)))
+               (setf files (nconc files filtered-files))))
+            ;; Wildcard pattern - expand using directory
+            ((or (find #\* arg) (find #\? arg))
+             (setf files (nconc files (directory path))))
+            ;; Regular file
+            ((probe-file path)
+             (push path files))
+            (t
+             (error "File not found: ~A" arg))))))
     (nreverse files)))
 
 (defun has-errors-p (results)

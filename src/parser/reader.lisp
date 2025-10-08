@@ -54,11 +54,13 @@ Always returns T to include all conditional code during linting."
 
 (defmethod eclector.reader:evaluate-expression ((client string-parse-result-client) expression)
   "Handle read-time evaluation (#. reader macro).
-Returns a placeholder string since we cannot evaluate expressions with string-based symbols."
+Returns a placeholder list since we cannot evaluate expressions with string-based symbols.
+Returns a list to ensure it can be safely processed by recursive form-checking code."
   (declare (ignore expression))
-  ;; Return a placeholder for read-time evaluated expressions
+  ;; Return a placeholder list for read-time evaluated expressions
   ;; We can't actually evaluate since symbols are strings
-  :read-time-eval-placeholder)
+  ;; Using a list ensures it won't cause type errors when embedded in parent forms
+  '(:read-time-eval-placeholder))
 
 (defmethod eclector.reader:find-character ((client string-parse-result-client) (designator string))
   "Find character by name, supporting SBCL character name extensions.
