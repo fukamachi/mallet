@@ -60,20 +60,55 @@ Returns a placeholder string since we cannot evaluate expressions with string-ba
   ;; We can't actually evaluate since symbols are strings
   :read-time-eval-placeholder)
 
-(defmethod eclector.reader:interpret-token ((client string-parse-result-client)
-                                            input-stream
-                                            token
-                                            escape-ranges)
-  "Interpret tokens including character names.
-Handles unknown character names gracefully for linting purposes."
-  ;; Try default interpretation first
-  (handler-case
-      (call-next-method)
-    ;; If character name is not recognized, return a placeholder character
-    (eclector.reader:unknown-character-name (condition)
-      (declare (ignore condition input-stream token escape-ranges))
-      ;; Return a placeholder character for unknown names
-      #\?)))
+(defmethod eclector.reader:find-character ((client string-parse-result-client) (designator string))
+  "Find character by name, supporting SBCL character name extensions.
+
+SBCL supports these character name extensions:
+- Nul (code 0)
+- Bel (code 7)
+- Esc, Escape (code 27) - both variants accepted
+- Backspace (code 8)
+- Tab (code 9)
+- Newline (code 10)
+- Page (code 12)
+- Return (code 13)
+- Space (code 32)
+- Rubout (code 127)
+
+The DESIGNATOR parameter contains the exact character name as written in source,
+allowing future linting rules to distinguish between variants like #\\Esc vs #\\Escape."
+  ;; First try standard character names
+  (or (call-next-method)
+      ;; If not found, try SBCL extensions
+      (cond
+        ;; ESC character: both #\Esc and #\Escape map to code 27
+        ((or (string-equal designator "Esc")
+             (string-equal designator "Escape"))
+         (code-char 27))
+        ;; NUL character
+        ((string-equal designator "Nul")
+         (code-char 0))
+        ;; BEL character
+        ((string-equal designator "Bel")
+         (code-char 7))
+        ;; Other SBCL names that might already be in standard set
+        ;; but we list them for completeness
+        ((string-equal designator "Backspace")
+         (code-char 8))
+        ((string-equal designator "Tab")
+         (code-char 9))
+        ((string-equal designator "Newline")
+         (code-char 10))
+        ((string-equal designator "Page")
+         (code-char 12))
+        ((string-equal designator "Return")
+         (code-char 13))
+        ((string-equal designator "Space")
+         (code-char 32))
+        ((string-equal designator "Rubout")
+         (code-char 127))
+        ;; Unknown character name - return nil to let Eclector signal error
+        (t nil))))
 
 (defmethod eclector.parse-result:make-expression-result
     ((client string-parse-result-client) expression children source)
