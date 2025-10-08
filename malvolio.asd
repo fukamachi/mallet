@@ -22,6 +22,17 @@
      (:file "reader")))
 
    ;; Rule system
+   (:module "rules-impl"
+    :pathname "rules"
+    :components
+    ((:file "base")
+     (:file "text")
+     (:file "tokens")
+     (:module "forms"
+      :pathname "forms"
+      :components
+      ((:file "control-flow")
+       (:file "variables")))))
    (:file "rules")
 
    ;; Configuration
