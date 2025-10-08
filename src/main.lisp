@@ -125,8 +125,9 @@ Handles wildcards and directories."
         (cond
           ;; Directory - recursively find .lisp files
           ((uiop:directory-exists-p path)
-           (setf files (nconc files
-                              (uiop:directory-files path "**/*.lisp"))))
+           (let ((dir-path (uiop:ensure-directory-pathname path)))
+             (setf files (nconc files
+                                (uiop:directory-files dir-path "**/*.lisp")))))
           ;; Wildcard pattern - expand using directory
           ((or (find #\* arg) (find #\? arg))
            (setf files (nconc files (directory path))))
