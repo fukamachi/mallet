@@ -375,9 +375,14 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                 (unless (or (ignored-var-p var-name ignored-vars)
                                             (find-references var-name scope))
                                   ;; Find position for this binding or variable name
+                                  ;; Try to find position of the variable name first, then binding, then fallback
                                   (multiple-value-bind (var-line var-column)
                                       (if position-map
-                                          (parser:find-position binding position-map fallback-line fallback-column)
+                                          (multiple-value-bind (name-line name-column)
+                                              (parser:find-position var-name position-map nil nil)
+                                            (if name-line
+                                                (values name-line name-column)
+                                                (parser:find-position binding position-map fallback-line fallback-column)))
                                           (values fallback-line fallback-column))
                                     (push (make-instance 'violation:violation
                                                          :rule :unused-variables
