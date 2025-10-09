@@ -1,5 +1,5 @@
 #!/bin/sh
-# Malvolio CLI wrapper script
+# Malo CLI wrapper script
 
 # Find the script directory
 SCRIPT="$0"
@@ -13,5 +13,5 @@ PROJECT_DIR=$(cd "$(dirname "$SCRIPT")/.." && pwd)
 # Run with SBCL
 exec sbcl --noinform --non-interactive \
     --load "$PROJECT_DIR/.qlot/setup.lisp" \
-    --eval "(asdf:load-system :malvolio)" \
-    --eval "(malvolio:main)" -- "$@"
+    --eval "(asdf:load-system :malo)" \
+    --eval "(malo:main)" -- "$@"

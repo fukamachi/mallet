@@ -1,8 +1,8 @@
-# Malvolio
+# Malo
 
 > A relentless guardian of code integrity for Common Lisp
 
-Malvolio is a sophisticated linter for Common Lisp, inspired by ESLint, that provides fast, file-based analysis with comprehensive rule coverage and customizable configuration.
+Malo is a sophisticated linter for Common Lisp, inspired by ESLint, that provides fast, file-based analysis with comprehensive rule coverage and customizable configuration.
 
 ## Features
 
@@ -14,18 +14,18 @@ Malvolio is a sophisticated linter for Common Lisp, inspired by ESLint, that pro
 
 ```bash
 # Clone the repository
-git clone https://github.com/fukamachi/malvolio.git
-cd malvolio
+git clone https://github.com/fukamachi/malo.git
+cd malo
 
 # Install dependencies
 qlot install
 
 # Make the CLI executable available
-chmod +x bin/malvolio
-ln -s $(pwd)/bin/malvolio /usr/local/bin/malvolio
+chmod +x bin/malo
+ln -s $(pwd)/bin/malo /usr/local/bin/malo
 
 # Run on your code
-malvolio src/
+malo src/
 ```
 
 ## Usage
@@ -34,29 +34,29 @@ malvolio src/
 
 ```bash
 # Lint a single file
-malvolio src/main.lisp
+malo src/main.lisp
 
 # Lint multiple files
-malvolio src/*.lisp
+malo src/*.lisp
 
 # Lint a directory recursively
-malvolio src/
+malo src/
 
 # Use JSON output format
-malvolio --format json src/
+malo --format json src/
 
 # Use a custom config file
-malvolio --config .malvolio.lisp src/
+malo --config .malo.lisp src/
 
 # Use a built-in preset
-malvolio --preset all src/        # Enable all rules
-malvolio --preset google src/     # Google style guide
+malo --preset all src/        # Enable all rules
+malo --preset google src/     # Google style guide
 
 # Show help
-malvolio --help
+malo --help
 
 # Show version
-malvolio --version
+malo --version
 ```
 
 ### Exit Codes
@@ -69,35 +69,35 @@ malvolio --version
 ### Library Usage
 
 ```lisp
-(ql:quickload :malvolio)
+(ql:quickload :malo)
 
 ;; Lint a single file
-(malvolio:lint-file #p"src/main.lisp")
+(malo:lint-file #p"src/main.lisp")
 
 ;; Lint multiple files
-(malvolio:lint-files (list #p"src/main.lisp" #p"src/utils.lisp"))
+(malo:lint-files (list #p"src/main.lisp" #p"src/utils.lisp"))
 
 ;; Use a custom configuration
-(let ((config (malvolio:load-config ".malvolio.lisp")))
-  (malvolio:lint-file #p"src/main.lisp" :config config))
+(let ((config (malo:load-config ".malo.lisp")))
+  (malo:lint-file #p"src/main.lisp" :config config))
 
 ;; Create a custom registry
-(let ((registry (malvolio:make-registry)))
-  (malvolio:register-rule registry :line-length
+(let ((registry (malo:make-registry)))
+  (malo:register-rule registry :line-length
                           :description "Lines should not exceed 100 characters"
                           :severity :warning
                           :enabled t)
-  (malvolio:lint-file #p"src/main.lisp" :registry registry))
+  (malo:lint-file #p"src/main.lisp" :registry registry))
 ```
 
 ## Configuration
 
-Malvolio uses S-expression based configuration files (`.malvolio.lisp`). Place this file in your project root, and Malvolio will automatically discover it.
+Malo uses S-expression based configuration files (`.malo.lisp`). Place this file in your project root, and Malo will automatically discover it.
 
 ### Example Configuration
 
 ```lisp
-(:malvolio-config
+(:malo-config
  ;; Extend from a built-in config
  (:extends :default)  ; Options: :default, :all, :google
 
@@ -119,7 +119,7 @@ Malvolio uses S-expression based configuration files (`.malvolio.lisp`). Place t
 
 ### Built-in Configurations
 
-Malvolio provides three built-in presets. Use them via `--preset` on the command line or `:extends` in configuration files:
+Malo provides three built-in presets. Use them via `--preset` on the command line or `:extends` in configuration files:
 
 - **`:default`** - Only universally-accepted rules (trailing whitespace, tabs, unused variables). Quiet output, suitable for all projects.
 - **`:all`** - All rules enabled. Useful for exploring what the linter can catch.
@@ -127,7 +127,7 @@ Malvolio provides three built-in presets. Use them via `--preset` on the command
 
 ## Rules
 
-Malvolio includes **11 rules** for checking code style, best practices, and potential issues:
+Malo includes **11 rules** for checking code style, best practices, and potential issues:
 
 - **Text-Level Rules (5)**: `line-length`, `trailing-whitespace`, `no-tabs`, `final-newline`, `consecutive-blank-lines`
 - **Token-Level Rules (1)**: `comment-level`
@@ -155,7 +155,7 @@ src/main.lisp:
 Machine-readable format for tool integration:
 
 ```bash
-malvolio --format json src/main.lisp
+malo --format json src/main.lisp
 ```
 
 ```json

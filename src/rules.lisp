@@ -1,8 +1,8 @@
-(uiop:define-package #:malvolio/rules
+(uiop:define-package #:malo/rules
   (:use #:cl)
-  (:use-reexport #:malvolio/rules/base
-                 #:malvolio/rules/text
-                 #:malvolio/rules/forms/control-flow
-                 #:malvolio/rules/forms/variables
-                 #:malvolio/rules/forms/package))
-(in-package #:malvolio/rules)
+  (:use-reexport #:malo/rules/base
+                 #:malo/rules/text
+                 #:malo/rules/forms/control-flow
+                 #:malo/rules/forms/variables
+                 #:malo/rules/forms/package))
+(in-package #:malo/rules)

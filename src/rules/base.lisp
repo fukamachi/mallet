@@ -1,8 +1,8 @@
-(defpackage #:malvolio/rules/base
+(defpackage #:malo/rules/base
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:violation #:malvolio/violation))
+   (#:violation #:malo/violation))
   (:export #:rule
            #:rule-name
            #:rule-description
@@ -21,7 +21,7 @@
            #:check-text
            #:check-tokens
            #:check-form))
-(in-package #:malvolio/rules/base)
+(in-package #:malo/rules/base)
 
 ;;; Rule class
 

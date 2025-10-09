@@ -1,9 +1,9 @@
-(defpackage #:malvolio/tests/config
+(defpackage #:malo/tests/config
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:config #:malvolio/config)))
-(in-package #:malvolio/tests/config)
+   (#:config #:malo/config)))
+(in-package #:malo/tests/config)
 
 ;;; Config data structure tests
 
@@ -26,7 +26,7 @@
 
 (deftest parse-config
   (testing "Parse simple config"
-    (let* ((sexp '(:malvolio-config
+    (let* ((sexp '(:malo-config
                    (:rules
                     (:line-length :enabled t :max-length 120))))
            (cfg (config:parse-config sexp)))
@@ -34,14 +34,14 @@
       (ok (= 120 (config:get-rule-option cfg :line-length :max-length)))))
 
   (testing "Parse config with disabled rule"
-    (let* ((sexp '(:malvolio-config
+    (let* ((sexp '(:malo-config
                    (:rules
                     (:if-without-else :enabled nil))))
            (cfg (config:parse-config sexp)))
       (ok (not (config:rule-enabled-p cfg :if-without-else)))))
 
   (testing "Parse config with severity override"
-    (let* ((sexp '(:malvolio-config
+    (let* ((sexp '(:malo-config
                    (:rules
                     (:unused-variables :severity :error))))
            (cfg (config:parse-config sexp)))
@@ -49,22 +49,25 @@
 
 ;;; Config file loading tests
 
+(defmacro with-temporary-config ((content pathname) &body body)
+  `(uiop:with-temporary-file (:stream out
+                              :pathname ,pathname
+                              :direction :output
+                              :prefix "malo-config"
+                              :type "lisp")
+     (write-string ,content out)
+     (force-output out)
+     ,@body))
+
 (deftest load-config-file
   (testing "Load config from file"
-    (let* ((tmpfile (format nil "/tmp/malvolio-test-~A.lisp" (get-universal-time)))
-           (config-content "(:malvolio-config
-                             (:rules
-                              (:line-length :enabled t :max-length 100)))"))
-      (unwind-protect
-          (progn
-            (with-open-file (out tmpfile :direction :output :if-exists :supersede)
-              (write-string config-content out))
-            (let ((cfg (config:load-config tmpfile)))
-              (ok (config:rule-enabled-p cfg :line-length))
-              (ok (= 100 (config:get-rule-option cfg :line-length :max-length)))))
-        ;; Cleanup
-        (when (probe-file tmpfile)
-          (delete-file tmpfile))))))
+    (let ((config-content "(:malo-config
+                              (:rules
+                               (:line-length :enabled t :max-length 100)))"))
+      (with-temporary-config (config-content tmpfile)
+        (let ((cfg (config:load-config tmpfile)))
+          (ok (config:rule-enabled-p cfg :line-length))
+          (ok (= 100 (config:get-rule-option cfg :line-length :max-length))))))))
 
 ;;; Config merging tests
 
@@ -119,7 +122,7 @@
 
 (deftest config-extends
   (testing "Parse config with extends"
-    (let* ((sexp '(:malvolio-config
+    (let* ((sexp '(:malo-config
                    (:extends :all)
                    (:rules
                     (:line-length :max-length 100))))
@@ -134,13 +137,13 @@
 
 (deftest find-config-file
   (testing "Find config in current directory"
-    (let* ((tmpdir (format nil "/tmp/malvolio-test-dir-~A" (get-universal-time)))
-           (config-file (merge-pathnames ".malvolio.lisp" tmpdir)))
+    (let* ((tmpdir (format nil "/tmp/malo-test-dir-~A" (get-universal-time)))
+           (config-file (merge-pathnames ".malo.lisp" tmpdir)))
       (unwind-protect
           (progn
             (ensure-directories-exist tmpdir)
             (with-open-file (out config-file :direction :output :if-exists :supersede)
-              (write-string "(:malvolio-config)" out))
+              (write-string "(:malo-config)" out))
             (let ((found (config:find-config-file tmpdir)))
               (ok (not (null found)))
               (ok (equal (namestring found) (namestring config-file)))))
@@ -151,14 +154,14 @@
           (uiop:delete-directory-tree tmpdir :validate t)))))
 
   (testing "Find config in parent directory"
-    (let* ((tmpdir (format nil "/tmp/malvolio-test-parent-~A" (get-universal-time)))
+    (let* ((tmpdir (format nil "/tmp/malo-test-parent-~A" (get-universal-time)))
            (subdir (merge-pathnames "sub/" tmpdir))
-           (config-file (merge-pathnames ".malvolio.lisp" tmpdir)))
+           (config-file (merge-pathnames ".malo.lisp" tmpdir)))
       (unwind-protect
           (progn
             (ensure-directories-exist subdir)
             (with-open-file (out config-file :direction :output :if-exists :supersede)
-              (write-string "(:malvolio-config)" out))
+              (write-string "(:malo-config)" out))
             ;; Search from subdir should find config in parent
             (let ((found (config:find-config-file subdir)))
               (ok (not (null found)))

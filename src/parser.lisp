@@ -1,4 +1,4 @@
-(defpackage #:malvolio/parser
+(defpackage #:malo/parser
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria))
@@ -33,7 +33,7 @@
            #:case-form-p
            #:defpackage-form-p
            #:defun-form-p))
-(in-package #:malvolio/parser)
+(in-package #:malo/parser)
 
 ;;; Token data structure
 

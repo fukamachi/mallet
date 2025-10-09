@@ -1,9 +1,9 @@
-(defpackage #:malvolio/tests/parser/reader
+(defpackage #:malo/tests/parser/reader
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:parser #:malvolio/parser)))
-(in-package #:malvolio/tests/parser/reader)
+   (#:parser #:malo/parser)))
+(in-package #:malo/tests/parser/reader)
 
 (deftest parse-simple-forms
   (testing "Single number"

@@ -1,13 +1,13 @@
-(defpackage #:malvolio/rules/forms/package
+(defpackage #:malo/rules/forms/package
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malvolio/rules/base)
-   (#:violation #:malvolio/violation)
-   (#:parser #:malvolio/parser))
+   (#:base #:malo/rules/base)
+   (#:violation #:malo/violation)
+   (#:parser #:malo/parser))
   (:export #:unused-local-nicknames-rule
            #:unused-imported-symbols-rule))
-(in-package #:malvolio/rules/forms/package)
+(in-package #:malo/rules/forms/package)
 
 ;;; Unused Local Nicknames Rule
 

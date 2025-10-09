@@ -1,10 +1,10 @@
-(defpackage #:malvolio/formatter
+(defpackage #:malo/formatter
   (:use #:cl)
   (:local-nicknames
-   (#:violation #:malvolio/violation))
+   (#:violation #:malo/violation))
   (:export #:format-text
            #:format-json))
-(in-package #:malvolio/formatter)
+(in-package #:malo/formatter)
 
 (defun format-text (results &key (stream *standard-output*))
   "Format linting RESULTS as human-readable text to STREAM.

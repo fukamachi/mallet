@@ -1,16 +1,16 @@
-(defpackage #:malvolio/engine
+(defpackage #:malo/engine
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:parser #:malvolio/parser)
-   (#:rules #:malvolio/rules)
-   (#:config #:malvolio/config)
-   (#:violation #:malvolio/violation))
+   (#:parser #:malo/parser)
+   (#:rules #:malo/rules)
+   (#:config #:malo/config)
+   (#:violation #:malo/violation))
   (:export #:lint-file
            #:lint-files
            #:make-registry-from-config
            #:make-default-registry))
-(in-package #:malvolio/engine)
+(in-package #:malo/engine)
 
 (defun make-default-registry ()
   "Create a registry with all default rules enabled."

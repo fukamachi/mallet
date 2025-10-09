@@ -1,14 +1,14 @@
-(defpackage #:malvolio/rules/text
+(defpackage #:malo/rules/text
   (:use #:cl)
   (:local-nicknames
-   (#:base #:malvolio/rules/base)
-   (#:violation #:malvolio/violation))
+   (#:base #:malo/rules/base)
+   (#:violation #:malo/violation))
   (:export #:line-length-rule
            #:trailing-whitespace-rule
            #:no-tabs-rule
            #:final-newline-rule
            #:consecutive-blank-lines-rule))
-(in-package #:malvolio/rules/text)
+(in-package #:malo/rules/text)
 
 ;;; Line length rule
 

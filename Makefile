@@ -1,7 +1,7 @@
 .PHONY: help test test-unit test-cli
 
 help:
-	@echo "Malvolio Linter - Make targets:"
+	@echo "Malo Linter - Make targets:"
 	@echo ""
 	@echo "  make test          - Run all tests (unit + CLI integration)"
 	@echo "  make test-unit     - Run unit tests only"
@@ -15,7 +15,7 @@ test: test-unit test-cli
 test-unit:
 	@echo "Running unit tests..."
 	@qlot exec sbcl --noinform --non-interactive \
-		--eval "(asdf:test-system :malvolio)"
+		--eval "(asdf:test-system :malo)"
 
 test-cli:
 	@echo ""

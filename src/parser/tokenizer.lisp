@@ -1,4 +1,4 @@
-(in-package #:malvolio/parser)
+(in-package #:malo/parser)
 
 (defun make-token (type value file line column raw)
   "Create a token object."

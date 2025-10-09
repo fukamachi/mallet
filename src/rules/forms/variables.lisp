@@ -1,19 +1,19 @@
-(defpackage #:malvolio/rules/forms/variables
+(defpackage #:malo/rules/forms/variables
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malvolio/rules/base)
-   (#:parser #:malvolio/parser)
-   (#:violation #:malvolio/violation))
+   (#:base #:malo/rules/base)
+   (#:parser #:malo/parser)
+   (#:violation #:malo/violation))
   (:export #:unused-variables-rule))
-(in-package #:malvolio/rules/forms/variables)
+(in-package #:malo/rules/forms/variables)
 
 ;;; Utilities
 
 (defun debug-mode-p ()
   "Check if debug mode is enabled."
-  (and (find-symbol "*DEBUG-MODE*" "MALVOLIO")
-       (symbol-value (find-symbol "*DEBUG-MODE*" "MALVOLIO"))))
+  (and (find-symbol "*DEBUG-MODE*" "MALO")
+       (symbol-value (find-symbol "*DEBUG-MODE*" "MALO"))))
 
 ;;; Unused-variables rule
 

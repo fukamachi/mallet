@@ -1,9 +1,9 @@
-(defpackage #:malvolio/tests/parser/unknown-reader-macros
+(defpackage #:malo/tests/parser/unknown-reader-macros
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:parser #:malvolio/parser)))
-(in-package #:malvolio/tests/parser/unknown-reader-macros)
+   (#:parser #:malo/parser)))
+(in-package #:malo/tests/parser/unknown-reader-macros)
 
 (deftest parse-with-unknown-reader-macro
   (testing "Parse forms with unknown reader macro (#?\"...\" from cl-interpol)"

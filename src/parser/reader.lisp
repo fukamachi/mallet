@@ -1,4 +1,4 @@
-(in-package #:malvolio/parser)
+(in-package #:malo/parser)
 
 ;;; Eclector parse-result based parser for precise source tracking
 ;;;
@@ -293,8 +293,8 @@ enabling accurate violation reporting."
         (error (e)
           ;; Other parse errors (e.g., unmatched parens) - warn and stop parsing this file
           (let ((pos (file-position stream)))
-            (if (and (find-symbol "*DEBUG-MODE*" "MALVOLIO")
-                     (symbol-value (find-symbol "*DEBUG-MODE*" "MALVOLIO")))
+            (if (and (find-symbol "*DEBUG-MODE*" "MALO")
+                     (symbol-value (find-symbol "*DEBUG-MODE*" "MALO")))
                 (format *error-output* "~%Warning: Stopped parsing ~A at position ~A~%  Error: ~A~%"
                         file pos e)
                 (format *error-output* "~%Warning: Stopped parsing ~A at position ~A (parse error, use --debug for details)~%"

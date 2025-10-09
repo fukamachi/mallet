@@ -1,8 +1,8 @@
-(defpackage #:malvolio/tests
+(defpackage #:malo/tests
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:m #:malvolio)
-   (#:parser #:malvolio/parser)
+   (#:m #:malo)
+   (#:parser #:malo/parser)
    (#:a #:alexandria)))
-(in-package #:malvolio/tests)
+(in-package #:malo/tests)

@@ -1,6 +1,6 @@
-# Malvolio Rules
+# Malo Rules
 
-This document describes all the rules available in Malvolio.
+This document describes all the rules available in Malo.
 
 ## Text-Level Rules
 

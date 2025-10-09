@@ -1,5 +1,5 @@
 #!/bin/bash
-# CLI Integration Tests for Malvolio
+# CLI Integration Tests for Malo
 # Tests the full CLI pipeline with fixture files
 
 set -e
@@ -18,13 +18,13 @@ TESTS_FAILED=0
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-CLI="$PROJECT_DIR/bin/malvolio"
+CLI="$PROJECT_DIR/bin/malo"
 FIXTURES="$SCRIPT_DIR/fixtures"
 CLEAN_DIR="$FIXTURES/clean"
 VIOLATIONS_DIR="$FIXTURES/violations"
 
 echo "========================================="
-echo "Malvolio CLI Integration Tests"
+echo "Malo CLI Integration Tests"
 echo "========================================="
 echo ""
 

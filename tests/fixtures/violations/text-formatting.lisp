@@ -1,6 +1,6 @@
-(defpackage #:malvolio-test-formatting
+(defpackage #:malo-test-formatting
   (:use #:cl))
-(in-package #:malvolio-test-formatting)
+(in-package #:malo-test-formatting)
 
 ;; This file has various text-level formatting violations
 

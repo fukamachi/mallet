@@ -1,11 +1,11 @@
-(defpackage #:malvolio/tests/rules/line-length
+(defpackage #:malo/tests/rules/line-length
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)
-   (#:violation #:malvolio/violation)
+   (#:rules #:malo/rules)
+   (#:violation #:malo/violation)
    (#:ppcre #:cl-ppcre)))
-(in-package #:malvolio/tests/rules/line-length)
+(in-package #:malo/tests/rules/line-length)
 
 (deftest line-length-within-limit
   (testing "Line within default limit (80 chars)"

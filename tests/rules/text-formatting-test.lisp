@@ -1,10 +1,10 @@
-(defpackage #:malvolio/tests/rules/text-formatting
+(defpackage #:malo/tests/rules/text-formatting
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)
-   (#:violation #:malvolio/violation)))
-(in-package #:malvolio/tests/rules/text-formatting)
+   (#:rules #:malo/rules)
+   (#:violation #:malo/violation)))
+(in-package #:malo/tests/rules/text-formatting)
 
 ;;; Trailing whitespace tests
 

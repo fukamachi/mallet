@@ -1,4 +1,4 @@
-(defpackage #:malvolio/config
+(defpackage #:malo/config
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria))
@@ -11,7 +11,7 @@
            #:get-rule-option
            #:get-built-in-config
            #:find-config-file))
-(in-package #:malvolio/config)
+(in-package #:malo/config)
 
 ;;; Config data structure
 
@@ -26,7 +26,7 @@
     :initform nil
     :accessor config-extends
     :documentation "Base config to extend from"))
-  (:documentation "Configuration for Malvolio linter."))
+  (:documentation "Configuration for Malo linter."))
 
 (defun make-config (&key rules extends)
   "Create a new config with RULES and optional EXTENDS."
@@ -71,8 +71,8 @@
   "Parse S-expression SEXP into a config object."
   (check-type sexp list)
 
-  (unless (eq (first sexp) :malvolio-config)
-    (error "Config must start with :malvolio-config"))
+  (unless (eq (first sexp) :malo-config)
+    (error "Config must start with :malo-config"))
 
   (let ((extends nil)
         (rules '()))
@@ -107,9 +107,9 @@
 
 (defun load-config (path)
   "Load configuration from file at PATH."
-  (check-type path (or string pathname))
-
-  (let ((pathname (uiop:parse-native-namestring path)))
+  (let ((pathname (etypecase path
+                    (string (uiop:parse-native-namestring path))
+                    (pathname path))))
     (unless (probe-file pathname)
       (error "Config file not found: ~A" pathname))
 
@@ -230,14 +230,14 @@ Uses 100 character line length per Google's guidelines."
 ;;; Config file discovery
 
 (defun find-config-file (start-directory)
-  "Find .malvolio.lisp config file starting from START-DIRECTORY.
+  "Find .malo.lisp config file starting from START-DIRECTORY.
 Walks up parent directories until found or reaches root."
   (let ((dir (if (pathnamep start-directory)
                  (uiop:ensure-directory-pathname start-directory)
                  (uiop:ensure-directory-pathname
                   (uiop:parse-native-namestring start-directory)))))
     (labels ((search-dir (current-dir)
-               (let ((config-path (merge-pathnames ".malvolio.lisp" current-dir)))
+               (let ((config-path (merge-pathnames ".malo.lisp" current-dir)))
                  (cond
                    ((probe-file config-path)
                     config-path)

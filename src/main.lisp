@@ -1,13 +1,13 @@
-(defpackage #:malvolio
+(defpackage #:malo
   (:use #:cl
-        #:malvolio/violation
-        #:malvolio/parser
-        #:malvolio/rules)
+        #:malo/violation
+        #:malo/parser
+        #:malo/rules)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:engine #:malvolio/engine)
-   (#:config #:malvolio/config)
-   (#:formatter #:malvolio/formatter))
+   (#:engine #:malo/engine)
+   (#:config #:malo/config)
+   (#:formatter #:malo/formatter))
   (:export #:main
            #:lint-file
            #:lint-files
@@ -32,7 +32,7 @@
            #:rule-type
            #:rule-enabled-p
            #:config
-           ;; Re-exported from malvolio/violation
+           ;; Re-exported from malo/violation
            #:violation
            #:violation-rule
            #:violation-file
@@ -41,7 +41,7 @@
            #:violation-severity
            #:violation-message
            #:violation-fix
-           ;; Re-exported from malvolio/parser
+           ;; Re-exported from malo/parser
            #:token
            #:token-type
            #:token-value
@@ -60,7 +60,7 @@
            #:form-source
            #:parse-forms
            #:analyze-text))
-(in-package #:malvolio)
+(in-package #:malo)
 
 ;;; Special variables
 
@@ -108,7 +108,7 @@ Returns (values format config-path preset debug files)."
            (print-help)
            (uiop:quit 0))
           ((string= arg "--version")
-           (format t "Malvolio version 0.1.0~%")
+           (format t "Malo version 0.1.0~%")
            (uiop:quit 0))
           ((and (> (length arg) 0) (char= (char arg 0) #\-))
            (error "Unknown option: ~A" arg))
@@ -119,13 +119,13 @@ Returns (values format config-path preset debug files)."
 (defun print-help ()
   "Print CLI usage information."
   (format t "~
-Malvolio - A relentless guardian of code integrity for Common Lisp
+Malo - A relentless guardian of code integrity for Common Lisp
 
-Usage: malvolio [options] <file>...
+Usage: malo [options] <file>...
 
 Options:
   --format <format>   Output format (text or json, default: text)
-  --config <path>     Path to config file (default: auto-discover .malvolio.lisp)
+  --config <path>     Path to config file (default: auto-discover .malo.lisp)
   --preset <name>     Use built-in preset (default, all, or google)
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
@@ -137,11 +137,11 @@ Presets:
   google              Google Common Lisp Style Guide compliance
 
 Examples:
-  malvolio src/main.lisp
-  malvolio --preset all src/*.lisp
-  malvolio --format json src/*.lisp
-  malvolio --config .malvolio.lisp src/
-  malvolio --debug src/
+  malo src/main.lisp
+  malo --preset all src/*.lisp
+  malo --format json src/*.lisp
+  malo --config .malo.lisp src/
+  malo --debug src/
 "))
 
 (defun expand-file-args (file-args)
@@ -194,7 +194,7 @@ Handles wildcards and directories, excluding common non-source directories."
         thereis (not (null violations))))
 
 (defun main (&optional (args (uiop:command-line-arguments)))
-  "Main entry point for the Malvolio CLI.
+  "Main entry point for the Malo CLI.
 Lints files specified in ARGS and exits with appropriate status code."
   (let* ((args (uiop:command-line-arguments))
          (args (if (equal (first args) "--")

@@ -1,11 +1,11 @@
-(defpackage #:malvolio/tests/rules/missing-otherwise
+(defpackage #:malo/tests/rules/missing-otherwise
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)
-   (#:parser #:malvolio/parser)
-   (#:violation #:malvolio/violation)))
-(in-package #:malvolio/tests/rules/missing-otherwise)
+   (#:rules #:malo/rules)
+   (#:parser #:malo/parser)
+   (#:violation #:malo/violation)))
+(in-package #:malo/tests/rules/missing-otherwise)
 
 (deftest missing-otherwise-valid
   (testing "Valid: case with otherwise"

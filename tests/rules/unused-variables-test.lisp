@@ -1,11 +1,11 @@
-(defpackage #:malvolio/tests/rules/unused-variables
+(defpackage #:malo/tests/rules/unused-variables
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)
-   (#:parser #:malvolio/parser)
-   (#:violation #:malvolio/violation)))
-(in-package #:malvolio/tests/rules/unused-variables)
+   (#:rules #:malo/rules)
+   (#:parser #:malo/parser)
+   (#:violation #:malo/violation)))
+(in-package #:malo/tests/rules/unused-variables)
 
 (deftest unused-variables-valid
   (testing "Valid: all parameters used"

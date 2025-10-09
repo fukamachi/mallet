@@ -1,9 +1,9 @@
-(defpackage #:malvolio/tests/rules/registry
+(defpackage #:malo/tests/rules/registry
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)))
-(in-package #:malvolio/tests/rules/registry)
+   (#:rules #:malo/rules)))
+(in-package #:malo/tests/rules/registry)
 
 (deftest register-and-find-rules
   (testing "Register a rule"

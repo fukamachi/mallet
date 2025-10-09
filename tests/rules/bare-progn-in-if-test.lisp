@@ -1,11 +1,11 @@
-(defpackage #:malvolio/tests/rules/bare-progn-in-if
+(defpackage #:malo/tests/rules/bare-progn-in-if
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)
-   (#:parser #:malvolio/parser)
-   (#:violation #:malvolio/violation)))
-(in-package #:malvolio/tests/rules/bare-progn-in-if)
+   (#:rules #:malo/rules)
+   (#:parser #:malo/parser)
+   (#:violation #:malo/violation)))
+(in-package #:malo/tests/rules/bare-progn-in-if)
 
 (deftest bare-progn-in-if-valid
   (testing "Valid: if without progn"

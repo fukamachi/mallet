@@ -1,4 +1,4 @@
-(defpackage #:malvolio/violation
+(defpackage #:malo/violation
   (:use #:cl)
   (:export #:violation
            #:violation-rule
@@ -8,7 +8,7 @@
            #:violation-severity
            #:violation-message
            #:violation-fix))
-(in-package #:malvolio/violation)
+(in-package #:malo/violation)
 
 (defclass violation ()
   ((rule

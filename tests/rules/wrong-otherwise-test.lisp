@@ -1,11 +1,11 @@
-(defpackage #:malvolio/tests/rules/wrong-otherwise
+(defpackage #:malo/tests/rules/wrong-otherwise
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)
-   (#:parser #:malvolio/parser)
-   (#:violation #:malvolio/violation)))
-(in-package #:malvolio/tests/rules/wrong-otherwise)
+   (#:rules #:malo/rules)
+   (#:parser #:malo/parser)
+   (#:violation #:malo/violation)))
+(in-package #:malo/tests/rules/wrong-otherwise)
 
 (deftest wrong-otherwise-valid
   (testing "Valid: ecase without otherwise"

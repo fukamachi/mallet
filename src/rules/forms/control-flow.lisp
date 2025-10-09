@@ -1,15 +1,15 @@
-(defpackage #:malvolio/rules/forms/control-flow
+(defpackage #:malo/rules/forms/control-flow
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malvolio/rules/base)
-   (#:parser #:malvolio/parser)
-   (#:violation #:malvolio/violation))
+   (#:base #:malo/rules/base)
+   (#:parser #:malo/parser)
+   (#:violation #:malo/violation))
   (:export #:if-without-else-rule
            #:bare-progn-in-if-rule
            #:missing-otherwise-rule
            #:wrong-otherwise-rule))
-(in-package #:malvolio/rules/forms/control-flow)
+(in-package #:malo/rules/forms/control-flow)
 
 ;;; If-without-else rule
 

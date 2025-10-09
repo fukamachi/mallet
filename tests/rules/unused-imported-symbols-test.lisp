@@ -1,10 +1,10 @@
-(defpackage #:malvolio/tests/rules/unused-imported-symbols
+(defpackage #:malo/tests/rules/unused-imported-symbols
   (:use #:cl #:rove)
   (:local-nicknames
-   (#:rules #:malvolio/rules)
-   (#:parser #:malvolio/parser)
-   (#:violation #:malvolio/violation)))
-(in-package #:malvolio/tests/rules/unused-imported-symbols)
+   (#:rules #:malo/rules)
+   (#:parser #:malo/parser)
+   (#:violation #:malo/violation)))
+(in-package #:malo/tests/rules/unused-imported-symbols)
 
 (defmacro with-test-file ((tmpfile-var code) &body body)
   "Helper macro to create temporary file with CODE and clean up after."
