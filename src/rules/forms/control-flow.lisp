@@ -28,10 +28,11 @@
   (check-type file pathname)
 
   (let ((violations '())
-        (position-map (parser:form-position-map form)))
+        (position-map (parser:form-position-map form))
+        (visited (make-hash-table :test 'eq)))  ; Track visited cons cells
     (labels ((check-expr (expr fallback-line fallback-column)
                "Recursively check expression for if-without-else violations."
-               (when (consp expr)
+               (base:with-safe-cons-expr (expr visited)
                  ;; Get actual position of this expression
                  (multiple-value-bind (line column)
                      (parser:find-position expr position-map fallback-line fallback-column)
@@ -87,7 +88,8 @@
   (check-type file pathname)
 
   (let ((violations '())
-        (position-map (parser:form-position-map form)))
+        (position-map (parser:form-position-map form))
+        (visited (make-hash-table :test 'eq)))  ; Track visited cons cells
     (labels ((is-progn-p (expr)
                "Check if expression is a bare progn form."
                (and (consp expr)
@@ -95,7 +97,7 @@
 
              (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for bare progn in if."
-               (when (consp expr)
+               (base:with-safe-cons-expr (expr visited)
                  ;; Get actual position of this expression
                  (multiple-value-bind (line column)
                      (parser:find-position expr position-map fallback-line fallback-column)
@@ -168,7 +170,8 @@
   (check-type file pathname)
 
   (let ((violations '())
-        (position-map (parser:form-position-map form)))
+        (position-map (parser:form-position-map form))
+        (visited (make-hash-table :test 'eq)))  ; Track visited cons cells
     (labels ((has-otherwise-clause-p (clauses)
                "Check if clauses list has an otherwise clause."
                (some (lambda (clause)
@@ -187,7 +190,7 @@
 
              (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for missing otherwise."
-               (when (consp expr)
+               (base:with-safe-cons-expr (expr visited)
                  ;; Get actual position of this expression
                  (multiple-value-bind (line column)
                      (parser:find-position expr position-map fallback-line fallback-column)
@@ -267,7 +270,8 @@
   (check-type file pathname)
 
   (let ((violations '())
-        (position-map (parser:form-position-map form)))
+        (position-map (parser:form-position-map form))
+        (visited (make-hash-table :test 'eq)))  ; Track visited cons cells
     (labels ((has-catch-all-clause-p (clauses)
                "Check if clauses list has an otherwise or t clause."
                (some (lambda (clause)
@@ -279,7 +283,7 @@
 
              (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for wrong otherwise."
-               (when (consp expr)
+               (base:with-safe-cons-expr (expr visited)
                  ;; Get actual position of this expression
                  (multiple-value-bind (line column)
                      (parser:find-position expr position-map fallback-line fallback-column)

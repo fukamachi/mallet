@@ -22,7 +22,9 @@
            #:coalton-form-p
            #:check-text
            #:check-tokens
-           #:check-form))
+           #:check-form
+           #:traverse-expr
+           #:with-safe-cons-expr))
 (in-package #:malo/rules/base)
 
 ;;; Rule class
@@ -175,3 +177,80 @@ Returns a list of VIOLATION objects."))
   (if (coalton-form-p form)
       nil  ; Return empty violations list for Coalton forms
       (call-next-method)))  ; Call the actual rule implementation
+
+;;; Generic traversal with cycle detection
+
+(defun traverse-expr (expr function &key (traverse-lists t))
+  "Traverse EXPR, calling FUNCTION on each sub-expression with cycle detection.
+
+FUNCTION is called with each expression encountered during traversal.
+The traversal automatically handles circular structures by tracking visited cons cells.
+
+If TRAVERSE-LISTS is T (default), recursively traverses both CAR and CDR of cons cells.
+If TRAVERSE-LISTS is NIL, only traverses CAR of proper lists (useful for walking code).
+
+Example usage:
+  ;; Collect all strings in an expression
+  (let ((strings '()))
+    (traverse-expr expr
+      (lambda (e) (when (stringp e) (push e strings))))
+    strings)
+
+  ;; Check if any subexpression matches a pattern
+  (let ((found nil))
+    (traverse-expr expr
+      (lambda (e) (when (my-pattern-p e) (setf found t))))
+    found)"
+  (let ((visited (make-hash-table :test 'eq)))
+    (labels ((traverse (e)
+               (cond
+                 ;; Atoms - call function on them
+                 ((not (consp e))
+                  (funcall function e))
+                 ;; Cons cells - check for cycles and recurse
+                 (t
+                  (unless (gethash e visited)
+                    (setf (gethash e visited) t)
+                    ;; Call function on the cons cell itself
+                    (funcall function e)
+                    ;; Traverse car
+                    (traverse (car e))
+                    ;; Traverse cdr based on mode
+                    (if traverse-lists
+                        ;; Full tree traversal mode - traverse any cdr
+                        (traverse (cdr e))
+                        ;; List traversal mode - only traverse cdr if it's a cons (proper list)
+                        (when (consp (cdr e))
+                          (traverse (cdr e)))))))))
+      (traverse expr)
+      nil)))
+
+;;; Safe expression checking with cycle detection
+
+(defmacro with-safe-cons-expr ((expr visited) &body body)
+  "Execute BODY only if EXPR is safe to check (cons, proper list, not visited).
+Automatically marks EXPR as visited before executing BODY.
+
+This macro handles three common safety checks for recursive expression analysis:
+1. EXPR must be a cons cell (not an atom)
+2. EXPR must be a proper list (not a malformed dotted pair from parse errors)
+3. EXPR must not have been visited yet (prevents infinite loops on circular structures)
+
+Example usage:
+  (let ((visited (make-hash-table :test 'eq)))
+    (labels ((check-expr (expr)
+               (with-safe-cons-expr (expr visited)
+                 ;; Your rule-specific logic here
+                 (when (some-pattern-p expr)
+                   (report-violation))
+                 ;; Recurse on subexpressions
+                 (dolist (subexpr (rest expr))
+                   (check-expr subexpr)))))
+      (check-expr my-form)))"
+  (let ((expr-var (gensym "EXPR")))
+    `(let ((,expr-var ,expr))
+       (when (and (consp ,expr-var)
+                  (a:proper-list-p ,expr-var)
+                  (not (gethash ,expr-var ,visited)))
+         (setf (gethash ,expr-var ,visited) t)
+         ,@body))))

@@ -357,15 +357,32 @@ enabling accurate violation reporting."
           nil)
         ;; Other reader errors we can't handle - re-signal
         (eclector.base:stream-position-reader-error (e)
-          (let ((pos (file-position stream)))
-            (format *error-output* "~%Warning: Skipping form at ~A position ~A (unknown reader macro)~%"
-                    file pos))
-          ;; Try to skip to next whitespace/newline to continue parsing
-          (loop for char = (read-char stream nil :eof)
-                until (or (eq char :eof)
-                          (member char '(#\Space #\Tab #\Newline #\Return)))
-                finally (when (not (eq char :eof))
-                          (unread-char char stream))))
+          (let* ((pos (file-position stream))
+                 ;; Extract a snippet of text around the error position
+                 (snippet-start (max 0 (- pos 10)))
+                 (snippet-end (min (length text) (+ pos 20)))
+                 (snippet (subseq text snippet-start snippet-end))
+                 ;; Find where the error position is in the snippet
+                 (marker-pos (- pos snippet-start)))
+            (multiple-value-bind (line column)
+                (char-pos-to-line-column pos line-starts)
+              (format *error-output* "~%Warning: Skipping form at ~A:~D:~D (unknown reader macro)~%"
+                      file line column)
+              (format *error-output* "  Near: ~S~%" snippet)
+              (format *error-output* "        ~v@T^--- here~%"  marker-pos)))
+          ;; Try to skip the entire top-level form using standard reader
+          ;; This preserves context (like backquote) better than skipping to whitespace
+          (handler-case
+              (cl:read stream nil :eof)
+            (end-of-file ()
+              (return))
+            ;; If standard reader also fails, skip to next whitespace as fallback
+            (error ()
+              (loop for char = (read-char stream nil :eof)
+                    until (or (eq char :eof)
+                              (member char '(#\Space #\Tab #\Newline #\Return)))
+                    finally (when (not (eq char :eof))
+                              (unread-char char stream))))))
         (error (e)
           ;; Other parse errors (e.g., reader errors, syntax errors)
           (let ((pos (file-position stream)))

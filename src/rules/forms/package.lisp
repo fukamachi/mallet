@@ -190,18 +190,14 @@ Returns list of symbol names."
 Looks for 'nickname:*' patterns.
 Returns list of strings where nickname was found."
   (let ((references '()))
-    (labels ((search-expr (expr)
-               (cond
-                 ((stringp expr)
-                  (when (and (position #\: expr)
-                             (string-equal (subseq expr 0 (position #\: expr))
-                                           nickname))
-                    (push expr references)))
-                 ((consp expr)
-                  (search-expr (car expr))
-                  (search-expr (cdr expr))))))
-      (dolist (form forms)
-        (search-expr (parser:form-expr form))))
+    (dolist (form forms)
+      (base:traverse-expr (parser:form-expr form)
+        (lambda (expr)
+          (when (and (stringp expr)
+                     (position #\: expr)
+                     (string-equal (subseq expr 0 (position #\: expr))
+                                   nickname))
+            (push expr references)))))
     references))
 
 (defun find-symbol-references (forms symbol)
@@ -210,14 +206,10 @@ Looks for 'CURRENT:symbol', 'package:symbol', or unqualified 'symbol'.
 Case-insensitive comparison.
 Returns list of strings where symbol was found."
   (let ((references '()))
-    (labels ((search-expr (expr)
-               (cond
-                 ((stringp expr)
-                  (when (string-equal (base:symbol-name-from-string expr) symbol)
-                    (push expr references)))
-                 ((consp expr)
-                  (search-expr (car expr))
-                  (search-expr (cdr expr))))))
-      (dolist (form forms)
-        (search-expr (parser:form-expr form))))
+    (dolist (form forms)
+      (base:traverse-expr (parser:form-expr form)
+        (lambda (expr)
+          (when (and (stringp expr)
+                     (string-equal (base:symbol-name-from-string expr) symbol))
+            (push expr references)))))
     references))
