@@ -139,7 +139,7 @@
                                              :line line
                                              :column column
                                              :message (format nil "Imported symbol '~A' from ~A is unused"
-                                                              sym pkg)
+                                                              (base:symbol-name-from-string sym) pkg)
                                              :severity (base:rule-severity rule))
                               violations)))))))
             (nreverse violations)))))))
