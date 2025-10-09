@@ -1,40 +1,107 @@
 (defpackage #:malo/formatter
   (:use #:cl)
   (:local-nicknames
+   (#:a #:alexandria)
    (#:violation #:malo/violation))
   (:export #:format-text
            #:format-json))
 (in-package #:malo/formatter)
+
+;;; ANSI color codes
+
+(defparameter *color-reset* (format nil "~C[0m" #\Escape))
+(defparameter *color-red* (format nil "~C[31m" #\Escape))
+(defparameter *color-yellow* (format nil "~C[33m" #\Escape))
+(defparameter *color-gray* (format nil "~C[90m" #\Escape))
+(defparameter *color-green* (format nil "~C[32m" #\Escape))
+
+(defun use-colors-p (stream)
+  "Check if we should use colors for STREAM (only if it's a TTY)."
+  (and (member stream (list *standard-output* *error-output*))
+       (interactive-stream-p stream)))
+
+(defun colorize (text color stream)
+  "Wrap TEXT in COLOR if STREAM supports colors."
+  (if (use-colors-p stream)
+      (format nil "~A~A~A" color text *color-reset*)
+      text))
 
 (defun format-text (results &key (stream *standard-output*))
   "Format linting RESULTS as human-readable text to STREAM.
 RESULTS is an alist of (file . violations)."
   (check-type results list)
 
-  (let ((total-violations 0)
-        (files-with-violations 0))
+  (let ((severity-counts (make-hash-table :test 'eq))
+        (total-violations 0))
 
+    ;; Count violations by severity
+    (dolist (result results)
+      (let ((violations (cdr result)))
+        (dolist (v violations)
+          (incf total-violations)
+          (let ((severity (violation:violation-severity v)))
+            (setf (gethash severity severity-counts 0)
+                  (1+ (gethash severity severity-counts 0)))))))
+
+    ;; Print violations grouped by file
     (dolist (result results)
       (let ((file (car result))
             (violations (cdr result)))
         (when violations
-          (incf files-with-violations)
-          (incf total-violations (length violations))
-
-          (format stream "~%~A:~%" (namestring file))
+          (format stream "~%~A~%" (namestring file))
           (dolist (v violations)
-            (format stream "  ~A:~A:~A ~A: ~A~%"
-                    (namestring (violation:violation-file v))
-                    (violation:violation-line v)
-                    (violation:violation-column v)
-                    (violation:violation-severity v)
-                    (violation:violation-message v))))))
+            (let* ((line (violation:violation-line v))
+                   (col (violation:violation-column v))
+                   (severity (violation:violation-severity v))
+                   (message (violation:violation-message v))
+                   (rule (violation:violation-rule v))
+                   ;; Format location (line:col)
+                   (location (format nil "~A:~A" line col))
+                   ;; Format severity with color
+                   (severity-str (string-downcase (symbol-name severity)))
+                   (colored-severity (case severity
+                                       (:error (colorize severity-str *color-red* stream))
+                                       (:warning (colorize severity-str *color-yellow* stream))
+                                       (otherwise severity-str)))
+                   ;; Format rule name with color
+                   (rule-str (string-downcase (symbol-name rule)))
+                   (colored-rule (colorize rule-str *color-gray* stream)))
+              (format stream "  ~8A ~A~A ~A  ~A~%"
+                      location colored-severity
+                      (make-string (max 0 (- 10 (length severity-str)))
+                                   :initial-element #\Space)
+                      message colored-rule))))))
 
+    ;; Print summary
     (format stream "~%")
     (if (zerop total-violations)
-        (format stream "✓ No violations found.~%")
-        (format stream "✗ Found ~A violation~:P in ~A file~:P.~%"
-                total-violations files-with-violations))
+        (format stream "~A~%"
+                (colorize "✓ No problems found." *color-green* stream))
+        (let* ((error-count (gethash :error severity-counts 0))
+               (warning-count (gethash :warning severity-counts 0))
+               (convention-count (gethash :convention severity-counts 0))
+               (format-count (gethash :format severity-counts 0))
+               (info-count (gethash :info severity-counts 0))
+               (problem-word (if (= total-violations 1) "problem" "problems"))
+               (parts '()))
+          ;; Build severity breakdown
+          (when (> error-count 0)
+            (push (format nil "~A error~:P" error-count) parts))
+          (when (> warning-count 0)
+            (push (format nil "~A warning~:P" warning-count) parts))
+          (when (> convention-count 0)
+            (push (format nil "~A convention~:P" convention-count) parts))
+          (when (> format-count 0)
+            (push (format nil "~A format~:P" format-count) parts))
+          (when (> info-count 0)
+            (push (format nil "~A info" info-count) parts))
+
+          (let ((summary (format nil "✗ ~A ~A (~{~A~^, ~})"
+                                total-violations
+                                problem-word
+                                (nreverse parts))))
+            (format stream "~A~%"
+                    (colorize summary *color-red* stream)))))
 
     total-violations))
 
