@@ -66,7 +66,7 @@ RESULTS is an alist of (file . violations)."
                    ;; Format rule name with color
                    (rule-str (string-downcase (symbol-name rule)))
                    (colored-rule (colorize rule-str *color-gray* stream)))
-              (format stream "  ~8A ~A~A ~A  ~A~%"
+              (format stream "  ~8A ~A~A  ~A  ~A~%"
                       location colored-severity
                       (make-string (max 0 (- 10 (length severity-str)))
                                    :initial-element #\Space)

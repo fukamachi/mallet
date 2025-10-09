@@ -1,0 +1,8 @@
+# Expected violations for mixed-optional-and-key.lisp
+# Format: line:column rule-name severity
+
+4:20 mixed-optional-and-key warning
+12:8 mixed-optional-and-key warning
+20:19 mixed-optional-and-key warning
+28:23 mixed-optional-and-key warning
+38:15 mixed-optional-and-key warning

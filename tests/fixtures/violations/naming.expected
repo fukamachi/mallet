@@ -1,0 +1,7 @@
+# Expected violations for naming.lisp
+# Format: line:column rule-name severity
+
+4:8 special-variable-naming convention
+10:14 special-variable-naming convention
+16:13 constant-naming info
+22:28 constant-naming info

@@ -1,0 +1,12 @@
+# Expected violations for asdf-component-strings.asd
+# Format: line:column rule-name severity
+# Note: All violations report at form start line, not precise symbol position
+
+4:0 asdf-component-strings convention
+12:0 asdf-component-strings convention
+12:0 asdf-component-strings convention
+22:0 asdf-component-strings convention
+22:0 asdf-component-strings convention
+32:0 asdf-component-strings convention
+32:0 asdf-component-strings convention
+32:0 asdf-component-strings convention

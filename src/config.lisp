@@ -184,29 +184,23 @@ Style preferences are disabled to keep output clean."
             (:unused-variables :enabled t)
             (:unused-local-nicknames :enabled t)
             (:unused-imported-symbols :enabled t)
+            (:asdf-component-strings :enabled t)
+            (:mixed-optional-and-key :enabled t)
             ;; Style preferences - disable (too noisy, no consensus)
             (:line-length :enabled nil)
             (:consecutive-blank-lines :enabled nil)
             (:if-without-else :enabled nil)
             (:bare-progn-in-if :enabled nil)
-            (:missing-otherwise :enabled nil))))
+            (:missing-otherwise :enabled nil)
+            (:special-variable-naming :enabled nil)
+            (:constant-naming :enabled nil))))
 
 (defun make-all-config ()
   "Create configuration with all rules enabled.
 Useful for exploration and discovering what rules exist."
   (make-config
    :rules '((:line-length :enabled t :max-length 100)
-            (:trailing-whitespace :enabled t)
-            (:no-tabs :enabled t)
-            (:final-newline :enabled t)
-            (:consecutive-blank-lines :enabled t :max-consecutive 2)
-            (:if-without-else :enabled t)
-            (:bare-progn-in-if :enabled t)
-            (:missing-otherwise :enabled t)
-            (:wrong-otherwise :enabled t)
-            (:unused-variables :enabled t)
-            (:unused-local-nicknames :enabled t)
-            (:unused-imported-symbols :enabled t))))
+            (:consecutive-blank-lines :enabled t :max-consecutive 2))))
 
 ;;; Config file discovery
 

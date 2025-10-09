@@ -32,7 +32,10 @@
       :components
       ((:file "control-flow")
        (:file "variables")
-       (:file "package")))))
+       (:file "package")
+       (:file "naming")
+       (:file "lambda-list")
+       (:file "asdf")))))
    (:file "rules")
 
    ;; Configuration
@@ -71,6 +74,9 @@
      (:file "unused-variables-test")
      (:file "unused-local-nicknames-test")
      (:file "unused-imported-symbols-test")
-     (:file "text-formatting-test"))))
+     (:file "text-formatting-test")
+     (:file "naming")
+     (:file "lambda-list")
+     (:file "asdf"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

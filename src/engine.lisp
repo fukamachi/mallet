@@ -37,6 +37,10 @@
               :description "case/typecase should have 'otherwise' clause"
               :default-severity :warning
               :type :form)
+             (:mixed-optional-and-key
+              :description "Don't mix &optional and &key in lambda lists"
+              :default-severity :warning
+              :type :form)
              ;; INFO: Code quality suggestions
              (:unused-local-nicknames
               :description "Local nicknames should be used"
@@ -46,6 +50,10 @@
               :description "Imported symbols should be used or re-exported"
               :default-severity :info
               :type :form)
+             (:constant-naming
+              :description "Constants should be named +foo+"
+              :default-severity :info
+              :type :form)
              ;; CONVENTION: Style/idiom suggestions
              (:if-without-else
               :description "Use 'when' or 'unless' instead of 'if' without else"
@@ -53,6 +61,14 @@
               :type :form)
              (:bare-progn-in-if
               :description "Use 'cond' instead of 'if' with bare 'progn'"
+              :default-severity :convention
+              :type :form)
+             (:special-variable-naming
+              :description "Special variables should be named *foo*"
+              :default-severity :convention
+              :type :form)
+             (:asdf-component-strings
+              :description "ASDF components, systems, and dependencies should use strings not symbols"
               :default-severity :convention
               :type :form)
              ;; FORMAT: Consensus formatting (Emacs/SLIME standards)
@@ -179,6 +195,10 @@ Returns a list of VIOLATION objects."
                       (:unused-variables (make-instance 'rules:unused-variables-rule :severity severity))
                       (:unused-local-nicknames (make-instance 'rules:unused-local-nicknames-rule :severity severity))
                       (:unused-imported-symbols (make-instance 'rules:unused-imported-symbols-rule :severity severity))
+                      (:special-variable-naming (make-instance 'rules:special-variable-naming-rule :severity severity))
+                      (:constant-naming (make-instance 'rules:constant-naming-rule :severity severity))
+                      (:mixed-optional-and-key (make-instance 'rules:mixed-optional-and-key-rule :severity severity))
+                      (:asdf-component-strings (make-instance 'rules:asdf-component-strings-rule :severity severity))
                       (t nil))))
               (when rule-impl
                 (setf violations
