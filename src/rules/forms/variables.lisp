@@ -65,11 +65,12 @@
                                 (cond
                                   ;; Simple variable
                                   ((stringp pattern)
-                                   (if (and (> (length pattern) 0)
-                                            (or (char= (char pattern 0) #\&)   ; Lambda-list keywords
-                                                (char= (char pattern 0) #\:))) ; Keyword arguments
-                                       nil  ; Skip lambda-list keywords and keyword arguments
-                                       (list pattern)))
+                                   (let ((symbol-name (base:symbol-name-from-string pattern)))
+                                     (if (and (> (length symbol-name) 0)
+                                              (or (char= (char symbol-name 0) #\&)   ; Lambda-list keywords
+                                                  (char= (char symbol-name 0) #\:))) ; Keyword arguments
+                                         nil  ; Skip lambda-list keywords and keyword arguments
+                                         (list pattern))))
                                   ;; Dotted pair - extract both parts
                                   ((and (consp pattern) (stringp (cdr pattern)))
                                    (append (extract-from-pattern (car pattern))
@@ -562,14 +563,9 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                    (check-binding-form :let bindings body line column position-map))))))
 
                          ;; Check DOTIMES
-                         (when (base:symbol-matches-p head "DOTIMES")
-                           (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
-                             (let* ((spec (first rest-args))
-                                    (body (rest rest-args)))
-                               (when (and (a:proper-list-p spec) (>= (length spec) 2))
-                                 (let* ((var (first spec))
-                                        (bindings (list (list var))))
-                                   (check-binding-form :let bindings body line column position-map))))))
+                         ;; Note: DOTIMES variables are conventionally ignorable since they're often
+                         ;; just used for counting. We skip checking them to avoid false positives.
+                         ;; Example: (dotimes (i 10) (print "hello")) - 'i' not used is normal
 
                          ;; Check DO
                          (when (base:symbol-matches-p head "DO")

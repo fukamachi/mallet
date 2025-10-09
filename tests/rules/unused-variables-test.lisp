@@ -339,7 +339,7 @@
       (ok (null violations)))))
 
 (deftest dotimes-bindings
-  (testing "Invalid: unused dotimes variable"
+  (testing "Valid: unused dotimes variable (ignorable by convention)"
     (let* ((code "(let ((sum 0))
                      (dotimes (i 5)
                        (incf sum))
@@ -347,9 +347,8 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (ok (= (length violations) 1))
-      (ok (search "Variable 'i' is unused"
-                  (violation:violation-message (first violations))))))
+      ;; DOTIMES variables are conventionally ignorable - no violation expected
+      (ok (null violations))))
 
   (testing "Valid: dotimes variable used"
     (let* ((code "(dotimes (i 10)
@@ -358,6 +357,47 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)))))
+
+(deftest lambda-list-keywords
+  (testing "Valid: lambda-list keywords (&key, &optional, &rest) are not parameters"
+    (let* ((code "(destructuring-bind (a &key b c)
+                     (list 1 :b 2 :c 3)
+                   (print b))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should report 'a' and 'c' as unused, but NOT '&key'
+      (ok (= (length violations) 2))
+      (ok (search "Variable 'a' is unused"
+                  (violation:violation-message (first violations))))
+      (ok (search "Variable 'c' is unused"
+                  (violation:violation-message (second violations))))))
+
+  (testing "Valid: defun with &optional and &key"
+    (let* ((code "(defun foo (x &optional y &key z)
+                   (print x))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should report 'y' and 'z' as unused, but NOT '&optional' or '&key'
+      (ok (= (length violations) 2))
+      (ok (some (lambda (v) (search "Variable 'y' is unused"
+                                    (violation:violation-message v)))
+                violations))
+      (ok (some (lambda (v) (search "Variable 'z' is unused"
+                                    (violation:violation-message v)))
+                violations))))
+
+  (testing "Valid: lambda with &rest"
+    (let* ((code "(lambda (x &rest args)
+                   (print x))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should report 'args' as unused, but NOT '&rest'
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'args' is unused"
+                  (violation:violation-message (first violations)))))))
 
 (deftest do-bindings
   (testing "Invalid: unused do variables"
