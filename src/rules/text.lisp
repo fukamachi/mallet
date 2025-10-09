@@ -78,15 +78,23 @@
               ;; Check if line ends with whitespace (space or tab)
               (when (and (plusp (length line))
                          (member (char line (1- (length line))) '(#\Space #\Tab)))
-                (push (make-instance 'violation:violation
-                                     :rule :trailing-whitespace
-                                     :file file
-                                     :line line-number
-                                     :column 0
-                                     :severity (base:rule-severity rule)
-                                     :message "Line has trailing whitespace"
-                                     :fix nil)
-                      violations))))
+                ;; Find the column where trailing whitespace starts
+                ;; by finding the last non-whitespace character
+                (let ((trailing-start (position-if-not
+                                        (lambda (ch) (member ch '(#\Space #\Tab)))
+                                        line
+                                        :from-end t)))
+                  (push (make-instance 'violation:violation
+                                       :rule :trailing-whitespace
+                                       :file file
+                                       :line line-number
+                                       ;; Column is right after the last non-whitespace char
+                                       ;; If the entire line is whitespace, report column 0
+                                       :column (if trailing-start (1+ trailing-start) 0)
+                                       :severity (base:rule-severity rule)
+                                       :message "Line has trailing whitespace"
+                                       :fix nil)
+                        violations)))))
 
     (nreverse violations)))
 
