@@ -194,7 +194,7 @@ Handles wildcards and directories, excluding common non-source directories."
   (loop for (file . violations) in results
         thereis (not (null violations))))
 
-(defun main (&optional (args (uiop:command-line-arguments)))
+(defun main ()
   "Main entry point for the Malo CLI.
 Lints files specified in ARGS and exits with appropriate status code."
   (let* ((args (uiop:command-line-arguments))

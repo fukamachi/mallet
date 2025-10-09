@@ -7,6 +7,9 @@
                "eclector")
   :in-order-to ((test-op (test-op "malo/tests")))
   :pathname "src"
+  :build-operation "program-op"
+  :build-pathname "../malo"
+  :entry-point "malo:main"
   :serial t
   :components
   (;; Core data structures

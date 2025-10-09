@@ -1,0 +1,44 @@
+name: test
+
+on: [push]
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare runner
+        run: |
+          DEBIAN_FRONTEND=noninteractive sudo apt-get -qq update \
+            && DEBIAN_FRONTEND=noninteractive sudo apt-get -qq --assume-yes install \
+                 sbcl
+
+      - uses: actions/checkout@v1
+
+      - name: Install quicklisp
+        run: |
+          wget https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --noinform --disable-debugger        \
+            --load quicklisp.lisp                   \
+            --eval '(quicklisp-quickstart:install)' \
+            --quit
+
+      # Until concrete-syntax-tree 0.3 becomes available via Quicklisp
+      - name: Clone dependencies into local-projects
+        run: |
+          cd "${HOME}/quicklisp/local-projects"                                             \
+            && git clone -b master https://github.com/s-expressionists/concrete-syntax-tree
+
+      - name: Run tests
+        run: |
+          SYSTEMS='"eclector" "eclector-concrete-syntax-tree" "eclector.syntax-extensions"'
+          TEST_SYSTEMS='"eclector/test" "eclector-concrete-syntax-tree/test" "eclector.syntax-extensions/test"'
+          sbcl --noinform --disable-debugger                                                                                                \
+            --load "${HOME}/quicklisp/setup.lisp"                                                                                           \
+            --eval '(asdf:initialize-source-registry (quote (:source-registry (:directory "'"$(pwd)"'") :ignore-inherited-configuration)))' \
+            --eval '(ql:quickload (list '"${TEST_SYSTEMS}"'))'                                                                              \
+            --eval '(let ((*result* t))
+                      (declare (special *result*))
+                      (mapc (function asdf:test-system) (list '"${SYSTEMS}"'))
+                      (uiop:quit (if *result* 0 1)))'

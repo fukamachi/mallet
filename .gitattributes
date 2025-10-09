@@ -1,0 +1,2 @@
+# Mark bundled third-party libraries as vendored code
+.bundle-libs/** linguist-vendored

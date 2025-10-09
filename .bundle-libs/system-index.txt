@@ -1,0 +1,9 @@
+software/acclimation-20241012-git/Temperature/acclimation-temperature.asd
+software/acclimation-20241012-git/acclimation.asd
+software/alexandria-20241012-git/alexandria.asd
+software/cl-ppcre-20250622-git/cl-ppcre-unicode.asd
+software/cl-ppcre-20250622-git/cl-ppcre.asd
+software/closer-mop-20250622-git/closer-mop.asd
+software/eclector-20250622-git/eclector-concrete-syntax-tree.asd
+software/eclector-20250622-git/eclector.asd
+software/eclector-20250622-git/eclector.syntax-extensions.asd

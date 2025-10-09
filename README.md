@@ -17,13 +17,20 @@ Good defaults don't require configuration. Good tools don't limit customization.
 
 ## Installation
 
-Requires [Qlot](https://github.com/fukamachi/qlot) to install dependencies.
-
 ```bash
 git clone https://github.com/fukamachi/malo.git
 cd malo
-qlot install
-ln -s $(pwd)/bin/malo /usr/local/bin/malo
+make
+```
+
+This creates a standalone executable `./malo`. You can run it directly or move it anywhere you want:
+
+```bash
+# Run directly from the build directory
+./malo src
+
+# Or move to a directory in your PATH
+mv malo ~/.local/bin/malo  # or /usr/local/bin/malo, ~/bin/malo, etc.
 ```
 
 ## Usage
@@ -32,10 +39,10 @@ ln -s $(pwd)/bin/malo /usr/local/bin/malo
 # Lint files
 malo src/main.lisp
 malo src/*.lisp
-malo src/  # recursively lints .lisp and .asd files
+malo src  # recursively lints .lisp and .asd files
 
 # Enable all rules
-malo --all src/
+malo --all src
 ```
 
 ## Configuration
@@ -65,3 +72,15 @@ See [RULES.md](RULES.md) for the complete list.
 ## License
 
 MIT License - see [LICENSE](LICENSE)
+
+## Bundled Libraries
+
+Malo bundles the following Common Lisp libraries for standalone distribution:
+
+- **acclimation** - Internationalization/localization (BSD 2-Clause)
+- **alexandria** - Utility library (Public Domain/MIT)
+- **cl-ppcre** - Regular expressions (BSD 2-Clause)
+- **closer-mop** - Meta-Object Protocol compatibility (MIT)
+- **eclector** - Common Lisp reader (BSD 2-Clause)
+
+See [THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) for full license texts.
