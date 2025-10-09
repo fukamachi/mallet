@@ -62,6 +62,22 @@ Returns a list to ensure it can be safely processed by recursive form-checking c
   ;; Using a list ensures it won't cause type errors when embedded in parent forms
   '(:read-time-eval-placeholder))
 
+(defmethod eclector.reader:call-reader-macro :around ((client string-parse-result-client) input-stream char readtable)
+  "Wrap reader macro calls to handle unknown reader macros gracefully."
+  (handler-case
+      (call-next-method)
+    (eclector.readtable:unknown-macro-sub-character ()
+      ;; Unknown dispatch reader macro (e.g., #?"..." from cl-interpol)
+      ;; The stream is after the dispatch char (#) but we need to consume the sub-char
+      ;; Then consume what follows using standard read
+      (handler-case
+          (cl:read input-stream)
+        ;; If that also fails, just continue
+        (error ()
+          nil))
+      ;; Return a placeholder
+      ':unknown-reader-macro)))
+
 (defmethod eclector.reader:find-character ((client string-parse-result-client) (designator string))
   "Find character by name, supporting SBCL character name extensions.
 
@@ -240,8 +256,31 @@ enabling accurate violation reporting."
                                          :position-map position-map)
                           forms))))))
 
-        (eclector.reader:unknown-macro-sub-character (e)
-          ;; Unknown reader macro - warn and skip to next form
+        (end-of-file ()
+          (return))
+        ;; Unknown reader macros (e.g., #?"..." from cl-interpol)
+        ;; We can't parse the current top-level form, so skip it entirely
+        (eclector.readtable:unknown-macro-sub-character ()
+          ;; The error occurred while reading a top-level form
+          ;; Try to skip to the next complete top-level form by reading with standard reader
+          ;; which may have the reader macro defined (or will error in a different way)
+          (handler-case
+              (cl:read stream nil :eof)
+            (end-of-file ()
+              (return))
+            ;; If standard reader also fails, continue anyway
+            (error ()
+              nil)))
+        ;; Quote without following object (from malformed reader macro)
+        (eclector.reader:object-must-follow-quote ()
+          ;; Skip and continue
+          nil)
+        ;; Unmatched closing paren (from malformed reader macro)
+        (eclector.reader:invalid-context-for-right-parenthesis ()
+          ;; Skip and continue
+          nil)
+        ;; Other reader errors we can't handle - re-signal
+        (eclector.base:stream-position-reader-error (e)
           (let ((pos (file-position stream)))
             (format *error-output* "~%Warning: Skipping form at ~A position ~A (unknown reader macro)~%"
                     file pos))

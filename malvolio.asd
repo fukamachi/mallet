@@ -55,7 +55,8 @@
     :pathname "parser"
     :components
     ((:file "tokenizer-test")
-     (:file "reader-test")))
+     (:file "reader-test")
+     (:file "unknown-reader-macros")))
 
    (:module "rules"
     :pathname "rules"
