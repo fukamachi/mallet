@@ -246,9 +246,10 @@ Lints files specified in ARGS and exits with appropriate status code."
 
           ;; Exit with appropriate status
           ;; Exit 2: ERROR severity (objectively wrong)
-          ;; Exit 1: WARNING severity (likely bugs)
-          ;; Exit 0: CONVENTION/FORMAT/INFO (style/preferences) or no violations
+          ;; Exit 1: Any other violations (WARNING/CONVENTION/FORMAT/INFO)
+          ;; Exit 0: No violations
+          ;; Teams control strictness via config (enable/disable rules)
           (cond
             ((has-errors-p results) (uiop:quit 2))
-            ((has-warnings-p results) (uiop:quit 1))
+            ((has-violations-p results) (uiop:quit 1))
             (t (uiop:quit 0))))))))
