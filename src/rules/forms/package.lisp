@@ -28,7 +28,7 @@
       ;; This is a defpackage form
       ;; Re-parse file to get all forms (we need forms after this defpackage)
       (let* ((text (uiop:read-file-string file))
-             (all-forms (parser:parse-forms text file))
+             (all-forms (nth-value 0 (parser:parse-forms text file)))
              ;; Find defpackage by line/column since we're re-parsing
              (defpkg-line (parser:form-line form))
              (defpkg-col (parser:form-column form))
@@ -90,7 +90,7 @@
       ;; This is a defpackage form
       ;; Re-parse file to get all forms (we need forms after this defpackage)
       (let* ((text (uiop:read-file-string file))
-             (all-forms (parser:parse-forms text file))
+             (all-forms (nth-value 0 (parser:parse-forms text file)))
              ;; Find defpackage by line/column since we're re-parsing
              (defpkg-line (parser:form-line form))
              (defpkg-col (parser:form-column form))

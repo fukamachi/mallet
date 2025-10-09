@@ -26,6 +26,12 @@
            ;; Reader
            #:parse-forms
            #:find-position
+           ;; Parse errors
+           #:parse-error-info
+           #:parse-error-info-message
+           #:parse-error-info-file
+           #:parse-error-info-line
+           #:parse-error-info-column
            ;; Form utilities
            #:walk-form
            #:if-form-p
@@ -114,3 +120,29 @@
     :documentation "Hash table mapping expressions to (line . column) positions"))
   (:documentation
    "Represents a parsed form (s-expression) with source location information."))
+
+;;; Parse error data structure
+
+(defclass parse-error-info ()
+  ((message
+    :initarg :message
+    :reader parse-error-info-message
+    :type string
+    :documentation "Error message")
+   (file
+    :initarg :file
+    :reader parse-error-info-file
+    :type pathname
+    :documentation "Source file")
+   (line
+    :initarg :line
+    :reader parse-error-info-line
+    :type (integer 1)
+    :documentation "Line number where error occurred")
+   (column
+    :initarg :column
+    :reader parse-error-info-column
+    :type (integer 0)
+    :documentation "Column number where error occurred (0-based)"))
+  (:documentation
+   "Represents a parse error with position information."))

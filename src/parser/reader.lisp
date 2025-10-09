@@ -205,11 +205,52 @@ Returns (values line column). If not found, returns fallback values."
         (values (car pos) (cdr pos))
         (values fallback-line fallback-column))))
 
+;;; Helper function to find unmatched opening paren
+
+(defun find-unmatched-opener (text start-pos)
+  "Find the position of an unmatched opening paren in TEXT starting from START-POS.
+Returns the character position of the unmatched opener, or NIL if balanced."
+  (let ((depth 0)
+        (in-string nil)
+        (in-comment nil)
+        (escape-next nil)
+        (unmatched-pos nil))
+    (loop for i from start-pos below (length text)
+          for char = (char text i)
+          do (cond
+               ;; Handle escape in strings
+               (escape-next
+                (setf escape-next nil))
+               ;; Handle strings
+               ((and (char= char #\\) in-string)
+                (setf escape-next t))
+               ((and (char= char #\") (not in-comment))
+                (setf in-string (not in-string)))
+               ;; Handle comments
+               ((and (char= char #\;) (not in-string))
+                (setf in-comment t))
+               ((and (char= char #\Newline) in-comment)
+                (setf in-comment nil))
+               ;; Handle parens (only when not in string or comment)
+               ((and (not in-string) (not in-comment))
+                (cond
+                  ((char= char #\()
+                   (when (zerop depth)
+                     (setf unmatched-pos i))
+                   (incf depth))
+                  ((char= char #\))
+                   (decf depth))))))
+    ;; If depth > 0, we have unmatched openers
+    (when (plusp depth)
+      unmatched-pos)))
+
 ;;; Main parsing function
 
 (defun parse-forms (text file)
   "Parse forms from TEXT in FILE using Eclector parse-result.
-Returns a list of FORM objects with source location information and position maps.
+Returns (values forms parse-errors) where:
+- forms is a list of FORM objects with source location information
+- parse-errors is a list of PARSE-ERROR-INFO objects for any parse errors encountered
 
 Uses eclector.parse-result to track positions for all nested expressions,
 enabling accurate violation reporting."
@@ -217,9 +258,11 @@ enabling accurate violation reporting."
   (check-type file pathname)
 
   (let ((forms '())
+        (parse-errors '())
         (client (make-instance 'string-parse-result-client))
         (stream (make-string-input-stream text))
-        (line-starts (build-line-starts text)))
+        (line-starts (build-line-starts text))
+        (last-end-pos 0))  ; Track end position of last successful form
 
     ;; Set readtable case to :preserve to maintain original case
     (setf (eclector.readtable:readtable-case eclector.readtable:*readtable*) :preserve)
@@ -244,6 +287,9 @@ enabling accurate violation reporting."
                   ;; Build position map for this form
                   (let ((position-map (build-position-map result line-starts)))
 
+                    ;; Track end position for EOF error reporting
+                    (setf last-end-pos end-pos)
+
                     ;; Create form object
                     (push (make-instance 'form
                                          :expr expr
@@ -257,6 +303,27 @@ enabling accurate violation reporting."
                           forms))))))
 
         (end-of-file ()
+          ;; EOF error - find position of unmatched opening parenthesis
+          (let ((unmatched-pos (find-unmatched-opener text last-end-pos)))
+            (if unmatched-pos
+                (multiple-value-bind (line column)
+                    (char-pos-to-line-column unmatched-pos line-starts)
+                  (push (make-instance 'parse-error-info
+                                       :message "Unmatched opening parenthesis"
+                                       :file file
+                                       :line line
+                                       :column column)
+                        parse-errors))
+                ;; Fallback if we can't find the unmatched opener
+                (let ((pos (file-position stream)))
+                  (multiple-value-bind (line column)
+                      (char-pos-to-line-column pos line-starts)
+                    (push (make-instance 'parse-error-info
+                                         :message "Unexpected end of file"
+                                         :file file
+                                         :line line
+                                         :column column)
+                          parse-errors)))))
           (return))
         ;; Unknown reader macros (e.g., #?"..." from cl-interpol)
         ;; We can't parse the current top-level form, so skip it entirely
@@ -275,9 +342,18 @@ enabling accurate violation reporting."
         (eclector.reader:object-must-follow-quote ()
           ;; Skip and continue
           nil)
-        ;; Unmatched closing paren (from malformed reader macro)
+        ;; Unmatched closing paren
         (eclector.reader:invalid-context-for-right-parenthesis ()
-          ;; Skip and continue
+          (let ((pos (file-position stream)))
+            (multiple-value-bind (line column)
+                (char-pos-to-line-column pos line-starts)
+              (push (make-instance 'parse-error-info
+                                   :message "Unmatched closing parenthesis"
+                                   :file file
+                                   :line line
+                                   :column column)
+                    parse-errors)))
+          ;; Continue parsing to find more errors
           nil)
         ;; Other reader errors we can't handle - re-signal
         (eclector.base:stream-position-reader-error (e)
@@ -291,14 +367,20 @@ enabling accurate violation reporting."
                 finally (when (not (eq char :eof))
                           (unread-char char stream))))
         (error (e)
-          ;; Other parse errors (e.g., unmatched parens) - warn and stop parsing this file
+          ;; Other parse errors (e.g., reader errors, syntax errors)
           (let ((pos (file-position stream)))
-            (if (and (find-symbol "*DEBUG-MODE*" "MALO")
-                     (symbol-value (find-symbol "*DEBUG-MODE*" "MALO")))
-                (format *error-output* "~%Warning: Stopped parsing ~A at position ~A~%  Error: ~A~%"
-                        file pos e)
-                (format *error-output* "~%Warning: Stopped parsing ~A at position ~A (parse error, use --debug for details)~%"
-                        file pos))
+            (multiple-value-bind (line column)
+                (char-pos-to-line-column pos line-starts)
+              (let ((message (if (and (find-symbol "*DEBUG-MODE*" "MALO")
+                                      (symbol-value (find-symbol "*DEBUG-MODE*" "MALO")))
+                                 (format nil "Parse error: ~A" e)
+                                 "Parse error (use --debug for details)")))
+                (push (make-instance 'parse-error-info
+                                     :message message
+                                     :file file
+                                     :line line
+                                     :column column)
+                      parse-errors)))
             (return)))))
 
-    (nreverse forms)))
+    (values (nreverse forms) (nreverse parse-errors))))

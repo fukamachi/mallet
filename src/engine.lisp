@@ -148,7 +148,22 @@ Returns a list of VIOLATION objects."
                   (nconc violations (rules:check-text rule-impl text file)))))))
 
     ;; Run form-level rules
-    (let ((forms (parser:parse-forms text file)))
+    (multiple-value-bind (forms parse-errors)
+        (parser:parse-forms text file)
+
+      ;; Convert parse errors to violations (always reported - not configurable)
+      ;; Parse errors are :error severity since they prevent compilation
+      (dolist (parse-error parse-errors)
+        (push (make-instance 'violation:violation
+                             :rule :parse-error
+                             :file (parser:parse-error-info-file parse-error)
+                             :line (parser:parse-error-info-line parse-error)
+                             :column (parser:parse-error-info-column parse-error)
+                             :severity :error
+                             :message (parser:parse-error-info-message parse-error)
+                             :fix nil)
+              violations))
+
       (dolist (form forms)
         (dolist (rule (rules:list-rules registry))
           (when (and (rules:rule-enabled-p rule)
