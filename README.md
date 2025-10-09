@@ -49,8 +49,8 @@ malo --format json src/
 malo --config .malo.lisp src/
 
 # Use a built-in preset
+malo --all src/               # Enable all rules (alias for --preset all)
 malo --preset all src/        # Enable all rules
-malo --preset google src/     # Google style guide
 
 # Show help
 malo --help
@@ -99,7 +99,7 @@ Malo uses S-expression based configuration files (`.malo.lisp`). Place this file
 ```lisp
 (:malo-config
  ;; Extend from a built-in config
- (:extends :default)  ; Options: :default, :all, :google
+ (:extends :default)  ; Options: :default or :all
 
  ;; Customize rules
  (:rules
@@ -119,11 +119,10 @@ Malo uses S-expression based configuration files (`.malo.lisp`). Place this file
 
 ### Built-in Configurations
 
-Malo provides three built-in presets. Use them via `--preset` on the command line or `:extends` in configuration files:
+Malo provides two built-in presets. Use them via `--preset` (or `--all`) on the command line or `:extends` in configuration files:
 
 - **`:default`** - Only universally-accepted rules (trailing whitespace, tabs, unused variables). Quiet output, suitable for all projects.
 - **`:all`** - All rules enabled. Useful for exploring what the linter can catch.
-- **`:google`** - Google Common Lisp Style Guide compliance (100 character lines, all style rules)
 
 ## Rules
 

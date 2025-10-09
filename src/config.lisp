@@ -160,7 +160,7 @@
 ;;; Built-in configs
 
 (defun get-built-in-config (name)
-  "Get a built-in configuration by NAME (:default, :all, :google)."
+  "Get a built-in configuration by NAME (:default or :all)."
   (check-type name keyword)
 
   (case name
@@ -168,10 +168,8 @@
      (make-default-config))
     (:all
      (make-all-config))
-    (:google
-     (make-google-config))
     (otherwise
-     (error "Unknown built-in config: ~A. Available: :default, :all, :google" name))))
+     (error "Unknown built-in config: ~A. Available: :default, :all" name))))
 
 (defun make-default-config ()
   "Create the default configuration - only universally-accepted rules.
@@ -196,23 +194,6 @@ Style preferences are disabled to keep output clean."
 (defun make-all-config ()
   "Create configuration with all rules enabled.
 Useful for exploration and discovering what rules exist."
-  (make-config
-   :rules '((:line-length :enabled t :max-length 100)
-            (:trailing-whitespace :enabled t)
-            (:no-tabs :enabled t)
-            (:final-newline :enabled t)
-            (:consecutive-blank-lines :enabled t :max-consecutive 2)
-            (:if-without-else :enabled t)
-            (:bare-progn-in-if :enabled t)
-            (:missing-otherwise :enabled t)
-            (:wrong-otherwise :enabled t)
-            (:unused-variables :enabled t)
-            (:unused-local-nicknames :enabled t)
-            (:unused-imported-symbols :enabled t))))
-
-(defun make-google-config ()
-  "Create configuration based on Google Common Lisp Style Guide.
-Uses 100 character line length per Google's guidelines."
   (make-config
    :rules '((:line-length :enabled t :max-length 100)
             (:trailing-whitespace :enabled t)

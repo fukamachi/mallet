@@ -100,8 +100,9 @@ Returns (values format config-path preset debug files)."
              (setf preset (cond
                             ((string= preset-name "default") :default)
                             ((string= preset-name "all") :all)
-                            ((string= preset-name "google") :google)
-                            (t (error "Unknown preset: ~A (must be 'default', 'all', or 'google')" preset-name))))))
+                            (t (error "Unknown preset: ~A (must be 'default' or 'all')" preset-name))))))
+          ((string= arg "--all")
+           (setf preset :all))
           ((string= arg "--debug")
            (setf debug t))
           ((string= arg "--help")
@@ -126,7 +127,8 @@ Usage: malo [options] <file>...
 Options:
   --format <format>   Output format (text or json, default: text)
   --config <path>     Path to config file (default: auto-discover .malo.lisp)
-  --preset <name>     Use built-in preset (default, all, or google)
+  --preset <name>     Use built-in preset (default or all)
+  --all               Alias for --preset all
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
@@ -134,11 +136,10 @@ Options:
 Presets:
   default             Only universally-accepted rules (quiet, recommended)
   all                 All rules enabled (useful for exploration)
-  google              Google Common Lisp Style Guide compliance
 
 Examples:
   malo src/main.lisp
-  malo --preset all src/*.lisp
+  malo --all src/*.lisp
   malo --format json src/*.lisp
   malo --config .malo.lisp src/
   malo --debug src/

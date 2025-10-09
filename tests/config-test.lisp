@@ -107,16 +107,7 @@
       ;; All rules should be enabled
       (ok (config:rule-enabled-p cfg :line-length))
       (ok (config:rule-enabled-p cfg :trailing-whitespace))
-      (ok (config:rule-enabled-p cfg :if-without-else))))
-
-  (testing "Load google config"
-    (let ((cfg (config:get-built-in-config :google)))
-      (ok (not (null cfg)))
-      ;; All rules enabled like recommended
-      (ok (config:rule-enabled-p cfg :line-length))
-      (ok (config:rule-enabled-p cfg :comment-level))
-      ;; Google style uses 100 character line length
-      (ok (= 100 (config:get-rule-option cfg :line-length :max-length))))))
+      (ok (config:rule-enabled-p cfg :if-without-else)))))
 
 ;;; Config extends tests
 
