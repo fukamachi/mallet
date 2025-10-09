@@ -18,6 +18,7 @@
            #:list-rules
            #:symbol-name-from-string
            #:symbol-matches-p
+           #:coalton-form-p
            #:check-text
            #:check-tokens
            #:check-form))
@@ -125,6 +126,24 @@ Works with both qualified (\"PACKAGE:IF\") and unqualified (\"IF\") symbols."
   (and (stringp str)
        (string-equal (symbol-name-from-string str) name)))
 
+(defun coalton-form-p (form)
+  "Check if FORM is a Coalton toplevel form.
+Coalton code is written in (coalton-toplevel ...) or (coalton:coalton-toplevel ...).
+Form-level linting rules should skip Coalton forms as they have different semantics."
+  (when form
+    ;; Extract expression from form object (try form-expr accessor, fall back to form itself)
+    (let ((expr (handler-case
+                    (malo/parser:form-expr form)
+                  (error () form))))
+      (when (consp expr)
+        (let* ((head (first expr))
+               (symbol-name (cond
+                              ((stringp head) (symbol-name-from-string head))
+                              ((symbolp head) (symbol-name head))
+                              (t nil))))
+          (and symbol-name
+               (string-equal symbol-name "coalton-toplevel")))))))
+
 ;;; Generic functions for rule checking
 
 (defgeneric check-text (rule text file)
@@ -138,3 +157,12 @@ Returns a list of VIOLATION objects."))
 (defgeneric check-form (rule form file)
   (:documentation "Check FORM from FILE using RULE.
 Returns a list of VIOLATION objects."))
+
+;; Skip Coalton forms for all form-level rules
+;; Coalton has different semantics (variable scoping, control flow, etc.)
+;; so Common Lisp linting rules don't apply
+(defmethod check-form :around ((rule rule) form file)
+  "Skip Coalton toplevel forms - they have different semantics from Common Lisp."
+  (if (coalton-form-p form)
+      nil  ; Return empty violations list for Coalton forms
+      (call-next-method)))  ; Call the actual rule implementation
