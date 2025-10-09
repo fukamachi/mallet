@@ -4,13 +4,20 @@ A Common Lisp linter focused on catching real mistakes without enforcing subject
 
 ## Philosophy
 
-The default preset enables only universally-accepted rules. It catches obvious mistakes—unused variables, trailing whitespace, unused imports—without enforcing subjective preferences.
+Works immediately. Grows with your needs.
 
-This keeps the default useful without being noisy. You catch real mistakes without fighting over style preferences.
+Run Malo without configuration—it catches real mistakes, not style preferences.
+Unused variables, wrong patterns, obvious bugs. Zero setup, zero noise.
 
-Want stricter rules? Enable them in config. Any violation fails CI.
+Need more? Enable additional rules. Teams have different standards. Projects
+have different constraints. Malo provides comprehensive rules like ESLint,
+but lets you choose what matters.
+
+Good defaults don't require configuration. Good tools don't limit customization.
 
 ## Installation
+
+Requires [Qlot](https://github.com/fukamachi/qlot) to install dependencies.
 
 ```bash
 git clone https://github.com/fukamachi/malo.git
@@ -29,16 +36,6 @@ malo src/  # recursively lints .lisp and .asd files
 
 # Enable all rules
 malo --all src/
-
-# Config
-malo --config .malo.lisp src/
-
-# Output
-malo --format json src/
-malo --format text src/  # default
-
-# Debug
-malo --debug src/
 ```
 
 ## Configuration
@@ -50,8 +47,8 @@ Create `.malo.lisp` in your project root:
  (:extends :default)  ; or :all
  (:rules
   (:line-length :enabled t :max-length 100)
-  (:unused-variables :enabled t)
-  (:if-without-else :enabled nil)))
+  (:unused-imported-symbols :enabled nil)
+  (:if-without-else :enabled t)))
 ```
 
 **Presets:**
