@@ -240,11 +240,26 @@ enabling accurate violation reporting."
                                          :position-map position-map)
                           forms))))))
 
-        (end-of-file ()
-          (return))
-        (error (e)
-          ;; Try to provide helpful error message
+        (eclector.reader:unknown-macro-sub-character (e)
+          ;; Unknown reader macro - warn and skip to next form
           (let ((pos (file-position stream)))
-            (error "Parse error at position ~A: ~A" pos e)))))
+            (format *error-output* "~%Warning: Skipping form at ~A position ~A (unknown reader macro)~%"
+                    file pos))
+          ;; Try to skip to next whitespace/newline to continue parsing
+          (loop for char = (read-char stream nil :eof)
+                until (or (eq char :eof)
+                          (member char '(#\Space #\Tab #\Newline #\Return)))
+                finally (when (not (eq char :eof))
+                          (unread-char char stream))))
+        (error (e)
+          ;; Other parse errors (e.g., unmatched parens) - warn and stop parsing this file
+          (let ((pos (file-position stream)))
+            (if (and (find-symbol "*DEBUG-MODE*" "MALVOLIO")
+                     (symbol-value (find-symbol "*DEBUG-MODE*" "MALVOLIO")))
+                (format *error-output* "~%Warning: Stopped parsing ~A at position ~A~%  Error: ~A~%"
+                        file pos e)
+                (format *error-output* "~%Warning: Stopped parsing ~A at position ~A (parse error, use --debug for details)~%"
+                        file pos))
+            (return)))))
 
     (nreverse forms)))

@@ -160,23 +160,40 @@
 ;;; Built-in configs
 
 (defun get-built-in-config (name)
-  "Get a built-in configuration by NAME (:recommended, :minimal, :strict, :google)."
+  "Get a built-in configuration by NAME (:default, :all, :google)."
   (check-type name keyword)
 
   (case name
-    (:recommended
-     (make-recommended-config))
-    (:minimal
-     (make-minimal-config))
-    (:strict
-     (make-strict-config))
+    (:default
+     (make-default-config))
+    (:all
+     (make-all-config))
     (:google
      (make-google-config))
     (otherwise
-     (error "Unknown built-in config: ~A" name))))
+     (error "Unknown built-in config: ~A. Available: :default, :all, :google" name))))
 
-(defun make-recommended-config ()
-  "Create the recommended default configuration."
+(defun make-default-config ()
+  "Create the default configuration - only universally-accepted rules.
+Enables rules that catch bugs or follow strong community conventions.
+Style preferences are disabled to keep output clean."
+  (make-config
+   :rules '(;; Universally accepted - keep enabled
+            (:trailing-whitespace :enabled t)
+            (:no-tabs :enabled t)
+            (:final-newline :enabled t)
+            (:wrong-otherwise :enabled t)
+            (:unused-variables :enabled t)
+            ;; Style preferences - disable (too noisy, no consensus)
+            (:line-length :enabled nil)
+            (:consecutive-blank-lines :enabled nil)
+            (:if-without-else :enabled nil)
+            (:bare-progn-in-if :enabled nil)
+            (:missing-otherwise :enabled nil))))
+
+(defun make-all-config ()
+  "Create configuration with all rules enabled.
+Useful for exploration and discovering what rules exist."
   (make-config
    :rules '((:line-length :enabled t :max-length 100)
             (:trailing-whitespace :enabled t)
@@ -188,35 +205,6 @@
             (:missing-otherwise :enabled t)
             (:wrong-otherwise :enabled t)
             (:unused-variables :enabled t))))
-
-(defun make-minimal-config ()
-  "Create a minimal configuration with only error-severity rules."
-  (make-config
-   :rules '((:line-length :enabled nil)
-            (:trailing-whitespace :enabled nil)
-            (:no-tabs :enabled nil)
-            (:final-newline :enabled nil)
-            (:consecutive-blank-lines :enabled nil)
-            (:if-without-else :enabled nil)
-            (:bare-progn-in-if :enabled nil)
-            (:missing-otherwise :enabled nil)
-            (:wrong-otherwise :enabled t)
-            (:unused-variables :enabled nil))))
-
-(defun make-strict-config ()
-  "Create a strict configuration promoting rules for CI enforcement.
-WARNING → ERROR, CONVENTION → WARNING, FORMAT → ERROR, INFO → WARNING."
-  (make-config
-   :rules '((:line-length :enabled t :max-length 80 :severity :warning)
-            (:trailing-whitespace :enabled t :severity :error)
-            (:no-tabs :enabled t :severity :error)
-            (:final-newline :enabled t :severity :error)
-            (:consecutive-blank-lines :enabled t :max-consecutive 2 :severity :warning)
-            (:if-without-else :enabled t :severity :warning)
-            (:bare-progn-in-if :enabled t :severity :warning)
-            (:missing-otherwise :enabled t :severity :error)
-            (:wrong-otherwise :enabled t :severity :error)
-            (:unused-variables :enabled t :severity :error))))
 
 (defun make-google-config ()
   "Create configuration based on Google Common Lisp Style Guide.

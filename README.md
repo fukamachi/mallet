@@ -48,6 +48,10 @@ malvolio --format json src/
 # Use a custom config file
 malvolio --config .malvolio.lisp src/
 
+# Use a built-in preset
+malvolio --preset all src/        # Enable all rules
+malvolio --preset google src/     # Google style guide
+
 # Show help
 malvolio --help
 
@@ -95,17 +99,17 @@ Malvolio uses S-expression based configuration files (`.malvolio.lisp`). Place t
 ```lisp
 (:malvolio-config
  ;; Extend from a built-in config
- (:extends :recommended)  ; Options: :recommended, :minimal, :strict
+ (:extends :default)  ; Options: :default, :all, :google
 
  ;; Customize rules
  (:rules
-  ;; Adjust line length limit
+  ;; Enable and configure a disabled rule
   (:line-length
    :enabled t
    :max-length 120)
 
   ;; Disable a rule
-  (:comment-level
+  (:trailing-whitespace
    :enabled nil)
 
   ;; Change severity
@@ -115,10 +119,11 @@ Malvolio uses S-expression based configuration files (`.malvolio.lisp`). Place t
 
 ### Built-in Configurations
 
-- **`:recommended`** (default) - All rules enabled with sensible defaults (80 character lines)
-- **`:minimal`** - Only error-severity rules enabled
-- **`:strict`** - All rules enabled with warnings promoted to errors
-- **`:google`** - Google Common Lisp Style Guide (100 character lines)
+Malvolio provides three built-in presets. Use them via `--preset` on the command line or `:extends` in configuration files:
+
+- **`:default`** - Only universally-accepted rules (trailing whitespace, tabs, unused variables). Quiet output, suitable for all projects.
+- **`:all`** - All rules enabled. Useful for exploring what the linter can catch.
+- **`:google`** - Google Common Lisp Style Guide compliance (100 character lines, all style rules)
 
 ## Rules
 

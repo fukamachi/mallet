@@ -71,9 +71,10 @@
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path debug files)."
+Returns (values format config-path preset debug files)."
   (let ((format :text)
         (config-path nil)
+        (preset nil)
         (debug nil)
         (files '()))
     (loop while args do
@@ -92,6 +93,15 @@ Returns (values format config-path debug files)."
              (unless path
                (error "Missing value for --config"))
              (setf config-path path)))
+          ((string= arg "--preset")
+           (let ((preset-name (pop args)))
+             (unless preset-name
+               (error "Missing value for --preset"))
+             (setf preset (cond
+                            ((string= preset-name "default") :default)
+                            ((string= preset-name "all") :all)
+                            ((string= preset-name "google") :google)
+                            (t (error "Unknown preset: ~A (must be 'default', 'all', or 'google')" preset-name))))))
           ((string= arg "--debug")
            (setf debug t))
           ((string= arg "--help")
@@ -104,7 +114,7 @@ Returns (values format config-path debug files)."
            (error "Unknown option: ~A" arg))
           (t
            (push arg files)))))
-    (values format config-path debug (nreverse files))))
+    (values format config-path preset debug (nreverse files))))
 
 (defun print-help ()
   "Print CLI usage information."
@@ -116,12 +126,19 @@ Usage: malvolio [options] <file>...
 Options:
   --format <format>   Output format (text or json, default: text)
   --config <path>     Path to config file (default: auto-discover .malvolio.lisp)
+  --preset <name>     Use built-in preset (default, all, or google)
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
 
+Presets:
+  default             Only universally-accepted rules (quiet, recommended)
+  all                 All rules enabled (useful for exploration)
+  google              Google Common Lisp Style Guide compliance
+
 Examples:
   malvolio src/main.lisp
+  malvolio --preset all src/*.lisp
   malvolio --format json src/*.lisp
   malvolio --config .malvolio.lisp src/
   malvolio --debug src/
@@ -183,7 +200,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                           (format *error-output* "Fatal error: ~A~%" e)
                           (uiop:print-condition-backtrace e)
                           (uiop:quit 3))))
-    (multiple-value-bind (format config-path debug file-args)
+    (multiple-value-bind (format config-path preset debug file-args)
         (parse-args args)
 
       ;; Enable debug mode if requested
@@ -197,6 +214,9 @@ Lints files specified in ARGS and exits with appropriate status code."
 
       ;; Load or discover config
       (let* ((cfg (cond
+                    ;; Explicit preset provided (takes precedence)
+                    (preset
+                     (config:get-built-in-config preset))
                     ;; Explicit config path provided
                     (config-path
                      (config:load-config config-path))
@@ -205,8 +225,8 @@ Lints files specified in ARGS and exits with appropriate status code."
                      (let ((found-config (config:find-config-file (uiop:getcwd))))
                        (if found-config
                            (config:load-config found-config)
-                           ;; No config found, use recommended defaults
-                           (config:get-built-in-config :recommended))))))
+                           ;; No config found, use default
+                           (config:get-built-in-config :default))))))
              ;; Expand file arguments
              (files (expand-file-args file-args))
              ;; Create registry from config

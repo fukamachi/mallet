@@ -87,29 +87,24 @@
 ;;; Built-in config tests
 
 (deftest built-in-configs
-  (testing "Load recommended config"
-    (let ((cfg (config:get-built-in-config :recommended)))
+  (testing "Load default config"
+    (let ((cfg (config:get-built-in-config :default)))
       (ok (not (null cfg)))
-      ;; All rules should be enabled by default
+      ;; Universally-accepted rules should be enabled
+      (ok (config:rule-enabled-p cfg :trailing-whitespace))
+      (ok (config:rule-enabled-p cfg :no-tabs))
+      (ok (config:rule-enabled-p cfg :unused-variables))
+      ;; Style preferences should be disabled
+      (ok (not (config:rule-enabled-p cfg :line-length)))
+      (ok (not (config:rule-enabled-p cfg :if-without-else)))))
+
+  (testing "Load all config"
+    (let ((cfg (config:get-built-in-config :all)))
+      (ok (not (null cfg)))
+      ;; All rules should be enabled
       (ok (config:rule-enabled-p cfg :line-length))
-      (ok (config:rule-enabled-p cfg :comment-level))
+      (ok (config:rule-enabled-p cfg :trailing-whitespace))
       (ok (config:rule-enabled-p cfg :if-without-else))))
-
-  (testing "Load minimal config"
-    (let ((cfg (config:get-built-in-config :minimal)))
-      (ok (not (null cfg)))
-      ;; Only error-severity rules should be enabled
-      (ok (config:rule-enabled-p cfg :wrong-otherwise))
-      ;; Warning rules should be disabled
-      (ok (not (config:rule-enabled-p cfg :line-length)))))
-
-  (testing "Load strict config"
-    (let ((cfg (config:get-built-in-config :strict)))
-      (ok (not (null cfg)))
-      ;; All rules enabled
-      (ok (config:rule-enabled-p cfg :line-length))
-      ;; All severities should be :error
-      (ok (eq :error (config:get-rule-option cfg :line-length :severity)))))
 
   (testing "Load google config"
     (let ((cfg (config:get-built-in-config :google)))
@@ -125,13 +120,13 @@
 (deftest config-extends
   (testing "Parse config with extends"
     (let* ((sexp '(:malvolio-config
-                   (:extends :recommended)
+                   (:extends :all)
                    (:rules
                     (:line-length :max-length 100))))
            (cfg (config:parse-config sexp)))
-      ;; Should inherit all rules from recommended
+      ;; Should inherit all rules from :all
       (ok (config:rule-enabled-p cfg :line-length))
-      (ok (config:rule-enabled-p cfg :comment-level))
+      (ok (config:rule-enabled-p cfg :trailing-whitespace))
       ;; But override specific options
       (ok (= 100 (config:get-rule-option cfg :line-length :max-length))))))
 
