@@ -1,8 +1,5 @@
 # Malo dependencies
 
-# Rove with failing support (for TDD)
-github rove fukamachi/rove
-
 # Other dependencies available via Quicklisp
 # - alexandria
 # - eclector
