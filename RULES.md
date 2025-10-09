@@ -95,7 +95,7 @@ Use `when` or `unless` instead of `if` without else.
   (do-something))
 ```
 
-**Default**: disabled
+**Default**: enabled
 
 ### `:bare-progn-in-if`
 
@@ -129,7 +129,7 @@ Special variables should be named `*foo*`.
 (defvar *config* nil)
 ```
 
-**Default**: disabled
+**Default**: enabled
 
 ### `:asdf-component-strings`
 

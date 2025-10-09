@@ -6,7 +6,7 @@ A Common Lisp linter focused on catching real mistakes without enforcing subject
 
 Malo's default preset is deliberately minimal—it only enables rules that catch obvious mistakes or enforce conventions nearly everyone accepts. Why? Because linters that enforce subjective preferences create noise and friction. You shouldn't have to fight your linter over style choices.
 
-The default catches things like unused variables (likely typos), trailing whitespace (universally discouraged), and unused imported symbols (dead dependencies). It skips subjective rules like line length limits, consecutive blank lines, or whether to use `when` vs `if`.
+The default catches things like unused variables (likely typos), trailing whitespace (universally discouraged), and unused imported symbols (dead dependencies). It skips subjective rules like line length limits, consecutive blank lines, or whether `case` needs an `otherwise` clause.
 
 If your team wants stricter rules, enable them in config. The default stays quiet and helpful.
 

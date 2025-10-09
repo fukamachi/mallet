@@ -97,9 +97,11 @@
       (ok (config:rule-enabled-p cfg :trailing-whitespace))
       (ok (config:rule-enabled-p cfg :no-tabs))
       (ok (config:rule-enabled-p cfg :unused-variables))
+      (ok (config:rule-enabled-p cfg :if-without-else))
+      (ok (config:rule-enabled-p cfg :special-variable-naming))
       ;; Style preferences should be disabled
       (ok (not (config:rule-enabled-p cfg :line-length)))
-      (ok (not (config:rule-enabled-p cfg :if-without-else)))))
+      (ok (not (config:rule-enabled-p cfg :constant-naming)))))
 
   (testing "Load all config"
     (let ((cfg (config:get-built-in-config :all)))
