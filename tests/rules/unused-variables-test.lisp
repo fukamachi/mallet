@@ -525,3 +525,100 @@
       (ok (= (length violations) 1))
       (ok (search "Variable 'x' is unused"
                   (violation:violation-message (first violations)))))))
+
+(deftest lambda-list-with-defaults
+  (testing "Bug: destructuring-bind with &optional and default value"
+    (let* ((code "(destructuring-bind (user &optional (pass \"\"))
+                     (list \"alice\" \"secret\")
+                   (if user
+                       (print pass)
+                       nil))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should have no violations - both user and pass are used
+      ;; Bug: was reporting Variable '' is unused (empty string from default value)
+      (ok (null violations))))
+
+  (testing "Bug: defun with &optional default value"
+    (let* ((code "(defun greet (name &optional (greeting \"Hello\"))
+                   (format nil \"~A ~A\" greeting name))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should have no violations - both name and greeting are used
+      ;; Bug: was extracting \"Hello\" as a variable name
+      (ok (null violations))))
+
+  (testing "Bug: lambda with &key default value"
+    (let* ((code "(lambda (x &key (y 10))
+                   (+ x y))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should have no violations - both x and y are used
+      ;; Bug: was extracting 10 as a variable name
+      (ok (null violations))))
+
+  (testing "Bug: &optional with default and supplied-p"
+    (let* ((code "(defun process (data &optional (validate t validate-p))
+                   (when validate-p
+                     (print validate))
+                   data)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should have no violations - all variables used
+      ;; Bug: was extracting t as a variable name
+      (ok (null violations))))
+
+  (testing "Bug: &key with keyword and default value"
+    (let* ((code "(lambda (x &key ((:name n) \"unknown\"))
+                   (format nil \"~A: ~A\" x n))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should have no violations - x and n are used
+      ;; Bug: was extracting :name and \"unknown\" as variable names
+      (ok (null violations))))
+
+  (testing "Valid: unused &optional parameter with default"
+    (let* ((code "(defun foo (x &optional (y 10))
+                   (print x))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; y is unused, should report exactly one violation for 'y'
+      ;; Not two violations (one for y, one for default value)
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'y' is unused"
+                  (violation:violation-message (first violations)))
+           "Should only report 'y' as unused, not the default value")))
+
+  (testing "Valid: &allow-other-keys is not a variable"
+    (let* ((code "(defun foo (x &key y &allow-other-keys)
+                   (print x))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should only report 'y' as unused, NOT '&allow-other-keys'
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'y' is unused"
+                  (violation:violation-message (first violations)))
+           "Should report only 'y' as unused")
+      (ok (not (some (lambda (v)
+                       (search "&allow-other-keys" (violation:violation-message v)))
+                     violations))
+           "Should NOT report &allow-other-keys as unused variable")))
+
+  (testing "Valid: other lambda-list keywords are not variables"
+    (let* ((code "(defmacro foo (x &body body)
+                   `(progn ,x))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should only report 'body' as unused, NOT '&body'
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'body' is unused"
+                  (violation:violation-message (first violations)))
+           "Should report only 'body' as unused, not the &body keyword"))))

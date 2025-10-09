@@ -75,6 +75,46 @@
                                   ((and (consp pattern) (stringp (cdr pattern)))
                                    (append (extract-from-pattern (car pattern))
                                            (extract-from-pattern (cdr pattern))))
+                                  ;; Lambda-list parameter specifications (must check before general proper list case)
+                                  ;; Handle &optional, &key parameter forms:
+                                  ;; (var default) - extract only var
+                                  ;; (var default supplied-p) - extract var and supplied-p
+                                  ;; ((keyword var) default) - extract only var (for &key)
+                                  ;; ((keyword var) default supplied-p) - extract var and supplied-p
+                                  ((and (consp pattern)
+                                        (a:proper-list-p pattern)
+                                        (or (and (= (length pattern) 2)
+                                                 (or (and (stringp (first pattern))
+                                                          ;; Must not be a lambda-list keyword
+                                                          (not (char= (char (base:symbol-name-from-string (first pattern)) 0) #\&)))
+                                                     (and (consp (first pattern))
+                                                          (= (length (first pattern)) 2)
+                                                          (stringp (second (first pattern))))))
+                                            (and (= (length pattern) 3)
+                                                 (or (and (stringp (first pattern))
+                                                          ;; Must not be a lambda-list keyword
+                                                          (not (char= (char (base:symbol-name-from-string (first pattern)) 0) #\&)))
+                                                     (and (consp (first pattern))
+                                                          (= (length (first pattern)) 2)
+                                                          (stringp (second (first pattern))))))))
+                                   ;; Extract only variable names, skip default values
+                                   (let ((var-spec (first pattern))
+                                         (supplied-p (when (= (length pattern) 3) (third pattern))))
+                                     (append
+                                      ;; Extract variable from var-spec
+                                      (cond
+                                        ;; Simple variable name
+                                        ((stringp var-spec)
+                                         (list var-spec))
+                                        ;; ((keyword var) ...) form - extract only var
+                                        ((and (consp var-spec)
+                                              (= (length var-spec) 2)
+                                              (stringp (second var-spec)))
+                                         (list (second var-spec)))
+                                        (t nil))
+                                      ;; Extract supplied-p if present
+                                      (when (and supplied-p (stringp supplied-p))
+                                        (list supplied-p)))))
                                   ;; Proper list - recurse on each element
                                   ;; Only recurse on cdr if it's a cons (to avoid errors on improper lists)
                                   ((consp pattern)
@@ -457,10 +497,15 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                     (body (cddr rest-args)))
                                (multiple-value-bind (regular-params aux-params)
                                    (parse-lambda-list lambda-list)
-                                 ;; Check regular parameters (excluding &optional, &key, &rest markers)
+                                 ;; Check regular parameters (excluding &optional, &key, &rest, &allow-other-keys, etc.)
+                                 ;; Collect both simple params (strings) and complex params (consp)
+                                 ;; like (var default) or (var default supplied-p)
                                  (let ((param-bindings (loop for param in regular-params
-                                                             when (and (stringp param)
-                                                                       (not (char= (char (base:symbol-name-from-string param) 0) #\&)))
+                                                             when (or (consp param)  ; (var default [supplied-p])
+                                                                      (and (stringp param)
+                                                                           (let ((name (base:symbol-name-from-string param)))
+                                                                             (and (> (length name) 0)
+                                                                                  (not (char= (char name 0) #\&))))))
                                                                collect (list param))))
                                    (when param-bindings
                                      (check-binding-form :defun-regular param-bindings body line column position-map)))
@@ -478,10 +523,15 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                     (body (rest rest-args)))
                                (multiple-value-bind (regular-params aux-params)
                                    (parse-lambda-list lambda-list)
-                                 ;; Check regular parameters (excluding &optional, &key, &rest markers)
+                                 ;; Check regular parameters (excluding &optional, &key, &rest, &allow-other-keys, etc.)
+                                 ;; Collect both simple params (strings) and complex params (consp)
+                                 ;; like (var default) or (var default supplied-p)
                                  (let ((param-bindings (loop for param in regular-params
-                                                             when (and (stringp param)
-                                                                       (not (char= (char (base:symbol-name-from-string param) 0) #\&)))
+                                                             when (or (consp param)  ; (var default [supplied-p])
+                                                                      (and (stringp param)
+                                                                           (let ((name (base:symbol-name-from-string param)))
+                                                                             (and (> (length name) 0)
+                                                                                  (not (char= (char name 0) #\&))))))
                                                                collect (list param))))
                                    (when param-bindings
                                      (check-binding-form :defun-regular param-bindings body line column position-map)))
