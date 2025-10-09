@@ -75,68 +75,31 @@
                                   ((and (consp pattern) (stringp (cdr pattern)))
                                    (append (extract-from-pattern (car pattern))
                                            (extract-from-pattern (cdr pattern))))
-                                  ;; Lambda-list parameter specifications (must check before general proper list case)
-                                  ;; Handle &optional, &key parameter forms:
-                                  ;; (var default) - extract only var
-                                  ;; (var default supplied-p) - extract var and supplied-p
-                                  ;; ((keyword var) default) - extract only var (for &key)
-                                  ;; ((keyword var) default supplied-p) - extract var and supplied-p
-                                  ((and (consp pattern)
-                                        (a:proper-list-p pattern)
-                                        (or (and (= (length pattern) 2)
-                                                 (or (and (stringp (first pattern))
-                                                          ;; Must not be a lambda-list keyword
-                                                          (not (char= (char (base:symbol-name-from-string (first pattern)) 0) #\&)))
-                                                     (and (consp (first pattern))
-                                                          (= (length (first pattern)) 2)
-                                                          (stringp (second (first pattern))))))
-                                            (and (= (length pattern) 3)
-                                                 (or (and (stringp (first pattern))
-                                                          ;; Must not be a lambda-list keyword
-                                                          (not (char= (char (base:symbol-name-from-string (first pattern)) 0) #\&)))
-                                                     (and (consp (first pattern))
-                                                          (= (length (first pattern)) 2)
-                                                          (stringp (second (first pattern))))))))
-                                   ;; Extract only variable names, skip default values
-                                   (let ((var-spec (first pattern))
-                                         (supplied-p (when (= (length pattern) 3) (third pattern))))
-                                     (append
-                                      ;; Extract variable from var-spec
-                                      (cond
-                                        ;; Simple variable name
-                                        ((stringp var-spec)
-                                         (list var-spec))
-                                        ;; ((keyword var) ...) form - extract only var
-                                        ((and (consp var-spec)
-                                              (= (length var-spec) 2)
-                                              (stringp (second var-spec)))
-                                         (list (second var-spec)))
-                                        (t nil))
-                                      ;; Extract supplied-p if present
-                                      (when (and supplied-p (stringp supplied-p))
-                                        (list supplied-p)))))
-                                  ;; Proper list - recurse on each element
-                                  ;; Only recurse on cdr if it's a cons (to avoid errors on improper lists)
-                                  ((consp pattern)
-                                   (append (extract-from-pattern (car pattern))
-                                           (when (consp (cdr pattern))
-                                             (extract-from-pattern (cdr pattern)))))
+                                  ;; Proper list - iterate through elements, filtering out non-variables
+                                  ;; This handles destructuring patterns like (a b c), (a &key b c), etc.
+                                  ;; Non-string elements (numbers, other forms) are automatically skipped
+                                  ((and (consp pattern) (a:proper-list-p pattern))
+                                   (mapcan #'extract-from-pattern pattern))
                                   ;; Anything else (NIL, numbers, keywords, etc.)
                                   (t nil))))
                        (cond
                          ;; Simple string (variable name)
                          ((stringp binding-form)
                           (list binding-form))
-                         ;; (var value) form - extract from var part only
-                         ;; Must check it's a proper list before calling cddr to avoid error on dotted pairs
+                         ;; Binding with init form: (var init-form) or (var init-form supplied-p)
+                         ;; Check if this is a binding (has non-string elements = values, not just variables)
+                         ;; This handles LET bindings and lambda parameters with defaults
                          ((and (consp binding-form)
-                               (not (null binding-form))
-                               (a:proper-list-p binding-form)  ; Must be proper list to safely call cddr
-                               (not (null (cdr binding-form)))
-                               (not (cddr binding-form)))  ; exactly 2 elements
+                               (a:proper-list-p binding-form)
+                               (>= (length binding-form) 2)
+                               (<= (length binding-form) 3)
+                               ;; At least one element after the first is not a string (value/init form)
+                               (some (lambda (elem) (not (stringp elem))) (rest binding-form)))
+                          ;; Extract only variable(s) from first element, skip init forms
                           (extract-from-pattern (first binding-form)))
-                         ;; Arbitrary destructuring pattern (including dotted pairs)
-                         ;; This handles patterns like (a . b) or nested patterns
+                         ;; Pure destructuring pattern: all elements are strings (variables)
+                         ;; or contains lambda-list keywords, or nested patterns
+                         ;; Examples: (a b), (a &key b c), ((a b) c), (a . b)
                          ((consp binding-form)
                           (extract-from-pattern binding-form))
                          ;; Anything else is not a valid binding form
@@ -368,9 +331,92 @@ Returns (values bindings body-clauses)."
                                        (push (base:symbol-name-from-string var) ignored)))))))))
                        ignored))
 
-                   (parse-lambda-list (lambda-list)
-                     "Parse lambda list into regular params and &aux params.
-Returns (values regular-params aux-params)."
+                   (extract-lambda-list-vars (lambda-list allow-destructuring)
+                     "Extract all variable names from a lambda list.
+ALLOW-DESTRUCTURING controls whether required parameters can be destructuring patterns.
+Returns list of variable names."
+                     (let ((vars '())
+                           (state :required)  ; :required, :optional, :rest, :key, :aux
+                           (i 0))
+                       (loop while (< i (length lambda-list))
+                             for elem = (nth i lambda-list)
+                             do (cond
+                                  ;; Lambda-list keywords
+                                  ((and (stringp elem)
+                                        (let ((name (base:symbol-name-from-string elem)))
+                                          (and (> (length name) 0)
+                                               (char= (char name 0) #\&))))
+                                   (let ((kw (base:symbol-name-from-string elem)))
+                                     (cond
+                                       ((or (string-equal kw "&OPTIONAL"))
+                                        (setf state :optional))
+                                       ((or (string-equal kw "&REST") (string-equal kw "&BODY"))
+                                        (setf state :rest))
+                                       ((string-equal kw "&KEY")
+                                        (setf state :key))
+                                       ((string-equal kw "&AUX")
+                                        (setf state :aux))
+                                       ;; Other keywords like &allow-other-keys, &environment, &whole - skip
+                                       )))
+                                  ;; Parameter
+                                  (t
+                                   (ecase state
+                                     (:required
+                                      ;; Required params: simple var or destructuring pattern (if allowed)
+                                      (if allow-destructuring
+                                          ;; Use extract-from-pattern for full destructuring support
+                                          (let ((extracted (extract-bindings (list elem))))
+                                            (setf vars (append vars extracted)))
+                                          ;; Simple variable only
+                                          (when (stringp elem)
+                                            (push elem vars))))
+                                     (:optional
+                                      ;; &optional param: var, (var), (var default), (var default supplied-p)
+                                      (cond
+                                        ((stringp elem)
+                                         (push elem vars))
+                                        ((and (consp elem) (stringp (first elem)))
+                                         ;; (var ...) - extract var
+                                         (push (first elem) vars)
+                                         ;; Extract supplied-p if present: (var default supplied-p)
+                                         (when (and (>= (length elem) 3) (stringp (third elem)))
+                                           (push (third elem) vars)))))
+                                     (:rest
+                                      ;; &rest/&body param: just a variable name
+                                      (when (stringp elem)
+                                        (push elem vars))
+                                      ;; After &rest, next keyword or aux
+                                      (setf state :required))
+                                     (:key
+                                      ;; &key param: var, (var), (var default), (var default supplied-p),
+                                      ;; ((:keyword var)), ((:keyword var) default), ((:keyword var) default supplied-p)
+                                      (cond
+                                        ((stringp elem)
+                                         (push elem vars))
+                                        ((and (consp elem)
+                                              (consp (first elem))
+                                              (= (length (first elem)) 2)
+                                              (stringp (second (first elem))))
+                                         ;; ((:keyword var) ...) - extract var
+                                         (push (second (first elem)) vars)
+                                         ;; Extract supplied-p if present
+                                         (when (and (>= (length elem) 3) (stringp (third elem)))
+                                           (push (third elem) vars)))
+                                        ((and (consp elem) (stringp (first elem)))
+                                         ;; (var ...) - extract var
+                                         (push (first elem) vars)
+                                         ;; Extract supplied-p if present
+                                         (when (and (>= (length elem) 3) (stringp (third elem)))
+                                           (push (third elem) vars)))))
+                                     (:aux
+                                      ;; &aux: handled separately like LET* bindings
+                                      nil))))
+                                (incf i))
+                       (nreverse vars)))
+
+                   (parse-lambda-list-for-aux (lambda-list)
+                     "Split lambda list into parts before and after &aux.
+Returns (values non-aux-part aux-params)."
                      (let ((aux-pos (position-if (lambda (x)
                                                    (and (stringp x)
                                                         (string-equal (base:symbol-name-from-string x) "&AUX")))
@@ -495,18 +541,11 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                       (listp (second rest-args)))
                              (let* ((lambda-list (second rest-args))
                                     (body (cddr rest-args)))
-                               (multiple-value-bind (regular-params aux-params)
-                                   (parse-lambda-list lambda-list)
-                                 ;; Check regular parameters (excluding &optional, &key, &rest, &allow-other-keys, etc.)
-                                 ;; Collect both simple params (strings) and complex params (consp)
-                                 ;; like (var default) or (var default supplied-p)
-                                 (let ((param-bindings (loop for param in regular-params
-                                                             when (or (consp param)  ; (var default [supplied-p])
-                                                                      (and (stringp param)
-                                                                           (let ((name (base:symbol-name-from-string param)))
-                                                                             (and (> (length name) 0)
-                                                                                  (not (char= (char name 0) #\&))))))
-                                                               collect (list param))))
+                               (multiple-value-bind (non-aux-part aux-params)
+                                   (parse-lambda-list-for-aux lambda-list)
+                                 ;; Extract variables from lambda list (no destructuring for defun)
+                                 (let* ((var-names (extract-lambda-list-vars non-aux-part nil))
+                                        (param-bindings (mapcar #'list var-names)))
                                    (when param-bindings
                                      (check-binding-form :defun-regular param-bindings body line column position-map)))
                                  ;; Check &aux parameters (sequential like LET*)
@@ -521,18 +560,11 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                       (listp (first rest-args)))
                              (let* ((lambda-list (first rest-args))
                                     (body (rest rest-args)))
-                               (multiple-value-bind (regular-params aux-params)
-                                   (parse-lambda-list lambda-list)
-                                 ;; Check regular parameters (excluding &optional, &key, &rest, &allow-other-keys, etc.)
-                                 ;; Collect both simple params (strings) and complex params (consp)
-                                 ;; like (var default) or (var default supplied-p)
-                                 (let ((param-bindings (loop for param in regular-params
-                                                             when (or (consp param)  ; (var default [supplied-p])
-                                                                      (and (stringp param)
-                                                                           (let ((name (base:symbol-name-from-string param)))
-                                                                             (and (> (length name) 0)
-                                                                                  (not (char= (char name 0) #\&))))))
-                                                               collect (list param))))
+                               (multiple-value-bind (non-aux-part aux-params)
+                                   (parse-lambda-list-for-aux lambda-list)
+                                 ;; Extract variables from lambda list (no destructuring for lambda)
+                                 (let* ((var-names (extract-lambda-list-vars non-aux-part nil))
+                                        (param-bindings (mapcar #'list var-names)))
                                    (when param-bindings
                                      (check-binding-form :defun-regular param-bindings body line column position-map)))
                                  ;; Check &aux parameters (sequential like LET*)
@@ -566,10 +598,11 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                              (let* ((lambda-list (first rest-args))
                                     ;; Second arg is the value form, skip it
                                     (body (cddr rest-args))
-                                    ;; Pass lambda-list as a single binding - extract-bindings will handle
-                                    ;; arbitrary destructuring patterns including dotted pairs
-                                    (bindings (list lambda-list)))
-                               (check-binding-form :let bindings body line column position-map))))
+                                    ;; Extract variables from destructuring lambda list (allow destructuring)
+                                    (var-names (extract-lambda-list-vars lambda-list t))
+                                    (bindings (mapcar #'list var-names)))
+                               (when bindings
+                                 (check-binding-form :let bindings body line column position-map)))))
 
                          ;; Check MULTIPLE-VALUE-BIND (parallel bindings like LET)
                          (when (base:symbol-matches-p head "MULTIPLE-VALUE-BIND")
@@ -581,7 +614,7 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                     (bindings (list vars)))
                                (check-binding-form :let bindings body line column position-map))))
 
-                         ;; Check DEFMACRO (like DEFUN with &aux support)
+                         ;; Check DEFMACRO (like DEFUN with &aux support and destructuring)
                          (when (base:symbol-matches-p head "DEFMACRO")
                            (when (and (a:proper-list-p rest-args)
                                       (>= (length rest-args) 3)
@@ -589,13 +622,11 @@ MESSAGE-PREFIX is the prefix for violation messages (default 'Variable')."
                                       (listp (second rest-args)))
                              (let* ((lambda-list (second rest-args))
                                     (body (cddr rest-args)))
-                               (multiple-value-bind (regular-params aux-params)
-                                   (parse-lambda-list lambda-list)
-                                 ;; Check regular parameters (excluding &optional, &key, &rest, &body markers)
-                                 (let ((param-bindings (loop for param in regular-params
-                                                             when (and (stringp param)
-                                                                       (not (char= (char (base:symbol-name-from-string param) 0) #\&)))
-                                                               collect (list param))))
+                               (multiple-value-bind (non-aux-part aux-params)
+                                   (parse-lambda-list-for-aux lambda-list)
+                                 ;; Extract variables from macro lambda list (allow destructuring)
+                                 (let* ((var-names (extract-lambda-list-vars non-aux-part t))
+                                        (param-bindings (mapcar #'list var-names)))
                                    (when param-bindings
                                      (check-binding-form :defun-regular param-bindings body line column position-map)))
                                  ;; Check &aux parameters (sequential like LET*)
