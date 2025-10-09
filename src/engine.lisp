@@ -37,6 +37,15 @@
               :description "case/typecase should have 'otherwise' clause"
               :default-severity :warning
               :type :form)
+             ;; INFO: Code quality suggestions
+             (:unused-local-nicknames
+              :description "Local nicknames should be used"
+              :default-severity :info
+              :type :form)
+             (:unused-imported-symbols
+              :description "Imported symbols should be used or re-exported"
+              :default-severity :info
+              :type :form)
              ;; CONVENTION: Style/idiom suggestions
              (:if-without-else
               :description "Use 'when' or 'unless' instead of 'if' without else"
@@ -153,6 +162,8 @@ Returns a list of VIOLATION objects."
                       (:missing-otherwise (make-instance 'rules:missing-otherwise-rule :severity severity))
                       (:wrong-otherwise (make-instance 'rules:wrong-otherwise-rule :severity severity))
                       (:unused-variables (make-instance 'rules:unused-variables-rule :severity severity))
+                      (:unused-local-nicknames (make-instance 'rules:unused-local-nicknames-rule :severity severity))
+                      (:unused-imported-symbols (make-instance 'rules:unused-imported-symbols-rule :severity severity))
                       (t nil))))
               (when rule-impl
                 (setf violations

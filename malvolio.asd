@@ -31,7 +31,8 @@
       :pathname "forms"
       :components
       ((:file "control-flow")
-       (:file "variables")))))
+       (:file "variables")
+       (:file "package")))))
    (:file "rules")
 
    ;; Configuration
@@ -68,6 +69,8 @@
      (:file "missing-otherwise-test")
      (:file "wrong-otherwise-test")
      (:file "unused-variables-test")
+     (:file "unused-local-nicknames-test")
+     (:file "unused-imported-symbols-test")
      (:file "text-formatting-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

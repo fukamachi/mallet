@@ -184,6 +184,8 @@ Style preferences are disabled to keep output clean."
             (:final-newline :enabled t)
             (:wrong-otherwise :enabled t)
             (:unused-variables :enabled t)
+            (:unused-local-nicknames :enabled t)
+            (:unused-imported-symbols :enabled t)
             ;; Style preferences - disable (too noisy, no consensus)
             (:line-length :enabled nil)
             (:consecutive-blank-lines :enabled nil)
@@ -204,7 +206,9 @@ Useful for exploration and discovering what rules exist."
             (:bare-progn-in-if :enabled t)
             (:missing-otherwise :enabled t)
             (:wrong-otherwise :enabled t)
-            (:unused-variables :enabled t))))
+            (:unused-variables :enabled t)
+            (:unused-local-nicknames :enabled t)
+            (:unused-imported-symbols :enabled t))))
 
 (defun make-google-config ()
   "Create configuration based on Google Common Lisp Style Guide.
@@ -219,7 +223,9 @@ Uses 100 character line length per Google's guidelines."
             (:bare-progn-in-if :enabled t)
             (:missing-otherwise :enabled t)
             (:wrong-otherwise :enabled t)
-            (:unused-variables :enabled t))))
+            (:unused-variables :enabled t)
+            (:unused-local-nicknames :enabled t)
+            (:unused-imported-symbols :enabled t))))
 
 ;;; Config file discovery
 
