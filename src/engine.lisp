@@ -70,7 +70,8 @@
              (:asdf-component-strings
               :description "ASDF components, systems, and dependencies should use strings not symbols"
               :default-severity :convention
-              :type :form)
+              :type :form
+              :file-types (:asd))
              ;; FORMAT: Consensus formatting (Emacs/SLIME standards)
              (:no-tabs
               :description "Use spaces instead of tab characters"
@@ -100,6 +101,7 @@
                (description (getf (rest rule-def) :description))
                (default-severity (getf (rest rule-def) :default-severity))
                (type (getf (rest rule-def) :type))
+               (file-types (getf (rest rule-def) :file-types '(:lisp)))
                (enabled (config:rule-enabled-p cfg rule-name))
                (severity (or (config:get-rule-option cfg rule-name :severity)
                              default-severity)))
@@ -107,7 +109,8 @@
                               :description description
                               :severity severity
                               :type type
-                              :enabled enabled))))
+                              :enabled enabled
+                              :file-types file-types))))
 
     registry))
 
@@ -135,12 +138,20 @@ Returns a list of VIOLATION objects."
     (error "File not found: ~A" file))
 
   (let ((text (uiop:read-file-string file))
-        (violations '()))
+        (violations '())
+        ;; Extract file extension and convert to keyword (e.g., "lisp" -> :LISP, "asd" -> :ASD)
+        (file-type (let ((type-string (pathname-type file)))
+                     (when type-string
+                       (intern (string-upcase type-string) :keyword)))))
 
     ;; Run text-level rules
     (dolist (rule (rules:list-rules registry))
       (when (and (rules:rule-enabled-p rule)
-                 (eq (rules:rule-type rule) :text))
+                 (eq (rules:rule-type rule) :text)
+                 ;; Only run rule if file has extension AND it matches rule's file-types
+                 ;; Files without extensions (LICENSE, README, etc.) are skipped
+                 (and file-type
+                      (member file-type (rules:rule-file-types rule))))
         (let* ((rule-name (rules:rule-name rule))
                (severity (rules:rule-severity rule))
                (rule-impl (case rule-name
@@ -183,7 +194,11 @@ Returns a list of VIOLATION objects."
       (dolist (form forms)
         (dolist (rule (rules:list-rules registry))
           (when (and (rules:rule-enabled-p rule)
-                     (eq (rules:rule-type rule) :form))
+                     (eq (rules:rule-type rule) :form)
+                     ;; Only run rule if file has extension AND it matches rule's file-types
+                     ;; Files without extensions (LICENSE, README, etc.) are skipped
+                     (and file-type
+                          (member file-type (rules:rule-file-types rule))))
             (let* ((rule-name (rules:rule-name rule))
                    (severity (rules:rule-severity rule))
                    (rule-impl

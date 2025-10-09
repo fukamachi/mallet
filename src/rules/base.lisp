@@ -9,6 +9,7 @@
            #:rule-severity
            #:rule-type
            #:rule-enabled-p
+           #:rule-file-types
            #:enable-rule
            #:disable-rule
            #:registry
@@ -53,7 +54,13 @@
     :initform t
     :accessor rule-enabled-p
     :type boolean
-    :documentation "Whether the rule is enabled"))
+    :documentation "Whether the rule is enabled")
+   (file-types
+    :initarg :file-types
+    :initform '(:lisp)
+    :reader rule-file-types
+    :type list
+    :documentation "List of file extensions this rule applies to (e.g., :lisp, :asd, :coal)"))
   (:documentation "Base class for linting rules."))
 
 (defun enable-rule (rule)
@@ -78,7 +85,7 @@
   (make-instance 'registry))
 
 (defun register-rule (registry name &key description severity (type :form)
-                                      (enabled t))
+                                      (enabled t) (file-types '(:lisp)))
   "Register a new rule in REGISTRY with NAME and properties."
   (check-type registry registry)
   (check-type name keyword)
@@ -86,13 +93,15 @@
   (check-type severity (member :error :warning :convention :format :info))
   (check-type type (member :text :token :form :pattern))
   (check-type enabled boolean)
+  (check-type file-types list)
 
   (let ((rule (make-instance 'rule
                              :name name
                              :description description
                              :severity severity
                              :type type
-                             :enabled enabled)))
+                             :enabled enabled
+                             :file-types file-types)))
     (setf (gethash name (registry-rules registry)) rule)
     rule))
 
