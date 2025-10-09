@@ -196,54 +196,58 @@ Handles wildcards and directories, excluding common non-source directories."
 (defun main (&optional (args (uiop:command-line-arguments)))
   "Main entry point for the Malvolio CLI.
 Lints files specified in ARGS and exits with appropriate status code."
-  (handler-bind ((error (lambda (e)
-                          (format *error-output* "Fatal error: ~A~%" e)
-                          (uiop:print-condition-backtrace e)
-                          (uiop:quit 3))))
-    (multiple-value-bind (format config-path preset debug file-args)
+  (let* ((args (uiop:command-line-arguments))
+         (args (if (equal (first args) "--")
+                   (rest args)
+                   args)))
+    (handler-bind ((error (lambda (e)
+                            (format *error-output* "Fatal error: ~A~%" e)
+                            (uiop:print-condition-backtrace e)
+                            (uiop:quit 3))))
+      (multiple-value-bind (format config-path preset debug file-args)
         (parse-args args)
 
-      ;; Enable debug mode if requested
-      (setf *debug-mode* debug)
+        ;; Enable debug mode if requested
+        (setf *debug-mode* debug)
 
-      ;; Validate we have files to lint
-      (when (null file-args)
-        (format *error-output* "Error: No files specified~%~%")
-        (print-help)
-        (uiop:quit 3))
+        ;; Validate we have files to lint
+        (when (null file-args)
+          (format *error-output* "Error: No files specified~%~%")
+          (print-help)
+          (uiop:quit 3))
 
-      ;; Load or discover config
-      (let* ((cfg (cond
-                    ;; Explicit preset provided (takes precedence)
-                    (preset
-                     (config:get-built-in-config preset))
-                    ;; Explicit config path provided
-                    (config-path
-                     (config:load-config config-path))
-                    ;; Auto-discover from current directory
-                    (t
-                     (let ((found-config (config:find-config-file (uiop:getcwd))))
-                       (if found-config
-                           (config:load-config found-config)
-                           ;; No config found, use default
-                           (config:get-built-in-config :default))))))
-             ;; Expand file arguments
-             (files (expand-file-args file-args))
-             ;; Create registry from config
-             (registry (engine:make-registry-from-config cfg))
-             ;; Lint files
-             (results (engine:lint-files files :registry registry :config cfg)))
+        ;; Load or discover config
+        (let* ((cfg (cond
+                      ;; Explicit preset provided (takes precedence)
+                      (preset
+                        (config:get-built-in-config preset))
+                      ;; Explicit config path provided
+                      (config-path
+                        (config:load-config config-path))
+                      ;; Auto-discover from current directory
+                      (t
+                        (let ((found-config (config:find-config-file (uiop:getcwd))))
+                          (if found-config
+                            (config:load-config found-config)
+                            ;; No config found, use default
+                            (config:get-built-in-config :default))))))
+               ;; Expand file arguments
+               (files (expand-file-args file-args))
+               ;; Create registry from config
+               (registry (engine:make-registry-from-config cfg))
+               ;; Lint files
+               (results (engine:lint-files files :registry registry :config cfg)))
 
-        ;; Format output
-        (ecase format
-          (:text (formatter:format-text results))
-          (:json (formatter:format-json results)))
+          ;; Format output
+          (ecase format
+            (:text (formatter:format-text results))
+            (:json (formatter:format-json results)))
 
-        ;; Exit with appropriate status
-        ;; Exit 2: ERROR severity (objectively wrong)
-        ;; Exit 1: WARNING severity (likely bugs)
-        ;; Exit 0: CONVENTION/FORMAT/INFO (style/preferences) or no violations
-        (cond
-          ((has-errors-p results) (uiop:quit 2))
-          ((has-warnings-p results) (uiop:quit 1))
-          (t (uiop:quit 0)))))))
+          ;; Exit with appropriate status
+          ;; Exit 2: ERROR severity (objectively wrong)
+          ;; Exit 1: WARNING severity (likely bugs)
+          ;; Exit 0: CONVENTION/FORMAT/INFO (style/preferences) or no violations
+          (cond
+            ((has-errors-p results) (uiop:quit 2))
+            ((has-warnings-p results) (uiop:quit 1))
+            (t (uiop:quit 0))))))))
