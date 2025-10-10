@@ -1,7 +1,8 @@
 (defpackage #:malo/config
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria))
+   (#:a #:alexandria)
+   (#:glob #:trivial-glob))
   (:export #:config
            #:make-config
            #:parse-config
@@ -11,7 +12,8 @@
            #:get-rule-option
            #:get-built-in-config
            #:find-config-file
-           #:config-overrides))
+           #:config-overrides
+           #:apply-overrides-for-file))
 (in-package #:malo/config)
 
 ;;; Config data structure
@@ -245,6 +247,38 @@ Useful for exploration and discovering what rules exist."
   (make-config
    :rules '((:line-length :enabled t :max-length 100)
             (:consecutive-blank-lines :enabled t :max-consecutive 2))))
+
+;;; Path-based overrides
+
+(defun apply-overrides-for-file (config file-path)
+  "Apply path-specific overrides from CONFIG for FILE-PATH.
+Returns a new config with matching overrides merged in."
+  (check-type config config)
+  (check-type file-path pathname)
+
+  (let ((merged-config config)
+        (file-namestring (namestring file-path)))
+    ;; Process each override entry
+    (dolist (override-entry (config-overrides config))
+      (let ((patterns (car override-entry))
+            (override-config (cdr override-entry)))
+        ;; Check if any pattern matches the file
+        (when (some (lambda (pattern)
+                      (path-matches-pattern-p file-namestring pattern))
+                    patterns)
+          ;; Merge this override into the accumulated config
+          (setf merged-config (merge-configs merged-config override-config)))))
+    merged-config))
+
+(defun path-matches-pattern-p (path pattern)
+  "Check if PATH matches glob PATTERN.
+Supports: * (any chars), ** (any dirs), ? (single char), {a,b} (alternatives)."
+  (check-type path string)
+  (check-type pattern string)
+
+  ;; Use trivial-glob's glob-match with pathname mode
+  ;; pathname=t ensures / is not matched by * wildcards
+  (glob:glob-match pattern path :pathname t))
 
 ;;; Config file discovery
 

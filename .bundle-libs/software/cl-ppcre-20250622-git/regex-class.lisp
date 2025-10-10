@@ -135,7 +135,7 @@ This is the index into *REGS-START* and *REGS-END*.")
           :accessor regex
           :documentation "The inner regex."))
   (:documentation "A standalone regular expression."))
-
+  
 (defclass back-reference (regex)
   ((num :initarg :num
         :accessor num
@@ -239,7 +239,7 @@ test succeeds.")
 test fails."))
   (:documentation "BRANCH objects represent Perl's conditional regular
 expressions."))
-
+    
 (defclass filter (regex)
   ((fn :initarg :fn
        :accessor fn

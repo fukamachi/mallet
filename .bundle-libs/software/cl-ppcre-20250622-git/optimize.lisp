@@ -457,12 +457,12 @@ function called by END-STRING.)"))
                            &optional (old-case-insensitive-p :void))
   (declare #.*standard-optimize-settings*)
   (end-string-aux (regex register) old-case-insensitive-p))
-
+    
 (defmethod end-string-aux ((standalone standalone)
                            &optional (old-case-insensitive-p :void))
   (declare #.*standard-optimize-settings*)
   (end-string-aux (regex standalone) old-case-insensitive-p))
-
+    
 (defmethod end-string-aux ((regex regex)
                            &optional (old-case-insensitive-p :void))
   (declare #.*standard-optimize-settings*)
@@ -522,7 +522,7 @@ objects."))
         for last-min-rest = current-min-rest then this-min-rest
         for this-min-rest = (compute-min-rest element last-min-rest)
         finally (return this-min-rest)))
-
+    
 (defmethod compute-min-rest ((alternation alternation) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (loop for choice in (choices alternation)
@@ -536,11 +536,11 @@ objects."))
 (defmethod compute-min-rest ((str str) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (+ current-min-rest (len str)))
-
+    
 (defmethod compute-min-rest ((filter filter) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (+ current-min-rest (or (len filter) 0)))
-
+    
 (defmethod compute-min-rest ((repetition repetition) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (setf (min-rest repetition) current-min-rest)
@@ -550,22 +550,22 @@ objects."))
 (defmethod compute-min-rest ((register register) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (compute-min-rest (regex register) current-min-rest))
-
+    
 (defmethod compute-min-rest ((standalone standalone) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (declare (ignore current-min-rest))
   (compute-min-rest (regex standalone) 0))
-
+    
 (defmethod compute-min-rest ((lookahead lookahead) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (compute-min-rest (regex lookahead) 0)
   current-min-rest)
-
+    
 (defmethod compute-min-rest ((lookbehind lookbehind) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (compute-min-rest (regex lookbehind) (+ current-min-rest (len lookbehind)))
   current-min-rest)
-
+    
 (defmethod compute-min-rest ((regex regex) current-min-rest)
   (declare #.*standard-optimize-settings*)
   (typecase regex

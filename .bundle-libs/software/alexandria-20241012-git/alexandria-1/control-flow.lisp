@@ -55,7 +55,7 @@ returns the values of T or OTHERWISE if no keys match."
       ((= 1 length)
        (first possibilities))
       ((every #'constantp possibilities)
-       `(svref (load-time-value (vector ,@possibilities))
+       `(svref (load-time-value (vector ,@possibilities)) 
                (random ,length)))
       (T
        (labels ((expand (possibilities position random-number)

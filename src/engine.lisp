@@ -123,6 +123,10 @@ Returns a list of VIOLATION objects."
   (when (and (not registry) (not config))
     (setf config (config:get-built-in-config :default)))
 
+  ;; Apply path-based overrides if config is provided
+  (when config
+    (setf config (config:apply-overrides-for-file config file)))
+
   ;; Create registry from config if not provided
   (when (and config (not registry))
     (setf registry (make-registry-from-config config)))

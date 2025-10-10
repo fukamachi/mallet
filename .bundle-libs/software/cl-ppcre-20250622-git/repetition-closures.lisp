@@ -355,7 +355,7 @@ repetitions is zero."))
             (declare (fixnum start-pos))
             (setf (svref *last-pos-stores* zero-length-num) nil)
             (greedy-aux start-pos)))))))
-
+  
 ;; code for non-greedy repetitions with minimum zero
 
 (defmacro non-greedy-constant-length-closure (check-curr-pos)
@@ -520,7 +520,7 @@ maximal number of repetitions is 1)."))
           (setq repeat-matcher
                   (create-matcher-aux (regex repetition) #'non-greedy-aux))
           #'non-greedy-aux)))))
-
+  
 (defgeneric create-non-greedy-matcher (repetition next-fn)
   (declare #.*standard-optimize-settings*)
   (:documentation "Creates a closure which tries to match REPETITION.
@@ -607,9 +607,9 @@ repetitions is zero."))
             (declare (fixnum start-pos))
             (setf (svref *last-pos-stores* zero-length-num) nil)
             (non-greedy-aux start-pos)))))))
-
+  
 ;; code for constant repetitions, i.e. those with a fixed number of repetitions
-
+                      
 (defmacro constant-repetition-constant-length-closure (check-curr-pos)
   "This is the template for simple constant repetitions (where simple
 means that the inner regex to be checked is of fixed length LEN, and
@@ -706,7 +706,7 @@ fixed length and doesn't contain registers."))
             (declare (function inner-matcher))
             (constant-repetition-constant-length-closure
              (funcall inner-matcher curr-pos))))))))
-
+  
 (defgeneric create-constant-repetition-matcher (repetition next-fn)
   (declare #.*standard-optimize-settings*)
   (:documentation "Creates a closure which tries to match REPETITION.
@@ -788,7 +788,7 @@ It is assumed that REPETITION has a constant number of repetitions."))
           (declare (fixnum start-pos))
           (setf (aref *repeat-counters* rep-num) 0)
           (constant-aux start-pos))))))
-
+  
 ;; the actual CREATE-MATCHER-AUX method for REPETITION objects which
 ;; utilizes all the functions and macros defined above
 

@@ -4,7 +4,8 @@
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
   :license "MIT"
   :depends-on ("alexandria"
-               "eclector")
+               "eclector"
+               "trivial-glob")
   :in-order-to ((test-op (test-op "malo/tests")))
   :pathname "src"
   :build-operation "program-op"

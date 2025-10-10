@@ -52,7 +52,7 @@ character code."
                  else
                  collect (string (code-char element)))))))
 
-(defun perl-test (&key (file-name
+(defun perl-test (&key (file-name 
                         (make-pathname :name "perltestdata"
                                        :type nil :version nil
                                        :defaults *this-file*)
@@ -103,7 +103,7 @@ test files."
               (setq expected-registers (mapcar 'create-string-from-input expected-registers))
               (unless (find counter *tests-to-skip* :test #'=)
                 (when verbose
-                  (format t "~&~4D: ~S" counter info-string))
+                  (format t "~&~4D: ~S" counter info-string))                  
                 (block inner-test-block
                   (let ((scanner
                          (handler-bind ((error (lambda (condition)
@@ -118,7 +118,7 @@ test files."
                                            :multi-line-mode multi-line-mode
                                            :single-line-mode single-line-mode
                                            :extended-mode extended-mode))))
-                    (multiple-value-bind (start end reg-starts reg-ends)
+                    (multiple-value-bind (start end reg-starts reg-ends)                        
                         (scan scanner target)
                       (cond (perl-error
                              (push (format nil "expected an error but got a result.")

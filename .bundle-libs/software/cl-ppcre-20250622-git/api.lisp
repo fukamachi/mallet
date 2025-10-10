@@ -706,7 +706,7 @@ that \(<= START FROM TO END)."
                          ;; an uppercase character
                          (setq current-result
                                  (if last-char-both-case
-                                   ;; not the first character in a
+                                   ;; not the first character in a 
                                    (case current-result
                                      ((:undecided) :upcase)
                                      ((:downcase :capitalize) (return nil))
@@ -794,7 +794,7 @@ S-expression."))
 (defmethod build-replacement-template ((replacement-function-symbol symbol))
   (declare #.*standard-optimize-settings*)
   (list replacement-function-symbol))
-
+        
 #-:cormanlisp
 (defmethod build-replacement-template ((replacement-list list))
   (declare #.*standard-optimize-settings*)
@@ -848,7 +848,7 @@ S-expression."))
         replacement)
       (t
         (list replacement)))))
-
+        
 (defun build-replacement (replacement-template
                           target-string
                           start end
@@ -885,7 +885,7 @@ corresponding string."
                                    :start (svref reg-starts token)
                                    :end (svref reg-ends token))))
                  (function
-                   (write-string
+                   (write-string 
                     (cond (simple-calls
                            (apply token
                                   (nsubseq target-string match-start match-end)

@@ -348,7 +348,7 @@
                    (if (eq documentation :unbound) car
                      (warn "Too many documentation strings in lambda expression ~S."
                            lambda-expression)))
-          else append (loop for declaration in (cdr car)
+          else append (loop for declaration in (cdr car) 
                             if (eq (car declaration) 'ignore)
                             collect `(ignorable ,@(cdr declaration))
                             and collect `(dynamic-extent ,@(cdr declaration))

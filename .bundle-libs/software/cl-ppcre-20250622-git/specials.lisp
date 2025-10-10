@@ -59,7 +59,7 @@ occur in character classes.  Change this value BEFORE creating
 scanners if you don't need the \(full) Unicode support of
 implementations like AllegroCL, CLISP, LispWorks, or SBCL.")
 (declaim (fixnum *regex-char-code-limit*))
-
+  
 (defvar *string* (make-sequence #+:lispworks 'lw:simple-text-string
                                 #-:lispworks 'simple-string
                                 0)
@@ -86,7 +86,7 @@ Will always be coerced to a SIMPLE-STRING.")
   "An array which holds the start positions
 of the current register candidates.")
 (declaim (simple-vector *reg-starts*))
-
+  
 (defvar *regs-maybe-start* (make-array 0)
   "An array which holds the next start positions
 of the current register candidates.")
@@ -169,4 +169,4 @@ intended to handle `character properties' like \\p{IsAlpha}.  If
     (cdr (assoc symbol
                 exported-symbols-alist
                 :test #'eq))))
-
+               

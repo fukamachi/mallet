@@ -60,7 +60,7 @@ boundary check - this has to be implemented by the caller."
   (:documentation "Creates a closure which takes one parameter,
 START-POS, and tests whether REGEX can match *STRING* at START-POS
 such that the call to NEXT-FN after the match would succeed."))
-
+                
 (defmethod create-matcher-aux ((seq seq) next-fn)
   (declare #.*standard-optimize-settings*)
   ;; the closure for a SEQ is a chain of closures for the elements of

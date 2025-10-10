@@ -126,7 +126,7 @@ FLAGS."
                              (t (signal-syntax-error "Unknown item ~A in char-class list." item))))))
     (unless test-functions
       (signal-syntax-error "Empty character class."))
-    (cond ((cdr test-functions)
+    (cond ((cdr test-functions)           
            (cond ((and invertedp case-insensitive-p)
                   (lambda (char)
                     (declare (character char))
@@ -835,7 +835,7 @@ parse trees which are atoms.")
   (declare #.*standard-optimize-settings*)
   ;; dispatch to the method for strings
   (convert-simple-parse-tree (string parse-tree)))
-
+        
 (defmethod convert-simple-parse-tree (parse-tree)
   "The default method - check if there's a translation."
   (declare #.*standard-optimize-settings*)

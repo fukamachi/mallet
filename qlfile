@@ -3,3 +3,4 @@
 # Other dependencies available via Quicklisp
 # - alexandria
 # - eclector
+github fukamachi/trivial-glob

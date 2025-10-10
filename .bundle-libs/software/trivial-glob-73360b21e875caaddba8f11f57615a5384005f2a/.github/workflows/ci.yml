@@ -1,0 +1,45 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: ${{ matrix.lisp }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        lisp:
+          - sbcl-bin
+          - ccl-bin
+        os:
+          - ubuntu-latest
+          - macos-latest
+        exclude:
+          # CCL doesn't work reliably on macOS in CI
+          - lisp: ccl-bin
+            os: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Roswell
+        env:
+          LISP: ${{ matrix.lisp }}
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+
+      - name: Install Qlot
+        run: |
+          ros install fukamachi/qlot
+          echo "$HOME/.roswell/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          qlot install --no-deps
+          qlot exec ros -e '(ql:quickload :trivial-glob/tests)'
+
+      - name: Run test suite
+        run: |
+          qlot exec ros -e '(asdf:load-system :trivial-glob/tests)' -e '(or (rove:run :trivial-glob/tests) (uiop:quit -1))'

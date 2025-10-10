@@ -374,7 +374,7 @@ to this object, otherwise NIL.  So, \"(.){1}\" would return true
   ;; with enough effort we could possibly do better here, but
   ;; currently we just give up and return NIL
   nil)
-
+    
 (defmethod regex-length ((char-class char-class))
   (declare #.*standard-optimize-settings*)
   1)
@@ -427,15 +427,15 @@ to this object, otherwise NIL.  So, \"(.){1}\" would return true
   ;; obviously the product of the inner minimal length and the minimal
   ;; number of repetitions
   (* (minimum repetition) (min-len repetition)))
-
+    
 (defmethod regex-min-length ((register register))
   (declare #.*standard-optimize-settings*)
   (regex-min-length (regex register)))
-
+    
 (defmethod regex-min-length ((standalone standalone))
   (declare #.*standard-optimize-settings*)
   (regex-min-length (regex standalone)))
-
+    
 (defmethod regex-min-length ((char-class char-class))
   (declare #.*standard-optimize-settings*)
   1)
@@ -447,7 +447,7 @@ to this object, otherwise NIL.  So, \"(.){1}\" would return true
 (defmethod regex-min-length ((str str))
   (declare #.*standard-optimize-settings*)
   (len str))
-
+    
 (defmethod regex-min-length ((filter filter))
   (declare #.*standard-optimize-settings*)
   (or (len filter)
@@ -516,19 +516,19 @@ slots of STR objects further down the tree."))
 (defmethod compute-offsets ((register register) start-pos)
   (declare #.*standard-optimize-settings*)
   (compute-offsets (regex register) start-pos))
-
+    
 (defmethod compute-offsets ((standalone standalone) start-pos)
   (declare #.*standard-optimize-settings*)
   (compute-offsets (regex standalone) start-pos))
-
+    
 (defmethod compute-offsets ((char-class char-class) start-pos)
   (declare #.*standard-optimize-settings*)
   (1+ start-pos))
-
+    
 (defmethod compute-offsets ((everything everything) start-pos)
   (declare #.*standard-optimize-settings*)
   (1+ start-pos))
-
+    
 (defmethod compute-offsets ((str str) start-pos)
   (declare #.*standard-optimize-settings*)
   (setf (offset str) start-pos)

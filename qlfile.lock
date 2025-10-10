@@ -2,3 +2,7 @@
  (:class qlot/source/dist:source-dist
   :initargs (:distribution "https://beta.quicklisp.org/dist/quicklisp.txt" :%version :latest)
   :version "2025-06-22"))
+("trivial-glob" .
+ (:class qlot/source/github:source-github
+  :initargs (:repos "fukamachi/trivial-glob" :ref nil :branch nil :tag nil)
+  :version "github-73360b21e875caaddba8f11f57615a5384005f2a"))

@@ -96,5 +96,6 @@ Malo bundles the following Common Lisp libraries for standalone distribution:
 - **cl-ppcre** - Regular expressions (BSD 2-Clause)
 - **closer-mop** - Meta-Object Protocol compatibility (MIT)
 - **eclector** - Common Lisp reader (BSD 2-Clause)
+- **trivial-glob** - Shell-style glob pattern (MIT)
 
 See [THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) for full license texts.

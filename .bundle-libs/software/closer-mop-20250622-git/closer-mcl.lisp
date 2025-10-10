@@ -26,7 +26,7 @@
   (:method (object (type class))
    (member (class-of object)
            (class-precedence-list type))))
-
+  
 (defgeneric subtypep (type1 type2)
   (:method (type1 type2)
    (cl:subtypep type1 type2))

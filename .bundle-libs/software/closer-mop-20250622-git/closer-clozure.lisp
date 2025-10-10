@@ -58,14 +58,14 @@
 (cl:defmethod add-method :after ((gf standard-generic-function) method)
   (declare (ignore method))
   (set-funcallable-instance-function gf (compute-discriminating-function gf)))
-
+  
 (cl:defmethod remove-method :after ((gf standard-generic-function) method)
   (declare (ignore method))
   (set-funcallable-instance-function gf (compute-discriminating-function gf)))
-
+  
 (cl:defmethod initialize-instance :after ((gf standard-generic-function) &key)
   (set-funcallable-instance-function gf (compute-discriminating-function gf)))
-
+  
 (cl:defmethod reinitialize-instance :after ((gf standard-generic-function) &key)
   (set-funcallable-instance-function gf (compute-discriminating-function gf)))
 

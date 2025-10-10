@@ -29,7 +29,7 @@
 
 (in-package :cl-ppcre-test)
 
-(defun unicode-test (&key (file-name
+(defun unicode-test (&key (file-name 
                            (make-pathname :name "unicodetestdata"
                                           :type nil :version nil
                                           :defaults *this-file*)

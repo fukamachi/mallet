@@ -41,7 +41,7 @@
   (end 0 :type fixnum)
   ;; the number of characters in the set, or NIL if this is unknown
   (count nil :type (or fixnum null))
-  ;; whether the charmap actually represents the complement of the set
+  ;; whether the charmap actually represents the complement of the set  
   (complementp nil :type boolean))
 
 ;; seems to be necessary for some Lisps like ClozureCL

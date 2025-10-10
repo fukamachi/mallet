@@ -207,7 +207,7 @@ symbols or lists of symbols."))
   or PACKAGE:SYMBOL otherwise."
   (format nil "~@[~a:~]~a"
           (unless (eq symbol
-                      (find-symbol (symbol-name symbol)
+                      (find-symbol (symbol-name symbol) 
                                    package))
             (shortest-package-name (symbol-package symbol)))
           (symbol-name symbol)))

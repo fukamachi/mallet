@@ -92,7 +92,7 @@
 
 (defmethod long-month-name ((month (eql 12)) (langauge french))
   "décembre")
-
+                            
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Methods on SHORT-MONTH-NAME.

@@ -92,7 +92,7 @@
 
 (defmethod long-month-name ((month (eql 12)) (langauge afrikaans))
   "Desember")
-
+                            
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Methods on SHORT-MONTH-NAME.
