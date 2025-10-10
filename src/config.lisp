@@ -239,7 +239,9 @@ Style preferences are disabled to keep output clean."
             (:consecutive-blank-lines :enabled nil)
             (:bare-progn-in-if :enabled nil)
             (:missing-otherwise :enabled nil)
-            (:constant-naming :enabled nil))))
+            (:constant-naming :enabled nil)
+            ;; LOOP variables - disable (idiomatic in CL, opt-in for strict checking)
+            (:unused-loop-variables :enabled nil))))
 
 (defun make-all-config ()
   "Create configuration with all rules enabled.

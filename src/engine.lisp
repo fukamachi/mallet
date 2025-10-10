@@ -54,6 +54,10 @@
               :description "Constants should be named +foo+"
               :default-severity :info
               :type :form)
+             (:unused-loop-variables
+              :description "LOOP variables should be used or explicitly ignored"
+              :default-severity :info
+              :type :form)
              ;; CONVENTION: Style/idiom suggestions
              (:if-without-else
               :description "Use 'when' or 'unless' instead of 'if' without else"
@@ -212,6 +216,7 @@ Returns a list of VIOLATION objects."
                       (:missing-otherwise (make-instance 'rules:missing-otherwise-rule :severity severity))
                       (:wrong-otherwise (make-instance 'rules:wrong-otherwise-rule :severity severity))
                       (:unused-variables (make-instance 'rules:unused-variables-rule :severity severity))
+                      (:unused-loop-variables (make-instance 'rules:unused-loop-variables-rule :severity severity))
                       (:unused-local-nicknames (make-instance 'rules:unused-local-nicknames-rule :severity severity))
                       (:unused-imported-symbols (make-instance 'rules:unused-imported-symbols-rule :severity severity))
                       (:special-variable-naming (make-instance 'rules:special-variable-naming-rule :severity severity))

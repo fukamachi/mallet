@@ -2,7 +2,10 @@
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
+   (#:utils #:malo/utils)
    (#:violation #:malo/violation))
+  (:import-from #:malo/utils
+                #:symbol-name-from-string)
   (:export #:rule
            #:rule-name
            #:rule-description
@@ -119,17 +122,6 @@
   (a:hash-table-values (registry-rules registry)))
 
 ;;; Helper functions for string-based symbol handling
-
-(defun symbol-name-from-string (str)
-  "Extract the symbol name from a string representation.
-Handles qualified symbols like \"PACKAGE:NAME\" → \"NAME\"
-and unqualified symbols like \"NAME\" → \"NAME\"."
-  (if (stringp str)
-      (let ((colon-pos (position #\: str :from-end t)))
-        (if colon-pos
-            (subseq str (1+ colon-pos))
-            str))
-      str))
 
 (defun symbol-matches-p (str name)
   "Check if string-based symbol STR matches NAME (case-insensitive).

@@ -728,4 +728,317 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
-           "Chained init forms should all be recognized as uses")))))
+           "Chained init forms should all be recognized as uses"))))
+
+(deftest loop-variables-in-subsequent-clauses
+  (testing "Bug: LOOP variable used in subsequent FOR clause (Coalton package.lisp case)"
+    (let* ((code "(loop :for name :being :the :hash-keys :of result
+                        :for data :being :the :hash-values :of result
+                        :for real-time := (cdar data)
+                        :for value := (coerce (cdr real-time) 'double-float)
+                        :collect value)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'data' is used in (cdar data), 'real-time' is used in (cdr real-time)
+      ;; Bug: parse-loop-clauses was only searching body clauses after DO/COLLECT
+      ;; But variables can be used in subsequent FOR/WITH clauses
+      (ok (null violations)
+          "Variables used in subsequent FOR clauses should not be flagged as unused")))
+
+  (testing "Valid: Simpler case of FOR variable used in next FOR"
+    (let* ((code "(loop for x in list
+                        for y = (* x 2)
+                        collect y)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Variable 'x' used in subsequent FOR clause should not be unused")))
+
+  (testing "Invalid: FOR variable not used anywhere"
+    (let* ((code "(loop for x in list
+                        for y = 42
+                        collect y)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'x' is truly unused
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'x' is unused"
+                  (violation:violation-message (first violations)))
+          "Should report 'x' as unused")))
+
+  (testing "Valid: WITH variable used in FOR clause"
+    (let* ((code "(loop with multiplier = 2
+                        for i from 1 to 10
+                        for doubled = (* i multiplier)
+                        collect doubled)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "WITH variable used in FOR clause should not be unused"))))
+
+(deftest loop-variables-in-accumulation-expressions
+  (testing "Bug: LOOP variable used in SUMMING expression (Coalton matrix.lisp case)"
+    (let* ((code "(loop :for i :from 0 :below 4
+                        :do (loop :for j :from 0 :below 4
+                                  :do (setf (aref r (+ (* i 4) j))
+                                            (loop :for k :from 0 :below 4
+                                                  :summing (* (aref a (+ (* i 4) k))
+                                                              (aref b (+ (* k 4) j)))))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'k' is used in the SUMMING expression
+      ;; Bug: parse-loop-clauses was only searching body after DO/COLLECT keywords
+      ;; But SUMMING expression itself should be searched
+      (ok (null violations)
+          "Variable 'k' used in SUMMING should not be flagged as unused")))
+
+  (testing "Valid: Variable used in COLLECTING expression"
+    (let* ((code "(loop for x from 1 to 10
+                        collecting (* x 2))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Variable used in COLLECTING expression should not be unused")))
+
+  (testing "Valid: Variable used in APPEND expression"
+    (let* ((code "(loop for x in '((1 2) (3 4))
+                        append x)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Variable used in APPEND should not be unused")))
+
+  (testing "Valid: Variable used in COUNT expression"
+    (let* ((code "(loop for x in list
+                        count (evenp x))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Variable used in COUNT should not be unused")))
+
+  (testing "Valid: Variable used in MAXIMIZE expression"
+    (let* ((code "(loop for item in list
+                        for value = (compute-value item)
+                        maximize value)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Variable used in MAXIMIZE should not be unused"))))
+
+(deftest loop-nested-scoping
+  (testing "Valid: Nested loops with proper scoping"
+    (let* ((code "(loop for i from 1 to 3
+                        collect (loop for j from 1 to 3
+                                      collect (* i j)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Nested loop variables should have proper scoping")))
+
+  (testing "Valid: Outer loop variable used in inner loop"
+    (let* ((code "(loop for limit from 1 to 5
+                        collect (loop for i from 1 to limit
+                                      collect i))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Outer loop variable used in inner loop should not be unused")))
+
+  (testing "Invalid: Outer loop variable shadowed and unused"
+    (let* ((code "(loop for i from 1 to 3
+                        collect (loop for i from 1 to 3
+                                      collect i))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Outer 'i' is shadowed by inner loop and never used
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'i' is unused"
+                  (violation:violation-message (first violations)))
+          "Shadowed outer loop variable should be flagged as unused")))
+
+  (testing "Valid: Triple-nested loops (Coalton matrix.lisp pattern)"
+    (let* ((code "(loop for i from 0 below 4
+                        do (loop for j from 0 below 4
+                                 do (loop for k from 0 below 4
+                                          summing (* i j k))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "All variables in triple-nested loops should be recognized as used")))))
+
+(deftest loop-nested-with-hash-value-bug
+  (testing "Bug: LET variable used in nested LOOP with :being :the :hash-value"
+    (let* ((code "(defun test (data)
+                     (let ((my-var 42))
+                       (loop :for instance :in data :do
+                         (loop :for subitem :being :the :hash-value :of instance
+                               :do (print my-var)
+                               :do (print subitem)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Debug: print violation info and position map
+      (when violations
+        (format t "~%Got ~D violation(s):~%" (length violations))
+        (dolist (v violations)
+          (format t "  ~A at ~D:~D - ~A~%"
+                  (violation:violation-rule v)
+                  (violation:violation-line v)
+                  (violation:violation-column v)
+                  (violation:violation-message v)))
+        ;; Print code lines to see what 5:42 actually points to
+        (let ((lines (uiop:split-string code :separator '(#\Newline))))
+          (format t "~%Code lines:~%")
+          (loop for line in lines
+                for i from 1
+                do (format t "  Line ~D: ~A~%" i line))))
+      (ok (null violations)
+          "LET variable used in nested LOOP should not be flagged as unused")))
+  (testing "Bug: Same with bare LOOP keywords (no colons)"
+    (let* ((code "(defun test (data)
+                     (let ((my-var 42))
+                       (loop for instance in data do
+                         (loop for subitem in instance
+                               do (print my-var)
+                               do (print subitem)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "LET variable used in nested LOOP with bare keywords should not be flagged as unused"))))
+
+(deftest backquote-unquote-false-positives
+  (testing "Bug: LOOP destructuring variable unused but in backquote (from Coalton)"
+    ;; This is a false positive - 'value' is truly unused, not a bug
+    ;; But documenting the pattern from original investigation
+    (let* ((code "(defun test ()
+                     (loop :for (name . value) :in data
+                           :collect `(use ,name)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'value' is genuinely unused - this should report a violation
+      ;; NOTE: This may actually be correct behavior
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'value' is unused"
+                  (violation:violation-message (first violations)))
+          "Variable 'value' is genuinely unused in this case")))
+
+  (testing "Valid: Parameter used before being shadowed by nested LOOP"
+    ;; This is the pattern from Coalton codegen-expression.lisp - now fixed!
+    (let* ((code "(defun test (node)
+                     (process node)
+                     (loop :for node :in items
+                           :collect node))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Parameter 'node' is used in (process node), then shadowed by LOOP
+      (ok (null violations)
+          "Parameter should be recognized as used before shadowing")))
+
+  ;; KNOWN FALSE POSITIVES - These tests document remaining issues to be fixed
+  ;; Using `failing` to mark tests that should fail until the bugs are fixed
+
+  (testing "Bug: LOOP variable used in subsequent clause and backquote (from Coalton) - FIXED!"
+    ;; This was a false positive that is now fixed by the two-phase shadow architecture
+    ;; Real Coalton pattern: node used in subsequent FOR clause, name and arity used in backquote
+    (let* ((code "(defun test ()
+                     (loop :for (name . node) :in bindings
+                           :for arity := (get-arity node)
+                           :collect `(setf ,name (make-entry ,arity))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'name' and 'arity' used in unquotes, 'node' used in subsequent FOR clause
+      ;; Fixed: Two-phase architecture correctly handles shadowing in LOOP destructuring
+      (ok (null violations)
+          "All variables should be recognized as used")))
+
+  (failing "Bug: Deep nesting with COND and parameter shadowing"
+    ;; Complex case with LET, COND, LET*, LOOP
+    (let* ((code "(defun test (node)
+                     (let ((bindings (get-bindings node)))
+                       (cond
+                         ((condition bindings)
+                          (let* ((inner (recurse node))
+                                 (result
+                                   (loop :for (name . node) :in bindings
+                                         :collect `(use ,name))))
+                            result)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Parameter 'node' is used in (get-bindings node) on line 2
+      ;; and in (recurse node) on line 5, but shadowed by LOOP on line 7
+      (ok (null violations)
+          "Parameter 'node' should be recognized as used despite LOOP shadowing")))
+
+  (failing "Bug: LET* nesting with parameter shadowing"
+    ;; Another pattern with LET* sequential bindings
+    (let* ((code "(defun test (node)
+                     (let* ((x (process node))
+                            (y (loop :for node :in items
+                                     :collect node)))
+                       y))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Parameter 'node' is used in (process node) before being shadowed
+      (ok (null violations)
+          "Parameter should be recognized as used in LET* init form"))))
+
+(deftest nested-loop-shadow-bug
+  (testing "Bug: Outer LOOP variable used in nested LOOP (Coalton codegen-expression.lisp:521)"
+    ;; Simplified version of the Coalton code that triggers the bug:
+    ;; Line 521: (loop :for (name . initform) :in scc-bindings
+    ;;                 :appending (loop :for arg :in (node-rands initform)
+    ;;                                  :collect `(setf ,(setf-accessor ctor-info i name) ...)))
+    ;; The bug: 'name' is reported as unused even though it's used in the nested loop's backquote
+    (let* ((code "(defun test ()
+                     (let ((pairs '((a . (1 2 3)) (b . (4 5 6)))))
+                       (loop :for (name . items) :in pairs
+                             :appending (loop :for i :in items
+                                              :collect `(setf ,(list 'value i name)
+                                                              ,(+ i 10))))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'name' from outer loop is used in nested loop's backquote: ,(list 'value i name)
+      ;; Bug: Nested LOOP creates complete shadow, blocking search for outer variables
+      ;; This should pass (no violations) but currently fails (reports name as unused)
+      (when violations
+        (format t "~%Got ~D violation(s):~%" (length violations))
+        (dolist (v violations)
+          (format t "  ~A at ~D:~D - ~A~%"
+                  (violation:violation-rule v)
+                  (violation:violation-line v)
+                  (violation:violation-column v)
+                  (violation:violation-message v))))
+      (ok (null violations)
+          "Outer LOOP variable used in nested LOOP should not be flagged as unused")))
+
+  (testing "Bug: Simpler nested LOOP case"
+    (let* ((code "(loop :for (name . value) :in pairs
+                        :appending (loop :for item :in value
+                                         :collect (cons name item)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (when violations
+        (format t "~%Simple case violations: ~A~%" violations))
+      (ok (null violations)
+          "Outer name used in inner loop should not be unused"))))

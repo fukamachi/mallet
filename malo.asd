@@ -13,7 +13,10 @@
   :entry-point "malo:main"
   :serial t
   :components
-  (;; Core data structures
+  (;; Shared utilities
+   (:file "utils")
+
+   ;; Core data structures
    (:file "violation")
    (:file "parser")
 
@@ -23,7 +26,8 @@
     :components
     ((:file "text")
      (:file "tokenizer")
-     (:file "reader")))
+     (:file "reader")
+     (:file "loop")))
 
    ;; Rule system
    (:module "rules-impl"
@@ -64,6 +68,7 @@
     :components
     ((:file "tokenizer-test")
      (:file "reader-test")
+     (:file "loop-test")
      (:file "unknown-reader-macros")))
 
    (:module "rules"

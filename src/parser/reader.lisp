@@ -186,7 +186,9 @@ Returns a hash table mapping expressions to (line . column) positions."
                        (source (getf result :source))
                        (children (getf result :children)))
                    ;; Map this expression to its position
-                   (when source
+                   ;; IMPORTANT: Only store the FIRST occurrence of each expression
+                   ;; (declarations come before usages)
+                   (when (and source (not (gethash expr position-map)))
                      (multiple-value-bind (line column)
                          (char-pos-to-line-column (car source) line-starts)
                        (setf (gethash expr position-map) (cons line column))))
