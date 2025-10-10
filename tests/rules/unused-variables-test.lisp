@@ -622,3 +622,110 @@
       (ok (search "Variable 'body' is unused"
                   (violation:violation-message (first violations)))
            "Should report only 'body' as unused, not the &body keyword"))))
+
+(deftest loop-do-cond-false-positive
+  (testing "Bug: Variable used in LOOP DO COND test clause (trivial-glob pattern.lisp:60)"
+    (let* ((code "(defun find-bracket-close (pattern start end)
+                     (loop with i = start
+                           while (< i end)
+                           do (cond
+                                ((char= (char pattern i) #\\])
+                                 (return i))
+                                (t
+                                 (incf i)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'pattern' is used in the COND test clause (char pattern i)
+      ;; Bug: DO loop handler was matching LOOP DO keyword and stopping search
+      (ok (null violations)
+           "Should not report 'pattern' as unused when used in LOOP DO COND test")))
+
+  (testing "Valid: Simpler LOOP DO COND case"
+    (let* ((code "(defun test-cond (pattern start end)
+                     (loop with i = start
+                           while (< i end)
+                           do (cond
+                                ((char= (char pattern i) #\\x)
+                                 (return i))
+                                (t
+                                 (incf i)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+           "All parameters should be recognized as used")))
+
+  (testing "Valid: LOOP DO with nested IF"
+    (let* ((code "(loop for item in list
+                        with pattern = \"test\"
+                        do (if (string= item pattern)
+                               (return item)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+           "Pattern used in IF test should not be flagged as unused"))))
+
+(deftest let-init-form-false-positive
+  (testing "Bug: Variable used only in LET init form (trivial-glob pattern.lisp:70)"
+    (let* ((code "(defun char-in-bracket-p (char bracket-content casefold)
+                     (let ((negated nil)
+                           (content bracket-content))
+                       (when (> (length content) 0)
+                         (setf negated t))
+                       (list char content negated casefold)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'bracket-content' is used to initialize 'content'
+      ;; Bug: extract-bindings was treating (content bracket-content) as destructuring
+      ;; and extracting both as variable names, causing shadowing detection to fail
+      (ok (null violations)
+           "Should not report 'bracket-content' as unused when used in LET init form")))
+
+  (testing "Valid: Simpler LET init form case"
+    (let* ((code "(defun test-let (bracket-content)
+                     (let ((content bracket-content))
+                       (list content)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+           "Parameter used in init form should not be flagged as unused")))
+
+  (testing "Valid: Multiple LET bindings with init forms"
+    (let* ((code "(defun process (input1 input2)
+                     (let ((a input1)
+                           (b input2))
+                       (+ a b)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+           "All parameters used in init forms should be recognized"))
+
+  (testing "Invalid: LET binding where init form is unused"
+    (let* ((code "(defun test (unused-param)
+                     (let ((x 10))
+                       (print x)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; unused-param is truly unused
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'unused-param' is unused"
+                  (violation:violation-message (first violations)))
+           "Should report unused-param but not x")))
+
+  (testing "Valid: Chain of LET init forms"
+    (let* ((code "(defun chain (input)
+                     (let ((a input))
+                       (let ((b a))
+                         (let ((c b))
+                           (print c)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+           "Chained init forms should all be recognized as uses")))))

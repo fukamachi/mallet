@@ -86,9 +86,17 @@
                          ;; Simple string (variable name)
                          ((stringp binding-form)
                           (list binding-form))
-                         ;; Binding with init form: (var init-form) or (var init-form supplied-p)
-                         ;; Check if this is a binding (has non-string elements = values, not just variables)
-                         ;; This handles LET bindings and lambda parameters with defaults
+                         ;; Standard LET/LET* binding: (var init-form)
+                         ;; These are 2-element lists where only the first is a variable
+                         ;; The second element is code (the init form), not a variable binding
+                         ((and (consp binding-form)
+                               (a:proper-list-p binding-form)
+                               (= (length binding-form) 2)
+                               (stringp (first binding-form)))
+                          ;; Extract only the variable (first element), not the init form
+                          (list (first binding-form)))
+                         ;; Lambda list binding with default/supplied-p: (var default) or (var default supplied-p)
+                         ;; Check if this has non-string elements indicating it's not pure destructuring
                          ((and (consp binding-form)
                                (a:proper-list-p binding-form)
                                (>= (length binding-form) 2)
@@ -99,7 +107,7 @@
                           (extract-from-pattern (first binding-form)))
                          ;; Pure destructuring pattern: all elements are strings (variables)
                          ;; or contains lambda-list keywords, or nested patterns
-                         ;; Examples: (a b), (a &key b c), ((a b) c), (a . b)
+                         ;; Examples: (a b c), (a &key b c), ((a b) c), (a . b)
                          ((consp binding-form)
                           (extract-from-pattern binding-form))
                          ;; Anything else is not a valid binding form
@@ -245,7 +253,7 @@ Returns (values bindings body-clauses)."
                                          ;; DO
                                          ((and (stringp head)
                                                (string-equal (base:symbol-name-from-string head) "DO"))
-                                          (if (and (a:proper-list-p rest-args) (>= (length rest-args) 1))
+                                          (if (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
                                               (let ((var-clauses (first rest-args)))
                                                 (if (and (a:proper-list-p var-clauses)
                                                          (some #'binds-same-name-p var-clauses))
