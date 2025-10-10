@@ -1,0 +1,26 @@
+(:malo-config
+ ;; Extend the default configuration
+ (:extends :default)
+
+ ;; Enable rules with custom options
+ (:enable :line-length
+   :max-length 100)
+
+ (:enable :consecutive-blank-lines
+   :max-lines 2)
+
+ ;; Enable rules without options
+ (:enable :constant-naming)
+
+ ;; Disable specific rules
+ (:disable :bare-progn-in-if)
+
+ ;; Path-specific overrides for test files
+ (:for-paths ("tests")
+   (:enable :line-length :max-length 120)
+   (:disable :unused-variables))
+
+ ;; Scripts and examples can be less strict
+ (:for-paths ("scripts" "examples")
+   (:disable :line-length)
+   (:disable :trailing-whitespace)))

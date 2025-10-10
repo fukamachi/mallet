@@ -10,7 +10,8 @@
            #:rule-enabled-p
            #:get-rule-option
            #:get-built-in-config
-           #:find-config-file))
+           #:find-config-file
+           #:config-overrides))
 (in-package #:malo/config)
 
 ;;; Config data structure
@@ -25,12 +26,17 @@
     :initarg :extends
     :initform nil
     :accessor config-extends
-    :documentation "Base config to extend from"))
+    :documentation "Base config to extend from")
+   (overrides
+    :initarg :overrides
+    :initform '()
+    :accessor config-overrides
+    :documentation "List of (patterns . config) for path-specific overrides"))
   (:documentation "Configuration for Malo linter."))
 
-(defun make-config (&key rules extends)
-  "Create a new config with RULES and optional EXTENDS."
-  (let ((cfg (make-instance 'config :extends extends)))
+(defun make-config (&key rules extends overrides)
+  "Create a new config with RULES, optional EXTENDS, and path OVERRIDES."
+  (let ((cfg (make-instance 'config :extends extends :overrides (or overrides '()))))
     (when rules
       (dolist (rule-spec rules)
         (let ((rule-name (first rule-spec))
@@ -38,6 +44,20 @@
           (setf (gethash rule-name (config-rules cfg))
                 (a:plist-hash-table options :test 'eq)))))
     cfg))
+
+(defun expand-path-pattern (pattern)
+  "Expand a path PATTERN, converting directory names to glob patterns.
+If pattern contains wildcards (* ? [ ]), return as-is.
+Otherwise, treat as directory and expand to 'dir/**/*.{lisp,asd}'."
+  (check-type pattern string)
+  (if (or (find #\* pattern)
+          (find #\? pattern)
+          (find #\[ pattern)
+          (find #\] pattern))
+      ;; Already a glob pattern
+      pattern
+      ;; Directory name - expand to match all Lisp files
+      (format nil "~A/**/*.{lisp,asd}" pattern)))
 
 (defun rule-enabled-p (config rule-name)
   "Check if RULE-NAME is enabled in CONFIG."
@@ -68,14 +88,16 @@
 ;;; Config parsing
 
 (defun parse-config (sexp)
-  "Parse S-expression SEXP into a config object."
+  "Parse S-expression SEXP into a config object.
+Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-paths ...)."
   (check-type sexp list)
 
   (unless (eq (first sexp) :malo-config)
     (error "Config must start with :malo-config"))
 
   (let ((extends nil)
-        (rules '()))
+        (rules '())
+        (overrides '()))
 
     ;; Parse top-level options
     (loop for item in (rest sexp)
@@ -87,20 +109,42 @@
                     (setf extends (if (keywordp extends-value)
                                       (get-built-in-config extends-value)
                                       (load-config extends-value)))))
-                 (:rules
-                  (setf rules (parse-rules-spec (rest item)))))))
+                 (:enable
+                  ;; New syntax: (:enable :rule-name :option value ...)
+                  (let* ((rule-name (second item))
+                         (options (cddr item)))
+                    (push (cons rule-name (list* :enabled t options)) rules)))
+                 (:disable
+                  ;; New syntax: (:disable :rule-name)
+                  (let ((rule-name (second item)))
+                    (push (cons rule-name '(:enabled nil)) rules)))
+                 (:for-paths
+                  ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
+                  (let* ((patterns (second item))
+                         (override-rules (parse-override-rules (cddr item)))
+                         (expanded-patterns (mapcar #'expand-path-pattern patterns)))
+                    (push (cons expanded-patterns
+                                (make-config :rules override-rules))
+                          overrides))))))
 
-    (make-config :rules rules :extends extends)))
+    (make-config :rules (nreverse rules)
+                 :extends extends
+                 :overrides (nreverse overrides))))
 
-(defun parse-rules-spec (rules-sexp)
-  "Parse rules specification from S-expression."
+(defun parse-override-rules (override-forms)
+  "Parse override rules from (:enable ...) and (:disable ...) forms."
   (let ((rules '()))
-    ;; rules-sexp is a list of (rule-name key value key value ...)
-    (loop for rule-spec in rules-sexp
-          when (consp rule-spec)
-          do (let ((rule-name (first rule-spec))
-                   (options (rest rule-spec)))
-               (push (cons rule-name options) rules)))
+    (dolist (form override-forms)
+      (when (consp form)
+        (let ((key (first form)))
+          (case key
+            (:enable
+             (let* ((rule-name (second form))
+                    (options (cddr form)))
+               (push (cons rule-name (list* :enabled t options)) rules)))
+            (:disable
+             (let ((rule-name (second form)))
+               (push (cons rule-name '(:enabled nil)) rules)))))))
     (nreverse rules)))
 
 ;;; Config file loading

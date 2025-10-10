@@ -52,16 +52,30 @@ Create `.malo.lisp` in your project root:
 ```lisp
 (:malo-config
  (:extends :default)  ; or :all
- (:rules
-  (:line-length :enabled t :max-length 100)
-  (:unused-imported-symbols :enabled nil)
-  (:if-without-else :enabled t)))
+
+ ;; Enable rules with options
+ (:enable :line-length :max-length 100)
+ (:enable :consecutive-blank-lines :max-lines 2)
+
+ ;; Disable specific rules
+ (:disable :constant-naming)
+
+ ;; Path-specific overrides
+ (:for-paths ("tests")
+   (:enable :line-length :max-length 120)
+   (:disable :unused-variables)))
 ```
 
 **Presets:**
 
 - `:default` - Only universally-accepted rules (catch mistakes, not enforce style)
 - `:all` - All rules enabled (for exploration)
+
+**Path overrides:**
+
+Use `:for-paths` to apply different rules to specific directories or files:
+- Directory names: `"tests"` → matches `tests/**/*.{lisp,asd}`
+- Glob patterns: `"src/**/*.lisp"` → matches pattern exactly
 
 Malo auto-discovers `.malo.lisp` by walking up from the current directory.
 
