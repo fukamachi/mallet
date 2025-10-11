@@ -517,19 +517,25 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
                  (find-shadows-in-expr arg target-name))))))
 
         ;; DOLIST, DOTIMES
+        ;; (dolist (var list-form [result-form]) body...)
+        ;; (dotimes (var count-form [result-form]) body...)
+        ;; The list-form/count-form is evaluated in outer scope (searchable)
+        ;; The result-form and body are evaluated with variable bound (not searchable)
         ((and (stringp head)
               (or (string-equal (base:symbol-name-from-string head) "DOLIST")
                   (string-equal (base:symbol-name-from-string head) "DOTIMES")))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 1))
            (let* ((spec (first rest-args))
-                  (var (when (a:proper-list-p spec) (first spec))))
+                  (var (when (a:proper-list-p spec) (first spec)))
+                  (source-form (when (and (a:proper-list-p spec) (>= (length spec) 2))
+                                (second spec))))
              (when (and (stringp var)
                         (string-equal (base:symbol-name-from-string var) target-name))
-               ;; Complete shadow
+               ;; Partial shadow - source-form (list/count) evaluated in outer scope
                (push (make-shadow-info
                       :form expr
-                      :type :complete
-                      :searchable nil)
+                      :type :partial-let
+                      :searchable (if source-form (list source-form) nil))
                      *shadows*))
              ;; Continue searching if not shadowed
              (unless (and (stringp var)

@@ -494,7 +494,18 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (ok (null violations)))))
+      (ok (null violations))))
+
+  (testing "Valid: parameter used in dolist list form then shadowed"
+    ;; Bug: parameter used in list form (second x) then shadowed by loop variable (first x)
+    (let* ((code "(defun foo (x)
+                     (dolist (x x)
+                       (print x)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Parameter used in list form should not be flagged as unused"))))
 
 (deftest dotimes-bindings
   (testing "Valid: unused dotimes variable (ignorable by convention)"
@@ -514,7 +525,18 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (ok (null violations)))))
+      (ok (null violations))))
+
+  (testing "Valid: parameter used in dotimes count form then shadowed"
+    ;; Bug: parameter used in count form (second x) then shadowed by loop variable (first x)
+    (let* ((code "(defun baz (x)
+                     (dotimes (x x)
+                       (print x)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Parameter used in count form should not be flagged as unused"))))
 
 (deftest lambda-list-keywords
   (testing "Valid: lambda-list keywords (&key, &optional, &rest) are not parameters"
