@@ -306,21 +306,22 @@ Returns a new config with matching overrides merged in."
           (if (uiop:directory-pathname-p pathname)
               (probe-file pathname)
               (uiop:pathname-directory-pathname pathname))))
-    (cond
-      ((or (find-if (lambda (dir)
-                      (uiop:directory-exists-p (merge-pathnames dir pathname)))
-                    '(".bzr" ".git" ".hg" ".qlot"))
-           (find-if (lambda (file)
-                      (uiop:file-exists-p (merge-pathnames file pathname)))
-                    '("qlfile" ".malo.lisp")))
-       pathname)
-      ((equal (user-homedir-pathname) pathname)
-       nil)
-      (t
-       (let ((parent (uiop:pathname-parent-directory-pathname pathname)))
-         (if (equal parent pathname)
-             nil
-             (find-project-root parent)))))))
+    (when pathname
+      (cond
+        ((or (find-if (lambda (dir)
+                        (uiop:directory-exists-p (merge-pathnames dir pathname)))
+                      '(".bzr" ".git" ".hg" ".qlot"))
+             (find-if (lambda (file)
+                        (uiop:file-exists-p (merge-pathnames file pathname)))
+                      '("qlfile" ".malo.lisp")))
+         pathname)
+        ((equal (user-homedir-pathname) pathname)
+         nil)
+        (t
+         (let ((parent (uiop:pathname-parent-directory-pathname pathname)))
+           (if (equal parent pathname)
+               nil
+               (find-project-root parent))))))))
 
 (defun find-config-file (start-directory)
   "Find .malo.lisp config file starting from START-DIRECTORY.

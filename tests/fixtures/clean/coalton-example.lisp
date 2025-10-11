@@ -1,9 +1,7 @@
 ;; This file demonstrates Coalton code that should not trigger Common Lisp linting violations
 
 (defpackage #:example/coalton
-  (:use #:cl)
-  (:local-nicknames
-   (#:coal #:coalton-library/builtin)))
+  (:use #:cl))
 (in-package #:example/coalton)
 
 ;; Coalton code has different semantics - should not trigger CL linting

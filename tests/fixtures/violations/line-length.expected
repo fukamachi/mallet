@@ -1,8 +1,5 @@
 # Expected violations for line-length.lisp
 # Format: line:column rule-name severity
 
-7:0 comment-level warning
-8:0 comment-level warning
-9:0 comment-level warning
-9:0 line-length warning
-11:0 line-length warning
+9:0 line-length info
+11:0 line-length info

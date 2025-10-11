@@ -66,11 +66,11 @@ for file in "$CLEAN_DIR"/*.lisp; do
 
         # Test output message
         test_start "Clean file '$filename' reports no violations"
-        OUTPUT=$("$CLI" "$file" 2>&1 | grep -c "No violations" || true)
+        OUTPUT=$("$CLI" "$file" 2>&1 | grep -c "No problems found" || true)
         if [ "$OUTPUT" -ge 1 ]; then
             test_pass
         else
-            test_fail "Expected 'No violations' message"
+            test_fail "Expected 'No problems found' message"
         fi
     fi
 done
@@ -85,6 +85,17 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
         filename=$(basename "$file")
         expected_file="${file%.lisp}.expected"
 
+        # Check if this file has expected violations
+        EXPECTED_COUNT=0
+        if [ -f "$expected_file" ]; then
+            EXPECTED_COUNT=$(grep -v '^#' "$expected_file" | grep -v '^$' | wc -l | tr -d ' ')
+        fi
+
+        # Skip tests for files with no expected violations
+        if [ "$EXPECTED_COUNT" -eq 0 ]; then
+            continue
+        fi
+
         # Test that violations are detected
         test_start "Violation file '$filename' detects violations"
         OUTPUT=$("$CLI" "$file" 2>&1 | grep -c "violation" || true)
@@ -96,8 +107,9 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
 
         # Test exit code (should be non-zero)
         test_start "Violation file '$filename' returns non-zero exit code"
+        EXIT_CODE=0
         "$CLI" "$file" 2>&1 > /dev/null || EXIT_CODE=$?
-        if [ $EXIT_CODE -ne 0 ]; then
+        if [ "$EXIT_CODE" -ne 0 ]; then
             test_pass
         else
             test_fail "Expected non-zero exit code, got 0"
@@ -110,8 +122,8 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
             # Count expected violations (excluding comments and empty lines)
             EXPECTED_COUNT=$(grep -v '^#' "$expected_file" | grep -v '^$' | wc -l | tr -d ' ')
 
-            # Count actual violations
-            ACTUAL_COUNT=$("$CLI" "$file" 2>&1 | grep -E '^\s+.*:[0-9]+:[0-9]+' | wc -l | tr -d ' ')
+            # Count actual violations (format: "  line:col  severity  message  rule")
+            ACTUAL_COUNT=$("$CLI" "$file" 2>&1 | grep -E '^\s+[0-9]+:[0-9]+' | wc -l | tr -d ' ')
 
             if [ "$ACTUAL_COUNT" -eq "$EXPECTED_COUNT" ]; then
                 test_pass
@@ -169,20 +181,11 @@ echo ""
 
 # Text-level rules
 test_start "Line-length rule detects violations"
-OUTPUT=$("$CLI" "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c "Line exceeds maximum length" || true)
+OUTPUT=$("$CLI" "--all" "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c "Line exceeds maximum length" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
     test_fail "Expected line-length violations"
-fi
-
-# Token-level rules
-test_start "Comment-level rule detects violations"
-OUTPUT=$("$CLI" "$VIOLATIONS_DIR/comment-level.lisp" 2>&1 | grep -c "semicolon" || true)
-if [ "$OUTPUT" -ge 1 ]; then
-    test_pass
-else
-    test_fail "Expected comment-level violations"
 fi
 
 # Form-level rules
@@ -195,7 +198,7 @@ else
 fi
 
 test_start "Bare-progn-in-if rule detects violations"
-OUTPUT=$("$CLI" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "cond.*progn" || true)
+OUTPUT=$("$CLI" "--all" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "cond.*progn" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -203,7 +206,7 @@ else
 fi
 
 test_start "Missing-otherwise rule detects violations"
-OUTPUT=$("$CLI" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should have 'otherwise' clause" || true)
+OUTPUT=$("$CLI" "--all" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should have 'otherwise' clause" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else

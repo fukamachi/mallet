@@ -117,7 +117,7 @@
                         for index from 0
                         collect item)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (search "Variable 'index' is unused"
@@ -707,7 +707,7 @@
   (testing "LOOP with unused FOR variable"
     (let* ((code "(loop for i from 1 to 10 collect 42)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; i is unused
       (ok (= (length violations) 1))
@@ -727,7 +727,7 @@
   (testing "LOOP with unused WITH variable"
     (let* ((code "(loop with x = 10 for i from 1 to 5 collect i)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; x is unused
       (ok (= (length violations) 1))
@@ -747,7 +747,7 @@
   (testing "LOOP with unused variable in destructuring"
     (let* ((code "(loop for (a b) in '((1 2) (3 4)) collect a)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; b is unused
       (ok (= (length violations) 1))
@@ -1177,7 +1177,7 @@
                      (loop :for (name . value) :in data
                            :collect `(use ,name)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; 'value' is genuinely unused - this should report a violation
       ;; NOTE: This may actually be correct behavior

@@ -197,7 +197,8 @@
 
 (deftest find-config-file
   (testing "Find config in current directory"
-    (let* ((tmpdir (format nil "/tmp/malo-test-dir-~A" (get-universal-time)))
+    (let* ((tmpdir-str (format nil "/tmp/malo-test-dir-~A" (get-universal-time)))
+           (tmpdir (uiop:ensure-directory-pathname tmpdir-str))
            (config-file (merge-pathnames ".malo.lisp" tmpdir)))
       (unwind-protect
           (progn
@@ -206,7 +207,8 @@
               (write-string "(:malo-config)" out))
             (let ((found (config:find-config-file tmpdir)))
               (ok (not (null found)))
-              (ok (equal (namestring found) (namestring config-file)))))
+              ;; Compare truenames to handle pathname variations
+              (ok (equal (truename found) (truename config-file)))))
         ;; Cleanup
         (when (probe-file config-file)
           (delete-file config-file))
@@ -214,7 +216,8 @@
           (uiop:delete-directory-tree tmpdir :validate t)))))
 
   (testing "Find config in parent directory"
-    (let* ((tmpdir (format nil "/tmp/malo-test-parent-~A" (get-universal-time)))
+    (let* ((tmpdir-str (format nil "/tmp/malo-test-parent-~A" (get-universal-time)))
+           (tmpdir (uiop:ensure-directory-pathname tmpdir-str))
            (subdir (merge-pathnames "sub/" tmpdir))
            (config-file (merge-pathnames ".malo.lisp" tmpdir)))
       (unwind-protect
@@ -225,7 +228,8 @@
             ;; Search from subdir should find config in parent
             (let ((found (config:find-config-file subdir)))
               (ok (not (null found)))
-              (ok (equal (namestring found) (namestring config-file)))))
+              ;; Compare truenames to handle pathname variations
+              (ok (equal (truename found) (truename config-file)))))
         ;; Cleanup
         (when (probe-file config-file)
           (delete-file config-file))
