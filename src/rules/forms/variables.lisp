@@ -129,6 +129,19 @@ CONTEXT determines interpretation of ambiguous 2-element lists:
 
 ;;; Lambda list processing
 
+(defun lambda-list-keyword-p (elem)
+  "Check if ELEM is a lambda-list keyword (&optional, &key, etc.)."
+  (and (stringp elem)
+       (let ((name (base:symbol-name-from-string elem)))
+         (and (> (length name) 0)
+              (char= (char name 0) #\&)))))
+
+(defun contains-lambda-list-keyword-p (pattern)
+  "Check if PATTERN (a list) contains any lambda-list keywords.
+This indicates it's a nested lambda list rather than a simple destructuring pattern."
+  (when (and (consp pattern) (a:proper-list-p pattern))
+    (some #'lambda-list-keyword-p pattern)))
+
 (defun extract-lambda-list-vars (lambda-list allow-destructuring)
   "Extract all variable names from a lambda list.
 ALLOW-DESTRUCTURING controls whether required parameters can be destructuring patterns.
@@ -160,14 +173,23 @@ Returns list of variable names."
                (t
                 (ecase state
                   (:required
-                   ;; Required params: simple var or destructuring pattern (if allowed)
-                   (if allow-destructuring
-                       ;; Use extract-from-pattern for full destructuring support
-                       (let ((extracted (extract-bindings (list elem) :destructuring)))
-                         (setf vars (append vars extracted)))
-                       ;; Simple variable only
-                       (when (stringp elem)
-                         (push elem vars))))
+                   ;; Required params: simple var, destructuring pattern, or nested lambda list (if allowed)
+                   (cond
+                     ((not allow-destructuring)
+                      ;; Simple variable only
+                      (when (stringp elem)
+                        (push elem vars)))
+                     ((stringp elem)
+                      ;; Simple string variable
+                      (push elem vars))
+                     ((contains-lambda-list-keyword-p elem)
+                      ;; Nested lambda list - recursively extract variables
+                      (let ((extracted (extract-lambda-list-vars elem t)))
+                        (setf vars (append vars extracted))))
+                     (t
+                      ;; Simple destructuring pattern - extract all strings
+                      (let ((extracted (extract-bindings (list elem) :destructuring)))
+                        (setf vars (append vars extracted))))))
                   (:optional
                    ;; &optional param: var, (var), (var default), (var default supplied-p)
                    (cond

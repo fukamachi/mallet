@@ -317,6 +317,87 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)))))
 
+(deftest nested-lambda-lists
+  (testing "Bug: defmacro with nested lambda list and initialization form"
+    ;; This was incorrectly extracting '+' from the init form (+ 1 2 3)
+    (let* ((code "(defmacro foo (a (&key (b (+ 1 2 3))))
+                     `(values ,a ,b))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should have no violations - both a and b are used
+      ;; Bug: was incorrectly reporting '+' as an unused variable
+      (ok (null violations))))
+
+  (testing "Valid: defmacro with multiple nested lambda list parameters"
+    (let* ((code "(defmacro with-options (name (&key (x 10) (y 20)) &body body)
+                     `(let ((,name (list ,x ,y)))
+                        ,@body))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; All parameters used: name, x, y, body
+      (ok (null violations))))
+
+  (testing "Invalid: defmacro with unused nested lambda list parameter"
+    (let* ((code "(defmacro bar (a (&key (b 1) (c 2)))
+                     `(list ,a ,b))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; c is unused
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'c' is unused"
+                  (violation:violation-message (first violations))))))
+
+  (testing "Valid: nested lambda list with &optional"
+    (let* ((code "(defmacro process (input (&optional (validate t)))
+                     `(if ,validate
+                          (check ,input)
+                          ,input))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: nested lambda list with complex init form"
+    (let* ((code "(defmacro compute (x (&key (result (funcall #'+ x 10))))
+                     `(list ,x ,result))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Should not extract 'funcall' or '+' from the init form
+      (ok (null violations))))
+
+  (testing "Valid: deeply nested lambda lists"
+    (let* ((code "(defmacro nested (a (b (&key (c 3))))
+                     `(list ,a ,b ,c))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Invalid: deeply nested with unused parameter"
+    (let* ((code "(defmacro nested (a (b (&key (c 3) (d 4))))
+                     `(list ,a ,b ,c))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; d is unused
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'd' is unused"
+                  (violation:violation-message (first violations))))))
+
+  (testing "Valid: nested lambda list with supplied-p parameter"
+    (let* ((code "(defmacro check (name (&optional (value nil value-p)))
+                     (if ,value-p
+                         `(process ,name ,value)
+                         `(default ,name)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
+
 (deftest dolist-bindings
   (testing "Invalid: unused dolist variable"
     (let* ((code "(let ((sum 0))
