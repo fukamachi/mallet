@@ -85,7 +85,11 @@ Examples:
   (glob-match \"*.txt\" \"file.txt\") => T
   (glob-match \"test?.c\" \"test1.c\") => T
   (glob-match \"[a-z]*\" \"hello\") => T"
-  (pattern:match-pattern pattern string
-                         :pathname pathname
-                         :period period
-                         :casefold casefold))
+  ;; Expand braces if present, then check if string matches any expanded pattern
+  (let ((expanded-patterns (expand-braces pattern)))
+    (some (lambda (expanded-pattern)
+            (pattern:match-pattern expanded-pattern string
+                                   :pathname pathname
+                                   :period period
+                                   :casefold casefold))
+          expanded-patterns)))

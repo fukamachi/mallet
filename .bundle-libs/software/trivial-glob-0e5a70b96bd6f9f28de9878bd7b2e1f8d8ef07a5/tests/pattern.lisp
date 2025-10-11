@@ -102,3 +102,30 @@
     (ok (pattern:match-pattern "test[[:digit:]].txt" "test5.txt"))
     (ok (pattern:match-pattern "[[:alpha:]]*[[:digit:]]" "abc123"))
     (ok (not (pattern:match-pattern "[[:digit:]]*" "abc")))))
+
+(deftest brace-expansion
+  (testing "Simple brace expansion with extensions"
+    (ok (trivial-glob:glob-match "*.{txt,log}" "file.txt"))
+    (ok (trivial-glob:glob-match "*.{txt,log}" "file.log"))
+    (ok (not (trivial-glob:glob-match "*.{txt,log}" "file.asd"))))
+
+  (testing "Brace expansion with file extensions and pathname mode"
+    (ok (trivial-glob:glob-match "docs/**/*.{lisp,asd}" "docs/design/foo.lisp"
+                                 :pathname t))
+    (ok (trivial-glob:glob-match "docs/**/*.{lisp,asd}" "docs/design/foo.asd"
+                                 :pathname t))
+    (ok (not (trivial-glob:glob-match "docs/**/*.{lisp,asd}" "docs/design/foo.txt"
+                                      :pathname t))))
+
+  (testing "Multiple brace groups"
+    (ok (trivial-glob:glob-match "file{1,2}.{txt,log}" "file1.txt"))
+    (ok (trivial-glob:glob-match "file{1,2}.{txt,log}" "file2.log"))
+    (ok (not (trivial-glob:glob-match "file{1,2}.{txt,log}" "file3.txt")))
+    (ok (not (trivial-glob:glob-match "file{1,2}.{txt,log}" "file1.asd"))))
+
+  (testing "Single option brace behaves like literal"
+    (ok (trivial-glob:glob-match "file{1}.txt" "file1.txt"))
+    (ok (not (trivial-glob:glob-match "file{1}.txt" "file2.txt"))))
+
+  (testing "Brace expansion with no matches"
+    (ok (not (trivial-glob:glob-match "{foo,bar}.txt" "baz.txt")))))
