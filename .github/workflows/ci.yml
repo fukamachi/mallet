@@ -28,6 +28,7 @@ jobs:
       - name: Install Qlot
         run: |
           ros install fukamachi/qlot
+          ros install fukamachi/archive/fix/tar-symlink-entry
           echo "$HOME/.roswell/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
