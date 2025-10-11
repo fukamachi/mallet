@@ -1217,7 +1217,7 @@
       (ok (null violations)
           "All variables should be recognized as used")))
 
-  (failing "Bug: Deep nesting with COND and parameter shadowing"
+  (testing "Bug: Deep nesting with COND and parameter shadowing"
     ;; Complex case with LET, COND, LET*, LOOP
     (let* ((code "(defun test (node)
                      (let ((bindings (get-bindings node)))
@@ -1226,7 +1226,7 @@
                           (let* ((inner (recurse node))
                                  (result
                                    (loop :for (name . node) :in bindings
-                                         :collect `(use ,name))))
+                                         :collect `(use ,name ,inner))))
                             result)))))")
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
@@ -1236,12 +1236,12 @@
       (ok (null violations)
           "Parameter 'node' should be recognized as used despite LOOP shadowing")))
 
-  (failing "Bug: LET* nesting with parameter shadowing"
+  (testing "Bug: LET* nesting with parameter shadowing"
     ;; Another pattern with LET* sequential bindings
     (let* ((code "(defun test (node)
                      (let* ((x (process node))
                             (y (loop :for node :in items
-                                     :collect node)))
+                                     :collect (cons x node))))
                        y))")
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
