@@ -25,7 +25,16 @@ jobs:
         run: |
           curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
 
+      - name: Install Qlot
+        run: |
+          ros install fukamachi/qlot
+          echo "$HOME/.roswell/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          qlot install --no-deps
+          qlot exec ros -e '(ql:quickload :malo/tests)'
+
       - name: Run test suite
         run: |
-          ros -l init.lisp -e '(asdf:load-system :malo/tests)' -e '(or (rove:run :malo/tests) (uiop:quit -1))'
-          make test-cli
+          make test
