@@ -76,7 +76,8 @@
                                :column column
                                :severity severity
                                :message (format nil "~A '~A' should be named *~A*"
-                                              label var-name var-name))))))))
+                                              label var-name
+                                              (string-trim '(#\*) var-name)))))))))
 
 (defun check-plus-name (expr form file severity label)
   "Check that constant name follows +foo+ convention."
@@ -101,4 +102,5 @@
                                :column column
                                :severity severity
                                :message (format nil "~A '~A' should be named +~A+"
-                                              label const-name const-name))))))))
+                                              label const-name
+                                              (string-trim '(#\+) const-name)))))))))
