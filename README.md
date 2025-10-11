@@ -1,5 +1,7 @@
 # Malo
 
+[![CI](https://github.com/fukamachi/malo/actions/workflows/ci.yml/badge.svg)](https://github.com/fukamachi/malo/actions/workflows/ci.yml)
+
 A Common Lisp linter focused on catching real mistakes without enforcing subjective style preferences.
 
 ## Philosophy
