@@ -797,8 +797,8 @@ Pushes violations to *violations* special variable."
       (handler-case
           (let ((bindings (first rest-args))
                 (body (rest rest-args)))
-            (let ((*current-form-position* (cons line column)))
-              (check-binding-form :let bindings body line column position-map rule)))
+            ;; Don't set *current-form-position* for LET - let each binding be looked up individually
+            (check-binding-form :let bindings body line column position-map rule))
         (type-error (e)
           (format *error-output* "~%Warning: Skipping LET form at ~A:~A due to unexpected structure: ~A~%"
                   *file* line e)
@@ -810,8 +810,8 @@ Pushes violations to *violations* special variable."
     (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
       (let ((bindings (first rest-args))
             (body (rest rest-args)))
-        (let ((*current-form-position* (cons line column)))
-          (check-binding-form :let* bindings body line column position-map rule))))))
+        ;; Don't set *current-form-position* for LET* - let each binding be looked up individually
+        (check-binding-form :let* bindings body line column position-map rule)))))
 
 (defun check-loop-bindings (expr line column position-map rule)
   "Check LOOP for unused variable bindings."

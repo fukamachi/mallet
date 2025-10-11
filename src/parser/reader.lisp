@@ -45,6 +45,11 @@ This avoids package resolution issues when linting code with unknown packages."
                   symbol-name))))
 
 (defmethod eclector.reader:check-feature-expression ((client string-parse-result-client) feature-expression)
+  "Check validity of feature expressions.
+Delegates to default implementation."
+  (call-next-method))
+
+(defmethod eclector.reader:evaluate-feature-expression ((client string-parse-result-client) feature-expression)
   "Evaluate feature expressions for reader conditionals.
 Always returns T to include all conditional code during linting."
   (declare (ignore feature-expression))
