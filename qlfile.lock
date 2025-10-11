@@ -10,3 +10,7 @@
  (:class qlot/source/github:source-github
   :initargs (:repos "fukamachi/rove" :ref nil :branch nil :tag nil)
   :version "github-1a4474901e7ab49e8184241dd88e74c95233195a"))
+("asdf" .
+ (:class qlot/source/asdf:source-asdf
+  :initargs (:version "3.3.7.4")
+  :version "3.3.7.4"))
