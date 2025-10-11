@@ -60,7 +60,9 @@
       (when (and var-name
                  (plusp (length var-name))
                  (not (and (char= (char var-name 0) #\*)
-                           (char= (char var-name (1- (length var-name))) #\*))))
+                           (char= (char var-name (1- (length var-name))) #\*)))
+                 (not (and (char= (char var-name 0) #\+)
+                           (char= (char var-name (1- (length var-name))) #\+))))
         (multiple-value-bind (line column)
             (if position-map
                 (parser:find-position var-name-expr position-map
