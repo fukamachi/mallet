@@ -650,6 +650,31 @@ Uses two-phase architecture: Phase 1 finds all shadows, Phase 2 searches for ref
     ;; Phase 2: Search for references respecting shadows
     (find-references-with-shadows var-name body shadows)))
 
+;;; Binding position calculation
+
+(defun calculate-variable-position (binding var-name form-type binding-line binding-column)
+  "Calculate the actual position of VAR-NAME within BINDING.
+Returns (values line column). Falls back to binding position if calculation fails."
+  (handler-case
+      (let ((var-name-normalized (base:symbol-name-from-string var-name)))
+        (cond
+          ;; For simple bindings like (var init-form), var is after one paren and potential whitespace
+          ;; We'll estimate column as binding-column + 1 (opening paren)
+          ;; This is a heuristic - actual position depends on whitespace
+          ((and (consp binding)
+                (stringp (first binding))
+                (string-equal (base:symbol-name-from-string (first binding)) var-name-normalized))
+           ;; The variable is the first element of the binding
+           ;; Estimate: after opening paren + potential whitespace
+           ;; Conservative estimate: binding-column + 1
+           (values binding-line (+ binding-column 1)))
+          ;; For other cases, use binding position as-is
+          (t
+           (values binding-line binding-column))))
+    (error ()
+      ;; On any error, fall back to binding position
+      (values binding-line binding-column))))
+
 ;;; Binding checking
 
 (defun check-binding-form (form-type bindings body fallback-line fallback-column position-map rule &optional aux-context message-prefix)
@@ -693,21 +718,25 @@ Pushes violations to *violations* special variable."
                        ;; Find position for this binding or variable name
                        (multiple-value-bind (var-line var-column)
                            (cond
-                             ;; Prefer *current-form-position* if available (most accurate)
+                             ;; Prefer *current-form-position* if set (contains the enclosing form's position)
                              (*current-form-position*
-                              (values (car *current-form-position*) (cdr *current-form-position*)))
-                             ;; Fallback: try position-map lookup
+                              ;; Calculate actual variable position from the current form position
+                              (calculate-variable-position binding var-name form-type
+                                                          (car *current-form-position*)
+                                                          (cdr *current-form-position*)))
+                             ;; Try position-map lookup for binding position
                              (position-map
                               (multiple-value-bind (binding-line binding-column)
+                                  ;; Look up the binding form's position
                                   ;; For single-element bindings like ((pattern)), look up the pattern directly
                                   (parser:find-position (if (and (= (length binding) 1) (consp binding))
                                                             (first binding)
                                                             binding)
                                                         position-map nil nil)
                                 (if binding-line
-                                    (values binding-line binding-column)
-                                    ;; Try var-name as last resort
-                                    (parser:find-position var-name position-map fallback-line fallback-column))))
+                                    ;; Calculate actual variable position from binding position
+                                    (calculate-variable-position binding var-name form-type binding-line binding-column)
+                                    (values fallback-line fallback-column))))
                              ;; Last resort: use fallback
                              (t
                               (values fallback-line fallback-column)))
@@ -850,7 +879,10 @@ Pushes violations to *violations* special variable."
         (when (and (a:proper-list-p spec) (>= (length spec) 2))
           (let* ((var (first spec))
                  (bindings (list (list var))))
-            (let ((*current-form-position* (cons line column)))
+            ;; Calculate variable position from DOLIST form position
+            ;; For (dolist (var ...) ...), variable is at: column + 1 + len("dolist") + 1 + 1
+            ;; But calculate-variable-position adds +1, so we use column + 8
+            (let ((*current-form-position* (cons line (+ column 8))))
               (check-binding-form :let bindings body line column position-map rule))))))))
 
 (defun check-defmacro-bindings (expr line column position-map rule)
@@ -944,7 +976,14 @@ Pushes violations to *violations* special variable."
          (when (and (a:proper-list-p rest-args))
            (dolist (subexpr rest-args)
              (when (consp subexpr)
-               (check-expr subexpr line column position-map rule)))))))))
+               ;; Look up the position of this subexpression before recursing
+               (multiple-value-bind (subexpr-line subexpr-column)
+                   (parser:find-position subexpr position-map line column)
+                 (check-expr subexpr
+                            (or subexpr-line line)
+                            (or subexpr-column column)
+                            position-map
+                            rule))))))))))
 
 ;;; Unused-variables rules
 
