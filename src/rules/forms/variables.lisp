@@ -967,6 +967,29 @@ Pushes violations to *violations* special variable."
         (scope:with-new-scope
           (check-binding-form :let* bindings body line column position-map rule))))))
 
+(defun find-original-loop-variable (pattern clauses)
+  "Find the original variable string object in CLAUSES that matches PATTERN.
+PATTERN is a stripped string or cons from loop parser.
+CLAUSES is the raw loop clause list from the parse tree.
+Returns the original string object that should be in the position-map."
+  (let ((pattern-str (if (stringp pattern)
+                         (base:symbol-name-from-string pattern)
+                         ;; For destructuring patterns, just search for the whole structure
+                         nil)))
+    (when pattern-str
+      ;; Scan through clauses looking for FOR/AS/WITH keywords
+      ;; The variable is right after the keyword
+      (loop for i from 0 below (1- (length clauses))
+            for elem = (nth i clauses)
+            for next-elem = (nth (1+ i) clauses)
+            when (and (stringp elem)
+                      (member (base:symbol-name-from-string elem)
+                              '("FOR" "AS" "WITH" "AND")
+                              :test #'string-equal)
+                      (stringp next-elem)
+                      (string-equal (base:symbol-name-from-string next-elem) pattern-str))
+            return next-elem))))
+
 (defun check-loop-bindings (expr line column position-map rule)
   "Check LOOP for unused variable bindings."
   (let ((rest-args (rest expr)))
@@ -976,10 +999,15 @@ Pushes violations to *violations* special variable."
         (when loop-bindings
           (multiple-value-bind (loop-line loop-column)
               (parser:find-position expr position-map line column)
+            ;; Create bindings using ORIGINAL variable objects from rest-args
+            ;; This is crucial for position-map lookup which uses EQ
             (let ((bindings (mapcar (lambda (lb)
-                                      (list (loop-parser:loop-binding-pattern lb)))
+                                      (let* ((pattern (loop-parser:loop-binding-pattern lb))
+                                             (original-var (find-original-loop-variable pattern rest-args)))
+                                        ;; Use original variable if found, otherwise fall back to stripped pattern
+                                        (list (or original-var pattern))))
                                     loop-bindings)))
-            (scope:with-new-scope
+              (scope:with-new-scope
                 (check-binding-form :let bindings body loop-line loop-column position-map rule)))))))))
 
 (defun check-do-bindings (expr line column position-map rule)
@@ -1165,8 +1193,9 @@ Pushes violations to *violations* special variable."
          (check-let-bindings expr line column position-map rule))
         ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET*"))
          (check-let*-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "LOOP")
-         (check-loop-bindings expr line column position-map rule))
+        ;; LOOP forms are checked by unused-loop-variables-rule, not unused-variables-rule
+        ;; ((base:symbol-matches-p head "LOOP")
+        ;;  (check-loop-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "DO")
          (check-do-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "DO*")
