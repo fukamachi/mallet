@@ -496,16 +496,18 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
               (or (string-equal (base:symbol-name-from-string head) "DESTRUCTURING-BIND")
                   (string-equal (base:symbol-name-from-string head) "MULTIPLE-VALUE-BIND")))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
-           (let ((vars (first rest-args)))
+           (let ((vars (first rest-args))
+                 (init-form (second rest-args)))  ; The init-form is evaluated in outer scope
              (let ((all-vars (extract-bindings vars :destructuring)))
                (when (some (lambda (v)
                              (string-equal (base:symbol-name-from-string v) target-name))
                            all-vars)
-                 ;; Complete shadow
+                 ;; Partial shadow - init-form can be searched (evaluated in outer scope)
+                 ;; Body is shadowed (new bindings active)
                  (push (make-shadow-info
                         :form expr
-                        :type :complete
-                        :searchable nil)
+                        :type :partial-let  ; Reuse partial-let type (similar behavior)
+                        :searchable (list init-form))  ; Only init-form is searchable
                        *shadows*)))
              ;; Continue searching if not shadowed
              (unless (some (lambda (v)

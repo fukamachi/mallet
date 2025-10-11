@@ -297,6 +297,83 @@
              (violations (rules:check-form rule (first forms) #p"test.lisp")))
         (ok (null violations)))))
 
+(deftest init-form-scoping
+  (testing "Valid: parameter used in multiple-value-bind init-form"
+    ;; Bug fix: init-form evaluated in outer scope, so 'a' should be recognized as used
+    (let* ((code "(defun foo (a)
+                     (multiple-value-bind (a a2) (bar a)
+                       (+ a a2)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Parameter 'a' used in init-form should not be flagged as unused")))
+
+  (testing "Valid: parameter used in destructuring-bind init-form"
+    (let* ((code "(defun process (data)
+                     (destructuring-bind (x y) (transform data)
+                       (+ x y)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Parameter 'data' used in init-form should not be flagged as unused")))
+
+  (testing "Valid: parameter shadows itself in binding but used in init-form"
+    ;; This is the exact pattern from the user's bug report
+    (let* ((code "(defun test (a)
+                     (multiple-value-bind (a b) (values a 2)
+                       (+ a b)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Parameter used in init-form then shadowed should not be unused")))
+
+  (testing "Valid: multiple parameters used in init-form"
+    (let* ((code "(defun compute (x y)
+                     (destructuring-bind (a b c) (list x y (+ x y))
+                       (+ a b c)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "All parameters used in init-form should be recognized")))
+
+  (testing "Valid: nested bindings with init-form usage"
+    (let* ((code "(defun nested (input)
+                     (multiple-value-bind (x y) (split input)
+                       (destructuring-bind (a b) (combine x y)
+                         (+ a b))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Init-form usage should work across nested bindings")))
+
+  (testing "Invalid: parameter truly unused when not in init-form"
+    (let* ((code "(defun test (unused)
+                     (multiple-value-bind (a b) (values 1 2)
+                       (+ a b)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'unused' is unused"
+                  (violation:violation-message (first violations)))
+          "Parameter not used in init-form should be flagged as unused")))
+
+  (testing "Valid: parameter used in complex init-form expression"
+    (let* ((code "(defun process (items)
+                     (destructuring-bind (first rest)
+                         (cons (car items) (cdr items))
+                       (list first rest)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Parameter used in complex init-form should be recognized"))))
+
 (deftest defmacro-parameters
   (testing "Invalid: unused macro parameter"
     (let* ((code "(defmacro my-macro (form1 form2 form3)
