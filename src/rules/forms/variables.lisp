@@ -5,17 +5,13 @@
    (#:base #:malo/rules/base)
    (#:parser #:malo/parser)
    (#:loop-parser #:malo/parser/loop)
-   (#:violation #:malo/violation))
+   (#:violation #:malo/violation)
+   (#:scope #:malo/utils/scope))
   (:export #:unused-variables-rule
            #:unused-loop-variables-rule))
 (in-package #:malo/rules/forms/variables)
 
 ;;; Utilities
-
-(defvar *current-form-position* nil
-  "Dynamic variable tracking the position (line . column) of the current form being checked.
-Used to provide accurate positions for binding violations without relying on position-map lookups,
-which can return stale data when multiple forms have identical patterns.")
 
 (defvar *violations* nil
   "Dynamic variable holding the list of violations found during checking.
@@ -24,6 +20,10 @@ Bound in base:check-form and accessible to all helper functions.")
 (defvar *file* nil
   "Dynamic variable holding the current file being checked.
 Bound in base:check-form and accessible to all helper functions.")
+
+(defvar *shadows* nil
+  "Dynamic variable holding the list of shadow-info structs during shadow finding.
+Bound in find-shadows and accessible to all helper functions.")
 
 (defun debug-mode-p ()
   "Check if debug mode is enabled."
@@ -224,9 +224,68 @@ Returns (values non-aux-part aux-params)."
                 (subseq lambda-list (1+ aux-pos)))
         (values lambda-list nil))))
 
-(defun calculate-scope (form-type binding remaining-bindings body aux-context)
+(defun extract-optional-key-defaults (lambda-list)
+  "Extract default forms from &optional and &key parameters in LAMBDA-LIST.
+Returns a list of default forms that can reference earlier parameters."
+  (let ((defaults '())
+        (state :required)
+        (i 0))
+    (loop while (< i (length lambda-list))
+          for elem = (nth i lambda-list)
+          do (cond
+               ;; Lambda-list keywords
+               ((and (stringp elem)
+                     (let ((name (base:symbol-name-from-string elem)))
+                       (and (> (length name) 0)
+                            (char= (char name 0) #\&))))
+                (let ((kw (base:symbol-name-from-string elem)))
+                  (cond
+                    ((string-equal kw "&OPTIONAL")
+                     (setf state :optional))
+                    ((or (string-equal kw "&REST") (string-equal kw "&BODY"))
+                     (setf state :rest))
+                    ((string-equal kw "&KEY")
+                     (setf state :key))
+                    ((string-equal kw "&AUX")
+                     ;; Stop processing - &aux is handled separately
+                     (return)))))
+               ;; Parameter
+               (t
+                (ecase state
+                  (:required
+                   ;; Required parameters have no defaults
+                   nil)
+                  (:optional
+                   ;; &optional: (var default) or (var default supplied-p)
+                   (when (and (consp elem) (>= (length elem) 2))
+                     ;; Second element is the default form
+                     (push (second elem) defaults)))
+                  (:rest
+                   ;; &rest has no default
+                   (setf state :required))
+                  (:key
+                   ;; &key: (var default), (var default supplied-p),
+                   ;; ((:keyword var) default), ((:keyword var) default supplied-p)
+                   (cond
+                     ;; ((:keyword var) default ...) form
+                     ((and (consp elem)
+                           (consp (first elem))
+                           (>= (length elem) 2))
+                      ;; Second element is the default form
+                      (push (second elem) defaults))
+                     ;; (var default ...) form
+                     ((and (consp elem)
+                           (stringp (first elem))
+                           (>= (length elem) 2))
+                      ;; Second element is the default form
+                      (push (second elem) defaults)))))))
+             (incf i))
+    (nreverse defaults)))
+
+(defun calculate-scope (form-type binding remaining-bindings body aux-context &optional optional-key-defaults)
   "Calculate the scope where a variable binding is available.
-Returns a list of forms where the variable should be checked for usage."
+Returns a list of forms where the variable should be checked for usage.
+OPTIONAL-KEY-DEFAULTS is a list of default forms from &optional and &key parameters (for :defun-regular only)."
   (ecase form-type
     (:let
      ;; Parallel bindings - scope is just the body
@@ -240,8 +299,9 @@ Returns a list of forms where the variable should be checked for usage."
                      remaining-bindings)
              body))
     (:defun-regular
-     ;; Regular parameters - scope is body (used for non-&aux params)
-     body)
+     ;; Regular parameters - scope is optional/key defaults + body
+     ;; This allows required parameters to be used in keyword parameter defaults
+     (append optional-key-defaults body))
     (:defun-aux
      ;; &aux parameters - evaluated sequentially like LET*
      ;; Scope is subsequent &aux bindings' init forms + body
@@ -258,6 +318,25 @@ Returns a list of forms where the variable should be checked for usage."
      (let ((var-clauses (first aux-context))
            (rest-context (rest aux-context)))
        (append
+        ;; All step forms (including this variable's own - we'll filter later)
+        (when (a:proper-list-p var-clauses)
+          (mapcar (lambda (clause)
+                    (when (and (a:proper-list-p clause) (>= (length clause) 3))
+                      (third clause)))  ; step form
+                  var-clauses))
+        ;; Test, result, and body
+        rest-context)))
+    (:do*
+     ;; DO* variables - sequential binding like LET*, then mutual recursion like DO
+     ;; aux-context is (var-clauses test-form result-form . body-forms)
+     (let ((var-clauses (first aux-context))
+           (rest-context (rest aux-context)))
+       (append
+        ;; Subsequent bindings' init forms (sequential like LET*)
+        (mapcar (lambda (clause)
+                  (when (and (a:proper-list-p clause) (>= (length clause) 2))
+                    (second clause)))  ; init form
+                remaining-bindings)
         ;; All step forms (including this variable's own - we'll filter later)
         (when (a:proper-list-p var-clauses)
           (mapcar (lambda (clause)
@@ -292,9 +371,9 @@ SEARCHABLE: For partial shadows, sub-expressions that CAN be searched"
             (string-equal (base:symbol-name-from-string v) target-name))
           vars)))
 
-(defun find-shadows-in-expr (expr target-name shadows)
+(defun find-shadows-in-expr (expr target-name)
   "Recursively find all shadowing points in expr.
-Modifies SHADOWS list by pushing new shadow-info structs."
+Modifies *SHADOWS* special variable by pushing new shadow-info structs."
   (when (consp expr)
     (let ((head (first expr))
           (rest-args (rest expr)))
@@ -321,16 +400,16 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                         :form expr
                         :type :partial-let
                         :searchable (remove nil init-forms))
-                       shadows)))
+                       *shadows*)))
              ;; Continue searching in non-shadowed parts or inside the shadow
              (when (and (a:proper-list-p bindings)
                         (not (some (lambda (b) (binds-same-name-p b target-name)) bindings)))
                ;; No shadow here, continue recursion
                (dolist (binding bindings)
                  (when (consp binding)
-                   (find-shadows-in-expr (second binding) target-name shadows)))
+                   (find-shadows-in-expr (second binding) target-name)))
                (dolist (form (rest rest-args))
-                 (find-shadows-in-expr form target-name shadows))))))
+                 (find-shadows-in-expr form target-name))))))
 
         ;; LET* - check for shadowing in bindings
         ((and (stringp head)
@@ -350,15 +429,15 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                         :form expr
                         :type :partial-let*
                         :searchable (nreverse searchable-inits))
-                       shadows)))
+                       *shadows*)))
              ;; Continue searching in non-shadowed parts
              (when (and (a:proper-list-p bindings)
                         (not (some (lambda (b) (binds-same-name-p b target-name)) bindings)))
                (dolist (binding bindings)
                  (when (consp binding)
-                   (find-shadows-in-expr (second binding) target-name shadows)))
+                   (find-shadows-in-expr (second binding) target-name)))
                (dolist (form (rest rest-args))
-                 (find-shadows-in-expr form target-name shadows))))))
+                 (find-shadows-in-expr form target-name))))))
 
         ;; DEFUN/LAMBDA/DEFMACRO - check parameters for shadowing
         ((and (stringp head)
@@ -379,7 +458,7 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                     :form expr
                     :type :complete
                     :searchable nil)
-                   shadows))
+                   *shadows*))
            ;; Continue searching in non-shadowed parts
            (unless (and (a:proper-list-p lambda-list)
                         (some (lambda (param)
@@ -388,7 +467,7 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                                      (string-equal (base:symbol-name-from-string param) target-name)))
                               lambda-list))
              (dolist (arg rest-args)
-               (find-shadows-in-expr arg target-name shadows)))))
+               (find-shadows-in-expr arg target-name)))))
 
         ;; DESTRUCTURING-BIND, MULTIPLE-VALUE-BIND
         ((and (stringp head)
@@ -405,13 +484,13 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                         :form expr
                         :type :complete
                         :searchable nil)
-                       shadows)))
+                       *shadows*)))
              ;; Continue searching if not shadowed
              (unless (some (lambda (v)
                              (string-equal (base:symbol-name-from-string v) target-name))
                            (extract-bindings vars :destructuring))
                (dolist (arg rest-args)
-                 (find-shadows-in-expr arg target-name shadows))))))
+                 (find-shadows-in-expr arg target-name))))))
 
         ;; DOLIST, DOTIMES
         ((and (stringp head)
@@ -427,12 +506,12 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                       :form expr
                       :type :complete
                       :searchable nil)
-                     shadows))
+                     *shadows*))
              ;; Continue searching if not shadowed
              (unless (and (stringp var)
                           (string-equal (base:symbol-name-from-string var) target-name))
                (dolist (arg rest-args)
-                 (find-shadows-in-expr arg target-name shadows))))))
+                 (find-shadows-in-expr arg target-name))))))
 
         ;; DO
         ((and (stringp head)
@@ -446,12 +525,31 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                       :form expr
                       :type :complete
                       :searchable nil)
-                     shadows))
+                     *shadows*))
              ;; Continue searching if not shadowed
              (unless (and (a:proper-list-p var-clauses)
                           (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
                (dolist (arg rest-args)
-                 (find-shadows-in-expr arg target-name shadows))))))
+                 (find-shadows-in-expr arg target-name))))))
+
+        ;; DO*
+        ((and (stringp head)
+              (string-equal (base:symbol-name-from-string head) "DO*"))
+         (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+           (let ((var-clauses (first rest-args)))
+             (when (and (a:proper-list-p var-clauses)
+                        (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
+               ;; Complete shadow
+               (push (make-shadow-info
+                      :form expr
+                      :type :complete
+                      :searchable nil)
+                     *shadows*))
+             ;; Continue searching if not shadowed
+             (unless (and (a:proper-list-p var-clauses)
+                          (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
+               (dolist (arg rest-args)
+                 (find-shadows-in-expr arg target-name))))))
 
         ;; LOOP - check for FOR/AS/WITH variables with AND detection
         ((and (stringp head)
@@ -488,7 +586,7 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                               :form expr
                               :type :partial-loop-and
                               :searchable searchable-forms)
-                             shadows))
+                             *shadows*))
                      ;; Sequential binding - like LET*
                      ;; Searchable: all init-forms UP TO AND INCLUDING the shadowing binding
                      (let* ((shadow-pos (position shadowing-binding loop-bindings))
@@ -499,11 +597,11 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                               :form expr
                               :type :partial-loop-sequential
                               :searchable searchable-forms)
-                             shadows))))
+                             *shadows*))))
                ;; Continue searching if not shadowed
                (unless shadowing-binding
                  (dolist (clause rest-args)
-                   (find-shadows-in-expr clause target-name shadows)))))))
+                   (find-shadows-in-expr clause target-name)))))))
 
         ;; QUASIQUOTE - only search unquoted expressions
         ((or (eq head 'eclector.reader:quasiquote)
@@ -521,14 +619,14 @@ Modifies SHADOWS list by pushing new shadow-info structs."
                                     (string-equal (symbol-name h) "UNQUOTE")
                                     (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
                            (when (rest expr)
-                             (find-shadows-in-expr (second expr) target-name shadows)))
+                             (find-shadows-in-expr (second expr) target-name)))
                           ;; UNQUOTE-SPLICING
                           ((or (eq h 'eclector.reader:unquote-splicing)
                                (and (symbolp h)
                                     (string-equal (symbol-name h) "UNQUOTE-SPLICING")
                                     (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
                            (when (rest expr)
-                             (find-shadows-in-expr (second expr) target-name shadows)))
+                             (find-shadows-in-expr (second expr) target-name)))
                           ;; Recurse
                           (t
                            (when (consp (car expr))
@@ -541,9 +639,9 @@ Modifies SHADOWS list by pushing new shadow-info structs."
         ;; Default: recursively search
         (t
          (when (consp (car expr))
-           (find-shadows-in-expr (car expr) target-name shadows))
+           (find-shadows-in-expr (car expr) target-name))
          (when (consp (cdr expr))
-           (find-shadows-in-expr (cdr expr) target-name shadows)))))))
+           (find-shadows-in-expr (cdr expr) target-name)))))))
 
 (defun find-shadows (var-name body)
   "Find all points where VAR-NAME is shadowed in BODY.
@@ -553,11 +651,11 @@ This is Phase 1 of the two-phase reference finding approach. It pre-computes
 all shadowing points and their types, which allows Phase 2 to search for
 references without worrying about shadow detection during traversal."
   (let ((target-name (base:symbol-name-from-string var-name))
-        (shadows '()))
+        (*shadows* '()))
     ;; Find all shadows in the body
     (dolist (form body)
-      (find-shadows-in-expr form target-name shadows))
-    (nreverse shadows)))
+      (find-shadows-in-expr form target-name))
+    (nreverse *shadows*)))
 
 (defun find-references-with-shadows (var-name body shadows)
   "Find if VAR-NAME is referenced in BODY, respecting pre-computed SHADOWS.
@@ -652,35 +750,46 @@ Uses two-phase architecture: Phase 1 finds all shadows, Phase 2 searches for ref
 
 ;;; Binding position calculation
 
-(defun calculate-variable-position (binding var-name form-type binding-line binding-column)
-  "Calculate the actual position of VAR-NAME within BINDING.
-Returns (values line column). Falls back to binding position if calculation fails."
-  (handler-case
-      (let ((var-name-normalized (base:symbol-name-from-string var-name)))
-        (cond
-          ;; For simple bindings like (var init-form), var is after one paren and potential whitespace
-          ;; We'll estimate column as binding-column + 1 (opening paren)
-          ;; This is a heuristic - actual position depends on whitespace
-          ((and (consp binding)
-                (stringp (first binding))
-                (string-equal (base:symbol-name-from-string (first binding)) var-name-normalized))
-           ;; The variable is the first element of the binding
-           ;; Estimate: after opening paren + potential whitespace
-           ;; Conservative estimate: binding-column + 1
-           (values binding-line (+ binding-column 1)))
-          ;; For other cases, use binding position as-is
-          (t
-           (values binding-line binding-column))))
-    (error ()
-      ;; On any error, fall back to binding position
-      (values binding-line binding-column))))
+(defun find-variable-object-in-binding (var-name binding)
+  "Find the actual string object for VAR-NAME in BINDING structure.
+Returns the string object (not a copy) so it can be looked up in position-map with EQ.
+VAR-NAME is a string to match against (by content).
+BINDING is the binding form (e.g., \"a\", (\"a\" 10), ((\"a\" \"b\") values))."
+  (let ((var-name-stripped (base:symbol-name-from-string var-name)))
+    (labels ((search-binding (form)
+               "Recursively search FORM for a string matching VAR-NAME."
+               (cond
+                 ;; Found a matching string - return it (the actual object)
+                 ((and (stringp form)
+                       (string-equal (base:symbol-name-from-string form) var-name-stripped))
+                  form)
+                 ;; Cons - search both parts
+                 ((consp form)
+                  (or (search-binding (car form))
+                      (when (consp (cdr form))
+                        (search-binding (cdr form)))))
+                 ;; Not found
+                 (t nil))))
+      (search-binding binding))))
+
+(defun find-variable-in-position-map (var-name binding position-map)
+  "Find the position of VAR-NAME by locating the actual string object in BINDING.
+Uses EQ lookup in POSITION-MAP to get the exact position from the reader.
+Returns (values line column) if found, or (values nil nil) if not found."
+  (when (and binding position-map)
+    (let* ((var-object (find-variable-object-in-binding var-name binding))
+           (pos (when var-object (gethash var-object position-map))))
+      (if pos
+          (values (car pos) (cdr pos))
+          (values nil nil)))))
 
 ;;; Binding checking
 
-(defun check-binding-form (form-type bindings body fallback-line fallback-column position-map rule &optional aux-context message-prefix)
+(defun check-binding-form (form-type bindings body fallback-line fallback-column position-map rule &optional aux-context message-prefix optional-key-defaults)
   "Check bindings for unused variables using scope-based approach.
 FORM-TYPE determines how scope is calculated (:let, :let*, :defun-regular, :defun-aux, :do).
 MESSAGE-PREFIX is the prefix for violation messages (default 'Variable').
+OPTIONAL-KEY-DEFAULTS is a list of default forms from &optional and &key parameters (for :defun-regular only).
 Pushes violations to *violations* special variable."
   (let ((ignored-vars (extract-ignored-vars body))
         (body-without-declares (remove-if
@@ -688,71 +797,89 @@ Pushes violations to *violations* special variable."
                                   (and (consp form)
                                        (base:symbol-matches-p (first form) "DECLARE")))
                                 body)))
+    ;; First pass: Record ALL variable positions in scope stack
+    ;; Look up the actual variable string object in the binding structure,
+    ;; then use EQ to look it up in position-map. This works correctly because:
+    ;; 1. Position-map uses :test 'eq (object identity)
+    ;; 2. Each symbol read creates a unique string object
+    ;; 3. extract-bindings returns the actual string objects from bindings
+    ;; 4. Looking up by object identity finds the exact position
+    (loop for binding in bindings
+          do (let ((var-names (extract-bindings binding)))
+               (dolist (var-name var-names)
+                 ;; Find position by looking up the actual variable string object
+                 (multiple-value-bind (var-line var-column)
+                     (cond
+                       (position-map
+                        ;; Find the actual string object and look it up directly
+                        (multiple-value-bind (obj-line obj-column)
+                            (find-variable-in-position-map var-name binding position-map)
+                          (if obj-line
+                              (values obj-line obj-column)
+                              (values fallback-line fallback-column))))
+                       ;; Last resort: use fallback
+                       (t
+                        (values fallback-line fallback-column)))
+                   ;; Record this variable's position in scope stack
+                   (when (and var-line var-column)
+                     (scope:record-variable var-name var-line var-column))))))
+
+    ;; Second pass: Check each variable for usage and create violations
     (loop for remaining-bindings on bindings
           for binding = (first remaining-bindings)
           for subsequent-bindings = (rest remaining-bindings)
           do (let ((var-names (extract-bindings binding)))
                (dolist (var-name var-names)
-                 (let ((scope (if (eq form-type :do)
-                                  ;; Special handling for DO: exclude own step form
-                                  ;; aux-context is (var-clauses test result . body)
-                                  (let* ((var-clauses (first aux-context))
-                                         (rest-context (rest aux-context))
-                                         (var-index (position binding bindings))
-                                         (own-clause (when (and var-index var-clauses)
-                                                       (nth var-index var-clauses)))
-                                         (own-step-form (when (and (a:proper-list-p own-clause) (>= (length own-clause) 3))
-                                                          (third own-clause)))
-                                         (all-step-forms (when (a:proper-list-p var-clauses)
-                                                           (mapcar (lambda (clause)
-                                                                     (when (and (a:proper-list-p clause) (>= (length clause) 3))
-                                                                       (third clause)))
-                                                                   var-clauses)))
-                                         (other-step-forms (remove own-step-form all-step-forms)))
-                                    (append other-step-forms rest-context))
-                                  ;; Normal scope calculation for other forms
-                                  (calculate-scope form-type binding subsequent-bindings body-without-declares aux-context))))
+                 (let ((scope (cond
+                                ;; DO*: sequential init forms (like LET*) + all step forms except own
+                                ((eq form-type :do*)
+                                 (let* ((base-scope (calculate-scope form-type binding subsequent-bindings body-without-declares aux-context optional-key-defaults))
+                                        (var-clauses (first aux-context))
+                                        (var-index (position binding bindings))
+                                        (own-clause (when (and var-index var-clauses)
+                                                      (nth var-index var-clauses)))
+                                        (own-step-form (when (and (a:proper-list-p own-clause) (>= (length own-clause) 3))
+                                                         (third own-clause))))
+                                   ;; Filter out own step form from base-scope
+                                   (remove own-step-form base-scope :test #'eq)))
+                                ;; DO: parallel init, only step forms + test/result/body, exclude own step form
+                                ((eq form-type :do)
+                                 (let* ((var-clauses (first aux-context))
+                                        (rest-context (rest aux-context))
+                                        (var-index (position binding bindings))
+                                        (own-clause (when (and var-index var-clauses)
+                                                      (nth var-index var-clauses)))
+                                        (own-step-form (when (and (a:proper-list-p own-clause) (>= (length own-clause) 3))
+                                                         (third own-clause)))
+                                        (all-step-forms (when (a:proper-list-p var-clauses)
+                                                          (mapcar (lambda (clause)
+                                                                    (when (and (a:proper-list-p clause) (>= (length clause) 3))
+                                                                      (third clause)))
+                                                                  var-clauses)))
+                                        (other-step-forms (remove own-step-form all-step-forms)))
+                                   (append other-step-forms rest-context)))
+                                ;; Normal scope calculation for other forms
+                                (t
+                                 (calculate-scope form-type binding subsequent-bindings body-without-declares aux-context optional-key-defaults)))))
                    (let ((is-ignored (ignored-var-p var-name ignored-vars))
                          (is-referenced (find-references var-name scope)))
                      (unless (or is-ignored is-referenced)
-                       ;; Find position for this binding or variable name
-                       (multiple-value-bind (var-line var-column)
-                           (cond
-                             ;; Prefer *current-form-position* if set (contains the enclosing form's position)
-                             (*current-form-position*
-                              ;; Calculate actual variable position from the current form position
-                              (calculate-variable-position binding var-name form-type
-                                                          (car *current-form-position*)
-                                                          (cdr *current-form-position*)))
-                             ;; Try position-map lookup for binding position
-                             (position-map
-                              (multiple-value-bind (binding-line binding-column)
-                                  ;; Look up the binding form's position
-                                  ;; For single-element bindings like ((pattern)), look up the pattern directly
-                                  (parser:find-position (if (and (= (length binding) 1) (consp binding))
-                                                            (first binding)
-                                                            binding)
-                                                        position-map nil nil)
-                                (if binding-line
-                                    ;; Calculate actual variable position from binding position
-                                    (calculate-variable-position binding var-name form-type binding-line binding-column)
-                                    (values fallback-line fallback-column))))
-                             ;; Last resort: use fallback
-                             (t
-                              (values fallback-line fallback-column)))
-                         (push (make-instance 'violation:violation
-                                              :rule (base:rule-name rule)
-                                              :file *file*
-                                              :line var-line
-                                              :column var-column
-                                              :severity (base:rule-severity rule)
-                                              :message
-                                              (format nil "~A '~A' is unused"
-                                                      (or message-prefix "Variable")
-                                                      (base:symbol-name-from-string var-name))
-                                              :fix nil)
-                               *violations*))))))))))
-
+                       ;; Look up position from scope stack for violation reporting
+                       (multiple-value-bind (scope-line scope-column)
+                           (scope:lookup-variable-position var-name)
+                         (when (and scope-line scope-column)
+                           (push (make-instance 'violation:violation
+                                                :rule (base:rule-name rule)
+                                                :file *file*
+                                                :line scope-line
+                                                :column scope-column
+                                                :severity (base:rule-severity rule)
+                                                :message
+                                                (format nil "~A '~A' is unused"
+                                                        (or message-prefix "Variable")
+                                                        (base:symbol-name-from-string var-name))
+                                                :fix nil)
+                                 *violations*)))))))))))
 (defun check-defun-bindings (expr line column position-map rule)
   "Check DEFUN for unused parameter bindings."
   (let ((rest-args (rest expr)))
@@ -761,15 +888,17 @@ Pushes violations to *violations* special variable."
                (listp (second rest-args)))
       (let* ((lambda-list (second rest-args))
              (body (cddr rest-args)))
-        ;; Bind *current-form-position* for this DEFUN
-        (let ((*current-form-position* (cons line column)))
-          (multiple-value-bind (non-aux-part aux-params)
-              (parse-lambda-list-for-aux lambda-list)
-            (let* ((var-names (extract-lambda-list-vars non-aux-part nil))
-                   (param-bindings (mapcar #'list var-names)))
-              (when param-bindings
-                (check-binding-form :defun-regular param-bindings body line column position-map rule)))
-            (when aux-params
+        (multiple-value-bind (non-aux-part aux-params)
+            (parse-lambda-list-for-aux lambda-list)
+          ;; Extract default forms from &optional and &key parameters
+          (let* ((optional-key-defaults (extract-optional-key-defaults non-aux-part))
+                 (var-names (extract-lambda-list-vars non-aux-part nil))
+                 (param-bindings (mapcar #'list var-names)))
+            (when param-bindings
+            (scope:with-new-scope
+                (check-binding-form :defun-regular param-bindings body line column position-map rule nil nil optional-key-defaults))))
+          (when aux-params
+            (scope:with-new-scope
               (check-binding-form :defun-aux aux-params body line column position-map rule body))))))))
 
 (defun check-lambda-bindings (expr line column position-map rule)
@@ -780,14 +909,17 @@ Pushes violations to *violations* special variable."
                (listp (first rest-args)))
       (let* ((lambda-list (first rest-args))
              (body (rest rest-args)))
-        (let ((*current-form-position* (cons line column)))
-          (multiple-value-bind (non-aux-part aux-params)
-              (parse-lambda-list-for-aux lambda-list)
-            (let* ((var-names (extract-lambda-list-vars non-aux-part nil))
-                   (param-bindings (mapcar #'list var-names)))
-              (when param-bindings
-                (check-binding-form :defun-regular param-bindings body line column position-map rule)))
-            (when aux-params
+        (multiple-value-bind (non-aux-part aux-params)
+            (parse-lambda-list-for-aux lambda-list)
+          ;; Extract default forms from &optional and &key parameters
+          (let* ((optional-key-defaults (extract-optional-key-defaults non-aux-part))
+                 (var-names (extract-lambda-list-vars non-aux-part nil))
+                 (param-bindings (mapcar #'list var-names)))
+            (when param-bindings
+            (scope:with-new-scope
+                (check-binding-form :defun-regular param-bindings body line column position-map rule nil nil optional-key-defaults))))
+          (when aux-params
+            (scope:with-new-scope
               (check-binding-form :defun-aux aux-params body line column position-map rule body))))))))
 
 (defun check-let-bindings (expr line column position-map rule)
@@ -797,10 +929,10 @@ Pushes violations to *violations* special variable."
       (handler-case
           (let ((bindings (first rest-args))
                 (body (rest rest-args)))
-            ;; Don't set *current-form-position* for LET - let each binding be looked up individually
-            (check-binding-form :let bindings body line column position-map rule))
+            (scope:with-new-scope
+              (check-binding-form :let bindings body line column position-map rule)))
         (type-error (e)
-          (format *error-output* "~%Warning: Skipping LET form at ~A:~A due to unexpected structure: ~A~%"
+          (format *error-output* "~%Warning: Skipping LET form at ~A:~A due to unexpected structure:~%  ~A~%"
                   *file* line e)
           nil)))))
 
@@ -810,8 +942,8 @@ Pushes violations to *violations* special variable."
     (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
       (let ((bindings (first rest-args))
             (body (rest rest-args)))
-        ;; Don't set *current-form-position* for LET* - let each binding be looked up individually
-        (check-binding-form :let* bindings body line column position-map rule)))))
+        (scope:with-new-scope
+          (check-binding-form :let* bindings body line column position-map rule))))))
 
 (defun check-loop-bindings (expr line column position-map rule)
   "Check LOOP for unused variable bindings."
@@ -822,10 +954,10 @@ Pushes violations to *violations* special variable."
         (when loop-bindings
           (multiple-value-bind (loop-line loop-column)
               (parser:find-position expr position-map line column)
-            (let ((*current-form-position* (cons loop-line loop-column)))
-              (let ((bindings (mapcar (lambda (lb)
-                                       (list (loop-parser:loop-binding-pattern lb)))
-                                     loop-bindings)))
+            (let ((bindings (mapcar (lambda (lb)
+                                      (list (loop-parser:loop-binding-pattern lb)))
+                                    loop-bindings)))
+            (scope:with-new-scope
                 (check-binding-form :let bindings body loop-line loop-column position-map rule)))))))))
 
 (defun check-do-bindings (expr line column position-map rule)
@@ -845,8 +977,24 @@ Pushes violations to *violations* special variable."
                                      (list clause)))
                                var-clauses))))
         (when bindings
-          (let ((*current-form-position* (cons line column)))
+          (scope:with-new-scope
             (check-binding-form :do bindings body line column position-map rule do-context)))))))
+
+(defun check-do*-bindings (expr line column position-map rule)
+  "Check DO* for unused variable bindings."
+  (let ((rest-args (rest expr)))
+    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+      (let* ((var-clauses (first rest-args))
+             (end-test-clause (second rest-args))
+             (body (cddr rest-args))
+             (test-form (when (a:proper-list-p end-test-clause) (first end-test-clause)))
+             (result-forms (when (a:proper-list-p end-test-clause) (rest end-test-clause)))
+             (do-context (cons var-clauses (append (list test-form) result-forms body))))
+        ;; For DO*, pass full var-clauses as bindings (not simplified)
+        ;; This allows calculate-scope to extract init forms for sequential binding check
+        (when var-clauses
+          (scope:with-new-scope
+            (check-binding-form :do* var-clauses body line column position-map rule do-context)))))))
 
 (defun check-destructuring-bind-bindings (expr line column position-map rule)
   "Check DESTRUCTURING-BIND for unused variable bindings."
@@ -857,7 +1005,7 @@ Pushes violations to *violations* special variable."
              (var-names (extract-lambda-list-vars lambda-list t))
              (bindings (mapcar #'list var-names)))
         (when bindings
-          (let ((*current-form-position* (cons line column)))
+          (scope:with-new-scope
             (check-binding-form :let bindings body line column position-map rule)))))))
 
 (defun check-multiple-value-bind-bindings (expr line column position-map rule)
@@ -867,7 +1015,7 @@ Pushes violations to *violations* special variable."
       (let* ((vars (first rest-args))
              (body (cddr rest-args))
              (bindings (list vars)))
-        (let ((*current-form-position* (cons line column)))
+        (scope:with-new-scope
           (check-binding-form :let bindings body line column position-map rule))))))
 
 (defun check-dolist-bindings (expr line column position-map rule)
@@ -879,11 +1027,8 @@ Pushes violations to *violations* special variable."
         (when (and (a:proper-list-p spec) (>= (length spec) 2))
           (let* ((var (first spec))
                  (bindings (list (list var))))
-            ;; Calculate variable position from DOLIST form position
-            ;; For (dolist (var ...) ...), variable is at: column + 1 + len("dolist") + 1 + 1
-            ;; But calculate-variable-position adds +1, so we use column + 8
-            (let ((*current-form-position* (cons line (+ column 8))))
-              (check-binding-form :let bindings body line column position-map rule))))))))
+            (scope:with-new-scope
+                (check-binding-form :let bindings body line column position-map rule))))))))
 
 (defun check-do-symbols-bindings (expr line column position-map rule)
   "Check DO-SYMBOLS/DO-EXTERNAL-SYMBOLS/DO-ALL-SYMBOLS for unused variable bindings."
@@ -894,8 +1039,8 @@ Pushes violations to *violations* special variable."
         (when (and (a:proper-list-p spec) (>= (length spec) 1))
           (let* ((var (first spec))
                  (bindings (list (list var))))
-            (let ((*current-form-position* (cons line (+ column 1))))
-              (check-binding-form :let bindings body line column position-map rule))))))))
+            (scope:with-new-scope
+                (check-binding-form :let bindings body line column position-map rule))))))))
 
 (defun check-with-slots-bindings (expr line column position-map rule)
   "Check WITH-SLOTS for unused variable bindings."
@@ -909,8 +1054,8 @@ Pushes violations to *violations* special variable."
                                             (first spec)  ; (var slot-name)
                                             spec)))       ; var
                                  slot-specs)))
-            (let ((*current-form-position* (cons line (+ column 1))))
-              (check-binding-form :let bindings body line column position-map rule))))))))
+            (scope:with-new-scope
+                (check-binding-form :let bindings body line column position-map rule))))))))
 
 (defun check-with-accessors-bindings (expr line column position-map rule)
   "Check WITH-ACCESSORS for unused variable bindings."
@@ -923,8 +1068,8 @@ Pushes violations to *violations* special variable."
                                    (when (and (consp spec) (>= (length spec) 2))
                                      (list (first spec))))  ; (var accessor-name)
                                  accessor-specs)))
-            (let ((*current-form-position* (cons line (+ column 1))))
-              (check-binding-form :let (remove nil bindings) body line column position-map rule))))))))
+            (scope:with-new-scope
+                (check-binding-form :let (remove nil bindings) body line column position-map rule))))))))
 
 (defun check-with-input-from-string-bindings (expr line column position-map rule)
   "Check WITH-INPUT-FROM-STRING for unused variable bindings."
@@ -935,8 +1080,8 @@ Pushes violations to *violations* special variable."
         (when (and (a:proper-list-p spec) (>= (length spec) 2))
           (let* ((var (first spec))
                  (bindings (list (list var))))
-            (let ((*current-form-position* (cons line (+ column 1))))
-              (check-binding-form :let bindings body line column position-map rule))))))))
+            (scope:with-new-scope
+                (check-binding-form :let bindings body line column position-map rule))))))))
 
 (defun check-with-output-to-string-bindings (expr line column position-map rule)
   "Check WITH-OUTPUT-TO-STRING for unused variable bindings."
@@ -947,8 +1092,8 @@ Pushes violations to *violations* special variable."
         (when (a:proper-list-p spec)
           (let* ((var (first spec))
                  (bindings (list (list var))))
-            (let ((*current-form-position* (cons line (+ column 1))))
-              (check-binding-form :let bindings body line column position-map rule))))))))
+            (scope:with-new-scope
+                (check-binding-form :let bindings body line column position-map rule))))))))
 
 (defun check-with-open-file-bindings (expr line column position-map rule)
   "Check WITH-OPEN-FILE for unused variable bindings."
@@ -959,8 +1104,8 @@ Pushes violations to *violations* special variable."
         (when (and (a:proper-list-p spec) (>= (length spec) 2))
           (let* ((var (first spec))
                  (bindings (list (list var))))
-            (let ((*current-form-position* (cons line (+ column 1))))
-              (check-binding-form :let bindings body line column position-map rule))))))))
+            (scope:with-new-scope
+                (check-binding-form :let bindings body line column position-map rule))))))))
 
 (defun check-defmacro-bindings (expr line column position-map rule)
   "Check DEFMACRO for unused parameter bindings."
@@ -970,14 +1115,17 @@ Pushes violations to *violations* special variable."
                (listp (second rest-args)))
       (let* ((lambda-list (second rest-args))
              (body (cddr rest-args)))
-        (let ((*current-form-position* (cons line column)))
-          (multiple-value-bind (non-aux-part aux-params)
-              (parse-lambda-list-for-aux lambda-list)
-            (let* ((var-names (extract-lambda-list-vars non-aux-part t))
-                   (param-bindings (mapcar #'list var-names)))
-              (when param-bindings
-                (check-binding-form :defun-regular param-bindings body line column position-map rule)))
-            (when aux-params
+        (multiple-value-bind (non-aux-part aux-params)
+            (parse-lambda-list-for-aux lambda-list)
+          ;; Extract default forms from &optional and &key parameters
+          (let* ((optional-key-defaults (extract-optional-key-defaults non-aux-part))
+                 (var-names (extract-lambda-list-vars non-aux-part t))
+                 (param-bindings (mapcar #'list var-names)))
+            (when param-bindings
+              (scope:with-new-scope
+                (check-binding-form :defun-regular param-bindings body line column position-map rule nil nil optional-key-defaults))))
+          (when aux-params
+            (scope:with-new-scope
               (check-binding-form :defun-aux aux-params body line column position-map rule body))))))))
 
 (defun check-expr (expr line column position-map rule)
@@ -999,6 +1147,8 @@ Pushes violations to *violations* special variable."
          (check-loop-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "DO")
          (check-do-bindings expr line column position-map rule))
+        ((base:symbol-matches-p head "DO*")
+         (check-do*-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "DESTRUCTURING-BIND")
          (check-destructuring-bind-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "MULTIPLE-VALUE-BIND")
@@ -1148,7 +1298,8 @@ Skips LOOP forms - use unused-loop-variables-rule for those."
                              (uiop:print-condition-backtrace e))))))
         ;; Bind special variables and call check-expr
         (let ((*violations* '())
-              (*file* file))
+              (*file* file)
+              (scope:*scope-stack* nil))  ; Initialize clean scope stack for this form
           (let ((position-map (parser:form-position-map form)))
             (check-expr (parser:form-expr form)
                         (parser:form-line form)
@@ -1157,6 +1308,7 @@ Skips LOOP forms - use unused-loop-variables-rule for those."
                         rule))
           (nreverse *violations*)))
     (type-error (e)
+      (declare (ignore e))
       ;; Print warning message only in debug mode
       nil)))
 
@@ -1261,7 +1413,8 @@ Recursively descends into all forms to find nested LOOPs."
                            (uiop:print-condition-backtrace e)))))
         ;; Bind special variables and recursively check for LOOPs
         (let ((*violations* '())
-              (*file* file))
+              (*file* file)
+              (scope:*scope-stack* nil))  ; Initialize clean scope stack for this form
           (let ((position-map (parser:form-position-map form)))
             (check-loop-expr (parser:form-expr form)
                             (parser:form-line form)
@@ -1270,4 +1423,5 @@ Recursively descends into all forms to find nested LOOPs."
                             rule))
           (nreverse *violations*)))
     (type-error (e)
+      (declare (ignore e))
       nil)))

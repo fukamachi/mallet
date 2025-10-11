@@ -178,8 +178,10 @@ Returns 1-based line and 0-based column."
   "Hash table mapping expressions to source positions.")
 
 (defun make-position-map ()
-  "Create a new position map."
-  (make-hash-table :test 'equal))
+  "Create a new position map.
+Uses EQ test for object identity - each symbol from interpret-symbol
+is a unique string object, so we can store positions for all occurrences."
+  (make-hash-table :test 'eq))
 
 (defun build-position-map (parse-result line-starts)
   "Build a position map from PARSE-RESULT.
@@ -191,8 +193,9 @@ Returns a hash table mapping expressions to (line . column) positions."
                        (source (getf result :source))
                        (children (getf result :children)))
                    ;; Map this expression to its position
-                   ;; IMPORTANT: Only store the FIRST occurrence of each expression
-                   ;; (declarations come before usages)
+                   ;; Since we use EQ test, each unique object (including duplicate variable names
+                   ;; in different scopes) gets its own position entry. Still check if already
+                   ;; present to avoid reprocessing the same object if seen multiple times.
                    (when (and source (not (gethash expr position-map)))
                      (multiple-value-bind (line column)
                          (char-pos-to-line-column (car source) line-starts)

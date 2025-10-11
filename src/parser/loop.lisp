@@ -98,10 +98,12 @@ This excludes iteration sub-keywords like FROM, TO, IN, etc. which are part of F
 
 (defun strip-package-prefix (form)
   "Recursively strip package prefixes from strings in FORM.
-Handles strings, cons structures, and lists."
+Handles strings, cons structures, and lists.
+Preserves the original case from source code for better error messages."
   (cond
     ((null form) nil)
-    ((stringp form) (utils:symbol-name-from-string form))
+    ((stringp form)
+     (utils:symbol-name-from-string form))
     ((consp form)
      (cons (strip-package-prefix (car form))
            (strip-package-prefix (cdr form))))
@@ -181,8 +183,8 @@ Simple form-based LOOP:
 
                          ;; Create loop-binding struct with is-parallel = T
                          (push (make-loop-binding
-                                :pattern next-elem
-                                :init-form (nreverse init-forms)
+                                :pattern (strip-package-prefix next-elem)
+                                :init-form (strip-package-prefix (nreverse init-forms))
                                 :is-parallel t)  ; AND bindings are always parallel
                                bindings))
                        ;; Don't increment i here, it's already at the next keyword
@@ -222,8 +224,8 @@ Simple form-based LOOP:
 
                         ;; Create loop-binding struct (sequential binding)
                         (push (make-loop-binding
-                               :pattern var-or-pattern
-                               :init-form (nreverse init-forms)
+                               :pattern (strip-package-prefix var-or-pattern)
+                               :init-form (strip-package-prefix (nreverse init-forms))
                                :is-parallel nil)  ; FOR/AS/WITH are always sequential
                               bindings))
                       ;; Don't increment i here, it's already at the next keyword

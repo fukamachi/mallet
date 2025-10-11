@@ -445,6 +445,75 @@
       (ok (search "Variable 'j' is unused"
                   (violation:violation-message (first violations)))))))
 
+(deftest do*-bindings
+  (testing "Invalid: unused do* variables"
+    (let* ((code "(do* ((i 0 (1+ i))
+                         (j 0 (+ j 2))
+                         (k 0 (+ k 3)))
+                        ((>= i 10) i)
+                      (print i))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; j and k are unused
+      (ok (= (length violations) 2))))
+
+  (testing "Valid: all do* variables used"
+    (let* ((code "(do* ((i 0 (1+ i))
+                         (sum 0 (+ sum i)))
+                        ((>= i 10) sum)
+                      (print i))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: do* sequential init forms (unlike do)"
+    (let* ((code "(do* ((a 1)
+                         (b (+ a 1))
+                         (c (+ a b)))
+                        ((>= c 10) c)
+                      (print c))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; a and b are used in subsequent init forms, c is used in test and body
+      (ok (null violations))))
+
+  (testing "Invalid: do* variable used only in subsequent init form"
+    (let* ((code "(do* ((a 1)
+                         (b (+ a 1)))
+                        ((>= b 10) b)
+                      (print b))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; a is used in b's init form, so no violations
+      (ok (null violations))))
+
+  (testing "Invalid: do* variable unused in init forms and body"
+    (let* ((code "(do* ((i 0 (1+ i))
+                         (j 0 (+ j 2)))
+                        ((>= i 10))
+                      (print i))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; j is unused
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'j' is unused"
+                  (violation:violation-message (first violations))))))
+
+  (testing "Valid: do* mutual recursion in step forms (like do)"
+    (let* ((code "(do* ((i 0 (1+ j))
+                         (j 0 (1+ i)))
+                        ((>= i 10) (+ i j)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; Both i and j are used in each other's step forms and in result
+      (ok (null violations)))))
+
 (deftest loop-simple-for
   (testing "LOOP with simple FOR variable"
     (let* ((code "(loop for i from 1 to 10 collect (* i 2))")

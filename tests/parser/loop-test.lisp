@@ -34,7 +34,7 @@
       (multiple-value-bind (bindings body)
           (loop-parser:parse-loop-clauses clauses)
         (ok (= (length bindings) 1))
-        (ok (string= (loop-parser:loop-binding-pattern (first bindings)) "I"))
+        (ok (string-equal (loop-parser:loop-binding-pattern (first bindings)) "I"))
         (ok (not (loop-parser:loop-binding-is-parallel (first bindings)))))))
 
   (testing "WITH binding with initialization"
@@ -42,7 +42,7 @@
       (multiple-value-bind (bindings body)
           (loop-parser:parse-loop-clauses clauses)
         (ok (= (length bindings) 1))
-        (ok (string= (loop-parser:loop-binding-pattern (first bindings)) "X"))
+        (ok (string-equal (loop-parser:loop-binding-pattern (first bindings)) "X"))
         (ok (not (loop-parser:loop-binding-is-parallel (first bindings)))))))
 
   (testing "AS binding (synonym for FOR)"
@@ -50,7 +50,7 @@
       (multiple-value-bind (bindings body)
           (loop-parser:parse-loop-clauses clauses)
         (ok (= (length bindings) 1))
-        (ok (string= (loop-parser:loop-binding-pattern (first bindings)) "ITEM"))))))
+        (ok (string-equal (loop-parser:loop-binding-pattern (first bindings)) "ITEM"))))))
 
 (deftest parallel-vs-sequential-bindings
   (testing "Sequential bindings (successive FOR)"
@@ -87,8 +87,8 @@
         (let ((pattern (loop-parser:loop-binding-pattern (first bindings))))
           (ok (consp pattern))
           (ok (= (length pattern) 2))
-          (ok (string= (first pattern) "A"))
-          (ok (string= (second pattern) "B"))))))
+          (ok (string-equal (first pattern) "A"))
+          (ok (string-equal (second pattern) "B"))))))
 
   (testing "Dotted pair destructuring"
     (let ((clauses (parse-loop-from-code "(loop for (name . node) in bindings collect name)")))
@@ -97,8 +97,8 @@
         (ok (= (length bindings) 1))
         (let ((pattern (loop-parser:loop-binding-pattern (first bindings))))
           (ok (consp pattern))
-          (ok (string= (car pattern) "NAME"))
-          (ok (string= (cdr pattern) "NODE"))))))
+          (ok (string-equal (car pattern) "NAME"))
+          (ok (string-equal (cdr pattern) "NODE"))))))
 
   (testing "Nested destructuring"
     (let ((clauses (parse-loop-from-code "(loop for ((a b) c) in nested collect a)")))
@@ -109,7 +109,7 @@
           (ok (consp pattern))
           (ok (= (length pattern) 2))
           (ok (consp (first pattern)))
-          (ok (string= (second pattern) "C")))))))
+          (ok (string-equal (second pattern) "C")))))))
 
 (deftest keyword-vs-variable-distinction
   (testing "LOOP keyword as variable reference"

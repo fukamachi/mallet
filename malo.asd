@@ -15,6 +15,7 @@
   :components
   (;; Shared utilities
    (:file "utils")
+   (:file "utils/scope")
 
    ;; Core data structures
    (:file "violation")
