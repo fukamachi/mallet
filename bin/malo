@@ -22,5 +22,5 @@ fi
 # Run with SBCL
 exec sbcl --noinform --non-interactive \
     --load "$SETUP_FILE" \
-    --eval "(asdf:load-system :malo)" \
+    --eval '(let ((*standard-output* (make-broadcast-stream)) (*error-output* (make-broadcast-stream)) (*trace-output* (make-broadcast-stream))) (asdf:load-system :malo))' \
     --eval "(malo:main)" -- "$@"
