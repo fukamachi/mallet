@@ -123,21 +123,16 @@
 Returns a list of VIOLATION objects."
   (check-type file pathname)
 
-  ;; If neither registry nor config provided, use default
-  (when (and (not registry) (not config))
-    (setf config (config:get-built-in-config :default)))
+  (setf config
+        (or config
+            (let ((config-file (config:find-config-file (uiop:pathname-directory-pathname file))))
+              (if config-file
+                  (let ((config (config:load-config config-file)))
+                    (config:apply-overrides-for-file config file
+                                                     :root-dir (uiop:pathname-directory-pathname config-file)))
+                  (config:get-built-in-config)))))
 
-  ;; Apply path-based overrides if config is provided
-  (when config
-    (setf config (config:apply-overrides-for-file config file)))
-
-  ;; Create registry from config if not provided
-  (when (and config (not registry))
-    (setf registry (make-registry-from-config config)))
-
-  ;; If no config but have registry, create default config for options
-  (when (and registry (not config))
-    (setf config (config:get-built-in-config :default)))
+  (setf registry (or registry (make-registry-from-config config)))
 
   (check-type registry rules:registry)
   (check-type config config:config)
@@ -235,14 +230,6 @@ Returns a list of VIOLATION objects."
   "Lint multiple FILES using REGISTRY rules and CONFIG.
 Returns an alist mapping file paths to violation lists."
   (check-type files list)
-
-  ;; Setup registry and config if not provided
-  (when (and (not registry) (not config))
-    (setf config (config:get-built-in-config :default)))
-  (when (and config (not registry))
-    (setf registry (make-registry-from-config config)))
-  (when (and registry (not config))
-    (setf config (config:get-built-in-config :default)))
 
   (loop for file in files
         for violations = (lint-file file :registry registry :config config)

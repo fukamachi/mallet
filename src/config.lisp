@@ -13,8 +13,11 @@
            #:get-built-in-config
            #:find-config-file
            #:config-overrides
-           #:apply-overrides-for-file))
+           #:apply-overrides-for-file
+           #:*default-preset*))
 (in-package #:malo/config)
+
+(defvar *default-preset* :default)
 
 ;;; Config data structure
 
@@ -205,7 +208,7 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-path
 
 ;;; Built-in configs
 
-(defun get-built-in-config (name)
+(defun get-built-in-config (&optional (name *default-preset*))
   "Get a built-in configuration by NAME (:default or :all)."
   (check-type name keyword)
 
@@ -273,11 +276,12 @@ Useful for exploration and discovering what rules exist."
 
 ;;; Path-based overrides
 
-(defun apply-overrides-for-file (config file-path)
+(defun apply-overrides-for-file (config file-path &key root-dir)
   "Apply path-specific overrides from CONFIG for FILE-PATH.
 Returns a new config with matching overrides merged in."
   (check-type config config)
   (check-type file-path pathname)
+  (check-type root-dir (or null pathname))
 
   (let ((merged-config config)
         (file-namestring (namestring file-path)))
@@ -287,40 +291,48 @@ Returns a new config with matching overrides merged in."
             (override-config (cdr override-entry)))
         ;; Check if any pattern matches the file
         (when (some (lambda (pattern)
-                      (path-matches-pattern-p file-namestring pattern))
+                      (let ((pattern (namestring (merge-pathnames pattern root-dir))))
+                        (glob:glob-match pattern file-namestring)))
                     patterns)
           ;; Merge this override into the accumulated config
           (setf merged-config (merge-configs merged-config override-config)))))
     merged-config))
 
-(defun path-matches-pattern-p (path pattern)
-  "Check if PATH matches glob PATTERN.
-Supports: * (any chars), ** (any dirs), ? (single char), {a,b} (alternatives)."
-  (check-type path string)
-  (check-type pattern string)
-
-  ;; Use trivial-glob's glob-match with pathname mode
-  ;; pathname=t ensures / is not matched by * wildcards
-  (glob:glob-match pattern path :pathname t))
-
 ;;; Config file discovery
+
+(defun find-project-root (&optional (pathname *default-pathname-defaults*))
+  (check-type pathname pathname)
+  (let ((pathname
+          (if (uiop:directory-pathname-p pathname)
+              (probe-file pathname)
+              (uiop:pathname-directory-pathname pathname))))
+    (cond
+      ((or (find-if (lambda (dir)
+                      (uiop:directory-exists-p (merge-pathnames dir pathname)))
+                    '(".bzr" ".git" ".hg" ".qlot"))
+           (find-if (lambda (file)
+                      (uiop:file-exists-p (merge-pathnames file pathname)))
+                    '("qlfile" ".malo.lisp")))
+       pathname)
+      ((equal (user-homedir-pathname) pathname)
+       nil)
+      (t
+       (let ((parent (uiop:pathname-parent-directory-pathname pathname)))
+         (if (equal parent pathname)
+             nil
+             (find-project-root parent)))))))
 
 (defun find-config-file (start-directory)
   "Find .malo.lisp config file starting from START-DIRECTORY.
 Walks up parent directories until found or reaches root."
-  (let ((dir (if (pathnamep start-directory)
-                 (uiop:ensure-directory-pathname start-directory)
-                 (uiop:ensure-directory-pathname
-                  (uiop:parse-native-namestring start-directory)))))
-    (labels ((search-dir (current-dir)
-               (let ((config-path (merge-pathnames ".malo.lisp" current-dir)))
-                 (cond
-                   ((probe-file config-path)
-                    config-path)
-                   ;; Check if we've reached root
-                   ((equal current-dir (uiop:pathname-parent-directory-pathname current-dir))
-                    nil)
-                   (t
-                    ;; Try parent directory
-                    (search-dir (uiop:pathname-parent-directory-pathname current-dir)))))))
-      (search-dir dir))))
+  (let ((dir (etypecase start-directory
+               (pathname
+                (uiop:ensure-directory-pathname start-directory))
+               (string
+                (uiop:ensure-directory-pathname
+                 (uiop:parse-native-namestring start-directory))))))
+    (when dir
+      (let ((project-root (find-project-root dir)))
+        (when project-root
+          (uiop:file-exists-p
+           (merge-pathnames ".malo.lisp" project-root)))))))

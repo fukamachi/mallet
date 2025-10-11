@@ -149,7 +149,7 @@ Examples:
   "Expand FILE-ARGS into a list of Lisp file pathnames.
 Handles wildcards and directories, excluding common non-source directories."
   (let ((files '())
-        (excluded-dirs '(".qlot" ".git" ".svn" ".hg" "node_modules" "_build")))
+        (excluded-dirs '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build")))
     (labels ((should-exclude-p (path)
                "Check if PATH is in an excluded directory."
                (let ((path-string (namestring path)))
@@ -206,7 +206,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                             (uiop:print-condition-backtrace e)
                             (uiop:quit 3))))
       (multiple-value-bind (format config-path preset debug file-args)
-        (parse-args args)
+          (parse-args args)
 
         ;; Enable debug mode if requested
         (setf *debug-mode* debug)
@@ -217,27 +217,11 @@ Lints files specified in ARGS and exits with appropriate status code."
           (print-help)
           (uiop:quit 3))
 
-        ;; Load or discover config
-        (let* ((cfg (cond
-                      ;; Explicit preset provided (takes precedence)
-                      (preset
-                        (config:get-built-in-config preset))
-                      ;; Explicit config path provided
-                      (config-path
-                        (config:load-config config-path))
-                      ;; Auto-discover from current directory
-                      (t
-                        (let ((found-config (config:find-config-file (uiop:getcwd))))
-                          (if found-config
-                            (config:load-config found-config)
-                            ;; No config found, use default
-                            (config:get-built-in-config :default))))))
-               ;; Expand file arguments
-               (files (expand-file-args file-args))
-               ;; Create registry from config
-               (registry (engine:make-registry-from-config cfg))
-               ;; Lint files
-               (results (engine:lint-files files :registry registry :config cfg)))
+        (let* ((files (expand-file-args file-args))
+               (config:*default-preset* (or preset :default))
+               (results (engine:lint-files files
+                                           :config (and config-path
+                                                        (config:load-config config-path)))))
 
           ;; Format output
           (ecase format
