@@ -885,6 +885,83 @@ Pushes violations to *violations* special variable."
             (let ((*current-form-position* (cons line (+ column 8))))
               (check-binding-form :let bindings body line column position-map rule))))))))
 
+(defun check-do-symbols-bindings (expr line column position-map rule)
+  "Check DO-SYMBOLS/DO-EXTERNAL-SYMBOLS/DO-ALL-SYMBOLS for unused variable bindings."
+  (let ((rest-args (rest expr)))
+    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+      (let* ((spec (first rest-args))
+             (body (rest rest-args)))
+        (when (and (a:proper-list-p spec) (>= (length spec) 1))
+          (let* ((var (first spec))
+                 (bindings (list (list var))))
+            (let ((*current-form-position* (cons line (+ column 1))))
+              (check-binding-form :let bindings body line column position-map rule))))))))
+
+(defun check-with-slots-bindings (expr line column position-map rule)
+  "Check WITH-SLOTS for unused variable bindings."
+  (let ((rest-args (rest expr)))
+    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 3))
+      (let* ((slot-specs (first rest-args))
+             (body (cddr rest-args)))
+        (when (a:proper-list-p slot-specs)
+          (let ((bindings (mapcar (lambda (spec)
+                                   (list (if (consp spec)
+                                            (first spec)  ; (var slot-name)
+                                            spec)))       ; var
+                                 slot-specs)))
+            (let ((*current-form-position* (cons line (+ column 1))))
+              (check-binding-form :let bindings body line column position-map rule))))))))
+
+(defun check-with-accessors-bindings (expr line column position-map rule)
+  "Check WITH-ACCESSORS for unused variable bindings."
+  (let ((rest-args (rest expr)))
+    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 3))
+      (let* ((accessor-specs (first rest-args))
+             (body (cddr rest-args)))
+        (when (a:proper-list-p accessor-specs)
+          (let ((bindings (mapcar (lambda (spec)
+                                   (when (and (consp spec) (>= (length spec) 2))
+                                     (list (first spec))))  ; (var accessor-name)
+                                 accessor-specs)))
+            (let ((*current-form-position* (cons line (+ column 1))))
+              (check-binding-form :let (remove nil bindings) body line column position-map rule))))))))
+
+(defun check-with-input-from-string-bindings (expr line column position-map rule)
+  "Check WITH-INPUT-FROM-STRING for unused variable bindings."
+  (let ((rest-args (rest expr)))
+    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+      (let* ((spec (first rest-args))
+             (body (rest rest-args)))
+        (when (and (a:proper-list-p spec) (>= (length spec) 2))
+          (let* ((var (first spec))
+                 (bindings (list (list var))))
+            (let ((*current-form-position* (cons line (+ column 1))))
+              (check-binding-form :let bindings body line column position-map rule))))))))
+
+(defun check-with-output-to-string-bindings (expr line column position-map rule)
+  "Check WITH-OUTPUT-TO-STRING for unused variable bindings."
+  (let ((rest-args (rest expr)))
+    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 1))
+      (let* ((spec (first rest-args))
+             (body (rest rest-args)))
+        (when (a:proper-list-p spec)
+          (let* ((var (first spec))
+                 (bindings (list (list var))))
+            (let ((*current-form-position* (cons line (+ column 1))))
+              (check-binding-form :let bindings body line column position-map rule))))))))
+
+(defun check-with-open-file-bindings (expr line column position-map rule)
+  "Check WITH-OPEN-FILE for unused variable bindings."
+  (let ((rest-args (rest expr)))
+    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+      (let* ((spec (first rest-args))
+             (body (rest rest-args)))
+        (when (and (a:proper-list-p spec) (>= (length spec) 2))
+          (let* ((var (first spec))
+                 (bindings (list (list var))))
+            (let ((*current-form-position* (cons line (+ column 1))))
+              (check-binding-form :let bindings body line column position-map rule))))))))
+
 (defun check-defmacro-bindings (expr line column position-map rule)
   "Check DEFMACRO for unused parameter bindings."
   (let ((rest-args (rest expr)))
@@ -909,7 +986,6 @@ Pushes violations to *violations* special variable."
     (let ((head (first expr))
           (rest-args (rest expr)))
       ;; 1. Dispatch to specific checkers for binding forms
-      ;; Note: LOOP is only checked by unused-loop-variables-rule (separate rule)
       (cond
         ((base:symbol-matches-p head "DEFUN")
          (check-defun-bindings expr line column position-map rule))
@@ -919,6 +995,8 @@ Pushes violations to *violations* special variable."
          (check-let-bindings expr line column position-map rule))
         ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET*"))
          (check-let*-bindings expr line column position-map rule))
+        ((base:symbol-matches-p head "LOOP")
+         (check-loop-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "DO")
          (check-do-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "DESTRUCTURING-BIND")
@@ -928,7 +1006,23 @@ Pushes violations to *violations* special variable."
         ((base:symbol-matches-p head "DOLIST")
          (check-dolist-bindings expr line column position-map rule))
         ((base:symbol-matches-p head "DEFMACRO")
-         (check-defmacro-bindings expr line column position-map rule)))
+         (check-defmacro-bindings expr line column position-map rule))
+        ;; DO-SYMBOLS family
+        ((or (base:symbol-matches-p head "DO-SYMBOLS")
+             (base:symbol-matches-p head "DO-EXTERNAL-SYMBOLS")
+             (base:symbol-matches-p head "DO-ALL-SYMBOLS"))
+         (check-do-symbols-bindings expr line column position-map rule))
+        ;; WITH-* macros
+        ((base:symbol-matches-p head "WITH-SLOTS")
+         (check-with-slots-bindings expr line column position-map rule))
+        ((base:symbol-matches-p head "WITH-ACCESSORS")
+         (check-with-accessors-bindings expr line column position-map rule))
+        ((base:symbol-matches-p head "WITH-INPUT-FROM-STRING")
+         (check-with-input-from-string-bindings expr line column position-map rule))
+        ((base:symbol-matches-p head "WITH-OUTPUT-TO-STRING")
+         (check-with-output-to-string-bindings expr line column position-map rule))
+        ((base:symbol-matches-p head "WITH-OPEN-FILE")
+         (check-with-open-file-bindings expr line column position-map rule)))
 
       ;; 2. Handle special forms for recursion
       (cond
@@ -936,6 +1030,34 @@ Pushes violations to *violations* special variable."
         ((or (eq head 'cl:quote)
              (eq head 'quote)
              (base:symbol-matches-p head "QUOTE"))
+         nil)
+
+        ;; DEFSTRUCT - skip entirely (has its own special syntax for slots)
+        ((base:symbol-matches-p head "DEFSTRUCT")
+         nil)
+
+        ;; DEFCLASS - skip entirely (slot definitions with special syntax)
+        ((base:symbol-matches-p head "DEFCLASS")
+         nil)
+
+        ;; DEFPACKAGE - skip entirely (special clause syntax)
+        ((base:symbol-matches-p head "DEFPACKAGE")
+         nil)
+
+        ;; DEFTYPE - skip entirely (has lambda list for type parameters)
+        ((base:symbol-matches-p head "DEFTYPE")
+         nil)
+
+        ;; DEFSETF - skip entirely (special lambda list forms)
+        ((base:symbol-matches-p head "DEFSETF")
+         nil)
+
+        ;; DEFINE-MODIFY-MACRO - skip entirely (special lambda list forms)
+        ((base:symbol-matches-p head "DEFINE-MODIFY-MACRO")
+         nil)
+
+        ;; DEFINE-SETF-EXPANDER - skip entirely (lambda list)
+        ((base:symbol-matches-p head "DEFINE-SETF-EXPANDER")
          nil)
 
         ;; QUASIQUOTE - only check unquoted parts
@@ -1054,6 +1176,34 @@ Similar to check-expr but only processes LOOP forms."
         ((or (eq head 'cl:quote)
              (eq head 'quote)
              (base:symbol-matches-p head "QUOTE"))
+         nil)
+
+        ;; DEFSTRUCT - skip entirely (has its own special syntax for slots)
+        ((base:symbol-matches-p head "DEFSTRUCT")
+         nil)
+
+        ;; DEFCLASS - skip entirely (slot definitions with special syntax)
+        ((base:symbol-matches-p head "DEFCLASS")
+         nil)
+
+        ;; DEFPACKAGE - skip entirely (special clause syntax)
+        ((base:symbol-matches-p head "DEFPACKAGE")
+         nil)
+
+        ;; DEFTYPE - skip entirely (has lambda list for type parameters)
+        ((base:symbol-matches-p head "DEFTYPE")
+         nil)
+
+        ;; DEFSETF - skip entirely (special lambda list forms)
+        ((base:symbol-matches-p head "DEFSETF")
+         nil)
+
+        ;; DEFINE-MODIFY-MACRO - skip entirely (special lambda list forms)
+        ((base:symbol-matches-p head "DEFINE-MODIFY-MACRO")
+         nil)
+
+        ;; DEFINE-SETF-EXPANDER - skip entirely (lambda list)
+        ((base:symbol-matches-p head "DEFINE-SETF-EXPANDER")
          nil)
 
         ;; QUASIQUOTE - only check unquoted parts

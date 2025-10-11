@@ -86,6 +86,8 @@
      (:file "text-formatting-test")
      (:file "naming")
      (:file "lambda-list")
-     (:file "asdf"))))
+     (:file "asdf")
+     (:file "special-forms-test")
+     (:file "with-macros-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
