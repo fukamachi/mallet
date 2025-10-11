@@ -71,6 +71,16 @@ LOOP keywords are position-dependent. Use this only for parsing decisions."
           '("INITIALLY" "FINALLY" "DO" "DOING")
           :test #'string-equal))
 
+(defun accumulation-keyword-p (string)
+  "Check if STRING is an accumulation clause keyword (COLLECT, APPEND, etc.).
+These can be connected with AND without creating variable bindings."
+  (member (utils:symbol-name-from-string string)
+          '("COLLECT" "COLLECTING" "APPEND" "APPENDING"
+            "NCONC" "NCONCING" "COUNT" "COUNTING"
+            "SUM" "SUMMING" "MAXIMIZE" "MAXIMIZING"
+            "MINIMIZE" "MINIMIZING")
+          :test #'string-equal))
+
 (defun clause-keyword-p (string)
   "Check if STRING starts a new LOOP clause.
 This excludes iteration sub-keywords like FROM, TO, IN, etc. which are part of FOR/AS/WITH clauses."
@@ -132,48 +142,62 @@ Simple form-based LOOP:
 
   (let ((bindings '())
         (var-positions '())  ; Track positions of variable names to filter out
+        (prev-clause nil)    ; Track the previous clause keyword
         (i 0))
     ;; Collect all variable bindings and their positions
     (loop while (< i (length clauses))
           for clause = (nth i clauses)
           do (cond
-               ;; AND - creates a parallel binding (like FOR but parallel)
+               ;; AND - creates a parallel binding ONLY when connecting FOR/AS/WITH
                ;; Syntax: "for x = 1 and y = 2" - AND takes variable directly, no second FOR
+               ;; BUT: "collect x and collect y" - AND just connects clauses, no binding
+               ;; AND can also connect: IF, WHEN, UNLESS, DO, DOING, etc.
                ((and (stringp clause)
                      (string-equal (utils:symbol-name-from-string clause) "AND"))
-                ;; AND is like FOR but marks binding as parallel
-                ;; Next element is the variable or pattern
-                (when (< (1+ i) (length clauses))
-                  (let ((var-or-pattern (nth (1+ i) clauses)))
-                    (when var-or-pattern
-                      ;; Mark this position as a variable binding (to be filtered out)
-                      (push (1+ i) var-positions)
-                      (incf i)  ; Move to variable position
-                      (incf i)  ; Move past variable to start of init clause
+                ;; Only treat as variable binding if PREVIOUS clause was FOR/AS/WITH
+                (cond
+                  ((and prev-clause
+                        (member (utils:symbol-name-from-string prev-clause)
+                                '("FOR" "AS" "WITH")
+                                :test #'string-equal)
+                        (< (1+ i) (length clauses)))
+                   ;; Previous was FOR/AS/WITH, this AND creates a parallel binding
+                   (let ((next-elem (nth (1+ i) clauses)))
+                     (when next-elem
+                       ;; Mark this position as a variable binding (to be filtered out)
+                       (push (1+ i) var-positions)
+                       (incf i)  ; Move to variable position
+                       (incf i)  ; Move past variable to start of init clause
 
-                      ;; Collect the init clause (everything until next clause-starting keyword)
-                      (let ((init-forms '()))
-                        (loop while (and (< i (length clauses))
-                                        (let ((next (nth i clauses)))
-                                          ;; Stop if we hit a clause-starting keyword
-                                          (not (and (stringp next)
-                                                   (clause-keyword-p next)))))
-                              do (push (nth i clauses) init-forms)
-                                 (incf i))
+                       ;; Collect the init clause (everything until next clause-starting keyword)
+                       (let ((init-forms '()))
+                         (loop while (and (< i (length clauses))
+                                         (let ((next (nth i clauses)))
+                                           ;; Stop if we hit a clause-starting keyword
+                                           (not (and (stringp next)
+                                                    (clause-keyword-p next)))))
+                               do (push (nth i clauses) init-forms)
+                                  (incf i))
 
-                        ;; Create loop-binding struct with is-parallel = T
-                        (push (make-loop-binding
-                               :pattern var-or-pattern
-                               :init-form (nreverse init-forms)
-                               :is-parallel t)  ; AND bindings are always parallel
-                              bindings))
-                      ;; Don't increment i here, it's already at the next keyword
-                      (decf i)))))
+                         ;; Create loop-binding struct with is-parallel = T
+                         (push (make-loop-binding
+                                :pattern next-elem
+                                :init-form (nreverse init-forms)
+                                :is-parallel t)  ; AND bindings are always parallel
+                               bindings))
+                       ;; Don't increment i here, it's already at the next keyword
+                       (decf i))))
+                  (t
+                   ;; Previous was not FOR/AS/WITH, AND is just a connector
+                   ;; Don't create binding, just move past AND
+                   (incf i))))
 
                ;; FOR/AS/WITH - binding clauses (always sequential, never parallel)
                ((and (stringp clause)
                      (binding-keyword-p clause)
                      (not (string-equal (utils:symbol-name-from-string clause) "AND")))
+                ;; Track this as the previous clause (important for AND handling)
+                (setf prev-clause clause)
                 ;; FOR/AS/WITH bindings are always sequential (is-parallel = NIL)
                 ;; Parallel bindings use AND keyword instead
                 ;; Next element is the variable or pattern
@@ -209,6 +233,8 @@ Simple form-based LOOP:
                ;; These consume multiple forms until the next clause keyword
                ((and (stringp clause)
                      (multi-form-keyword-p clause))
+                ;; Track this as the previous clause
+                (setf prev-clause clause)
                 (incf i)
                 ;; Skip all forms until next clause-starting keyword
                 (loop while (and (< i (length clauses))
@@ -218,7 +244,15 @@ Simple form-based LOOP:
                       do (incf i))
                 (decf i))
 
-               (t (incf i))))
+               ;; Other clause keywords - track for AND handling, then continue
+               ((and (stringp clause)
+                     (clause-keyword-p clause)
+                     (not (binding-keyword-p clause)))  ; Already handled above
+                ;; Track this as the previous clause (for AND detection)
+                (setf prev-clause clause))
+
+               (t nil))
+             (incf i))
 
     ;; Extract searchable expressions from clauses
     ;; Return only actual expressions (cons forms), not LOOP keywords or variable names
