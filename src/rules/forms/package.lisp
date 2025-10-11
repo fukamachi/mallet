@@ -52,7 +52,7 @@
 
         ;; Only check if there's actual code after in-package (not a package-only file)
         (when code-forms
-          (let ((nicknames (extract-local-nicknames-with-exprs expr)))
+          (let ((nicknames (extract-local-nicknames-with-exprs (parser:form-expr defpkg-form))))
             (loop for (nickname package nick-expr) in nicknames
                   for refs = (find-nickname-references code-forms nickname)
                   when (zerop (length refs))
@@ -114,8 +114,8 @@
 
         ;; Only check if there's actual code after in-package (not a package-only file)
         (when code-forms
-          (let ((imports (extract-imported-symbols-with-exprs expr))
-                (exports (extract-exports expr))
+          (let ((imports (extract-imported-symbols-with-exprs (parser:form-expr defpkg-form)))
+                (exports (extract-exports (parser:form-expr defpkg-form)))
                 (violations '()))
             (dolist (import imports)
               (let ((pkg (first import))
