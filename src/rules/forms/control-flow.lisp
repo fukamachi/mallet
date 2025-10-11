@@ -180,13 +180,13 @@
                            (base:symbol-matches-p key "OTHERWISE"))))
                      clauses))
 
-             (has-t-clause-p (clauses)
-               "Check if clauses list has a T clause (should use otherwise)."
-               (some (lambda (clause)
-                       (when (consp clause)
-                         (let ((key (first clause)))
-                           (base:symbol-matches-p key "T"))))
-                     clauses))
+             (find-t-clause (clauses)
+               "Find the T clause and return it, or nil if none."
+               (find-if (lambda (clause)
+                          (when (consp clause)
+                            (let ((key (first clause)))
+                              (base:symbol-matches-p key "T"))))
+                        clauses))
 
              (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for missing otherwise."
@@ -203,27 +203,30 @@
                                         :test #'string-equal))
                        (let* ((form-name (base:symbol-name-from-string head))
                               (keyform (first rest-args))
-                              (clauses (rest rest-args)))
+                              (clauses (rest rest-args))
+                              (t-clause (find-t-clause clauses)))
                          (declare (ignore keyform))
 
                          ;; Check if it has T instead of OTHERWISE
-                         (when (has-t-clause-p clauses)
-                           (push (make-instance 'violation:violation
-                                                :rule :missing-otherwise
-                                                :file file
-                                                :line line
-                                                :column column
-                                                :severity (base:rule-severity rule)
-                                                :message
-                                                (format nil
-                                                        "Use 'otherwise' instead of 't' in '~A'"
-                                                        (string-downcase form-name))
-                                                :fix nil)
-                                 violations))
+                         (when t-clause
+                           ;; Find the position of the t clause
+                           (multiple-value-bind (clause-line clause-column)
+                               (parser:find-position t-clause position-map line column)
+                             (push (make-instance 'violation:violation
+                                                  :rule :missing-otherwise
+                                                  :file file
+                                                  :line clause-line
+                                                  :column clause-column
+                                                  :severity (base:rule-severity rule)
+                                                  :message
+                                                  (format nil
+                                                          "Use 'otherwise' instead of 't' in '~A'"
+                                                          (string-downcase form-name))
+                                                  :fix nil)
+                                   violations)))
 
                          ;; Check if it has OTHERWISE clause
-                         (unless (or (has-otherwise-clause-p clauses)
-                                     (has-t-clause-p clauses))
+                         (unless (or (has-otherwise-clause-p clauses) t-clause)
                            (push (make-instance 'violation:violation
                                                 :rule :missing-otherwise
                                                 :file file
@@ -272,14 +275,14 @@
   (let ((violations '())
         (position-map (parser:form-position-map form))
         (visited (make-hash-table :test 'eq)))  ; Track visited cons cells
-    (labels ((has-catch-all-clause-p (clauses)
-               "Check if clauses list has an otherwise or t clause."
-               (some (lambda (clause)
-                       (when (consp clause)
-                         (let ((key (first clause)))
-                           (or (base:symbol-matches-p key "OTHERWISE")
-                               (base:symbol-matches-p key "T")))))
-                     clauses))
+    (labels ((find-catch-all-clause (clauses)
+               "Find the otherwise or t clause and return it, or nil if none."
+               (find-if (lambda (clause)
+                          (when (consp clause)
+                            (let ((key (first clause)))
+                              (or (base:symbol-matches-p key "OTHERWISE")
+                                  (base:symbol-matches-p key "T")))))
+                        clauses))
 
              (check-expr (expr fallback-line fallback-column)
                "Recursively check expression for wrong otherwise."
@@ -296,23 +299,27 @@
                                         :test #'string-equal))
                        (let* ((form-name (base:symbol-name-from-string head))
                               (keyform (first rest-args))
-                              (clauses (rest rest-args)))
+                              (clauses (rest rest-args))
+                              (catch-all-clause (find-catch-all-clause clauses)))
                          (declare (ignore keyform))
 
                          ;; Check if it has OTHERWISE or T clause
-                         (when (has-catch-all-clause-p clauses)
-                           (push (make-instance 'violation:violation
-                                                :rule :wrong-otherwise
-                                                :file file
-                                                :line line
-                                                :column column
-                                                :severity (base:rule-severity rule)
-                                                :message
-                                                (format nil
-                                                        "'~A' should not have 'otherwise' or 't' clause"
-                                                        (string-downcase form-name))
-                                                :fix nil)
-                                 violations))))
+                         (when catch-all-clause
+                           ;; Find the position of the catch-all clause
+                           (multiple-value-bind (clause-line clause-column)
+                               (parser:find-position catch-all-clause position-map line column)
+                             (push (make-instance 'violation:violation
+                                                  :rule :wrong-otherwise
+                                                  :file file
+                                                  :line clause-line
+                                                  :column clause-column
+                                                  :severity (base:rule-severity rule)
+                                                  :message
+                                                  (format nil
+                                                          "'~A' should not have 'otherwise' or 't' clause"
+                                                          (string-downcase form-name))
+                                                  :fix nil)
+                                   violations)))))
 
                      ;; Recursively check head if it's a cons (e.g., in let bindings)
                      (when (consp head)
