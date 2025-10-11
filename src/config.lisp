@@ -72,7 +72,7 @@ Otherwise, treat as directory and expand to 'dir/**/*.{lisp,asd}'."
         ;; If rule not in config, check extends
         (if (config-extends config)
             (rule-enabled-p (config-extends config) rule-name)
-            t))))  ; Default to enabled if not in any config
+            nil))))  ; Default to disabled if not in any config
 
 (defun get-rule-option (config rule-name option-name)
   "Get OPTION-NAME for RULE-NAME from CONFIG."
@@ -247,7 +247,28 @@ Style preferences are disabled to keep output clean."
   "Create configuration with all rules enabled.
 Useful for exploration and discovering what rules exist."
   (make-config
-   :rules '((:line-length :enabled t :max-length 100)
+   :rules '(;; ERROR: Objectively wrong code
+            (:wrong-otherwise :enabled t)
+            ;; WARNING: Likely bugs or dangerous patterns
+            (:unused-variables :enabled t)
+            (:missing-otherwise :enabled t)
+            (:mixed-optional-and-key :enabled t)
+            ;; INFO: Code quality suggestions
+            (:unused-local-nicknames :enabled t)
+            (:unused-imported-symbols :enabled t)
+            (:constant-naming :enabled t)
+            (:unused-loop-variables :enabled t)
+            ;; CONVENTION: Style/idiom suggestions
+            (:if-without-else :enabled t)
+            (:bare-progn-in-if :enabled t)
+            (:special-variable-naming :enabled t)
+            (:asdf-component-strings :enabled t)
+            ;; FORMAT: Consensus formatting (Emacs/SLIME standards)
+            (:no-tabs :enabled t)
+            (:trailing-whitespace :enabled t)
+            (:final-newline :enabled t)
+            ;; INFO: Subjective preferences
+            (:line-length :enabled t :max-length 100)
             (:consecutive-blank-lines :enabled t :max-consecutive 2))))
 
 ;;; Path-based overrides
