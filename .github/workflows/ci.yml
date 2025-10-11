@@ -42,3 +42,8 @@ jobs:
       - name: Run test suite
         run: |
           make test
+
+      - name: Build binary
+        run: |
+          make build
+          ./malo --version
