@@ -24,6 +24,9 @@ jobs:
           LISP: ${{ matrix.lisp }}
         run: |
           curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+          mkdir -p "$HOME/.local/bin"
+          printf '#!/bin/sh\nexec ros run -- "$@"\n' > "$HOME/.local/bin/sbcl"
+          chmod u+x "$HOME/.local/bin/sbcl"
 
       - name: Install Qlot
         run: |
