@@ -1,0 +1,31 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: ${{ matrix.lisp }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        lisp:
+          - sbcl-bin
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Roswell
+        env:
+          LISP: ${{ matrix.lisp }}
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+
+      - name: Run test suite
+        run: |
+          ros -l init.lisp -e '(asdf:load-system :malo/tests)' -e '(or (rove:run :malo/tests) (uiop:quit -1))'
+          make test-cli

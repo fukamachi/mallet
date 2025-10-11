@@ -25,7 +25,8 @@ test: test-unit test-cli
 test-unit:
 	@echo "Running unit tests..."
 	@qlot exec sbcl --noinform --non-interactive \
-		--eval "(asdf:test-system :malo)"
+		--eval '(asdf:load-system :malo/tests)' \
+		--eval '(or (rove:run :malo/tests) (uiop:quit -1))'
 
 test-cli:
 	@echo ""
