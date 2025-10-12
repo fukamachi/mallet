@@ -219,6 +219,66 @@
       (ok (funcall matcher "FILE.txt"))
       (ok (funcall matcher "FILE.TXT")))))
 
+(deftest compile-doublestar-patterns
+  (testing "** matches zero or more directory levels"
+    (let ((matcher (compiler:compile-pattern "**/file.txt" :pathname t)))
+      (ok (functionp matcher))
+      ;; Zero directories
+      (ok (funcall matcher "file.txt"))
+      ;; One directory
+      (ok (funcall matcher "a/file.txt"))
+      ;; Multiple directories
+      (ok (funcall matcher "a/b/file.txt"))
+      (ok (funcall matcher "a/b/c/file.txt"))))
+
+  (testing "**/*.txt matches .txt files at any depth"
+    (let ((matcher (compiler:compile-pattern "**/*.txt" :pathname t)))
+      (ok (functionp matcher))
+      (ok (funcall matcher "file.txt"))
+      (ok (funcall matcher "dir/file.txt"))
+      (ok (funcall matcher "a/b/c/file.txt"))
+      (ng (funcall matcher "file.log"))))
+
+  (testing "dir/**/*.txt matches .txt files under dir at any depth"
+    (let ((matcher (compiler:compile-pattern "src/**/*.lisp" :pathname t)))
+      (ok (functionp matcher))
+      ;; Direct child
+      (ok (funcall matcher "src/main.lisp"))
+      ;; Nested children
+      (ok (funcall matcher "src/core/parser.lisp"))
+      (ok (funcall matcher "src/core/types.lisp"))
+      (ok (funcall matcher "src/utils/helpers.lisp"))
+      ;; Wrong directory
+      (ng (funcall matcher "tests/main.lisp"))
+      ;; Wrong extension
+      (ng (funcall matcher "src/main.txt"))))
+
+  (testing "**/dir/**/* matches all files recursively in any dir subdirectory"
+    (let ((matcher (compiler:compile-pattern "**/core/**/*" :pathname t)))
+      (ok (functionp matcher))
+      ;; Direct children of core
+      (ok (funcall matcher "core/file.txt"))
+      (ok (funcall matcher "src/core/parser.lisp"))
+      ;; Nested children
+      (ok (funcall matcher "core/sub/file.txt"))
+      (ok (funcall matcher "src/core/sub/parser.lisp"))
+      (ok (funcall matcher "a/b/core/c/d/file.txt"))
+      ;; Not in core directory
+      (ng (funcall matcher "src/main.lisp"))
+      (ng (funcall matcher "src/utils/helpers.lisp"))))
+
+  (testing "**/dir/** matches all files recursively in any dir subdirectory"
+    (let ((matcher (compiler:compile-pattern "**/core/**" :pathname t)))
+      (ok (functionp matcher))
+      ;; Direct children of core
+      (ok (funcall matcher "core/file.txt"))
+      (ok (funcall matcher "src/core/parser.lisp"))
+      ;; Nested children
+      (ok (funcall matcher "core/sub/file.txt"))
+      (ok (funcall matcher "src/core/sub/parser.lisp"))
+      ;; Not in core directory
+      (ng (funcall matcher "src/main.lisp")))))
+
 (deftest normalize-exclusion-pattern
   (testing "Filename-only patterns unchanged"
     (ok (string= "**/*.log" (compiler::normalize-exclusion-pattern "*.log")))

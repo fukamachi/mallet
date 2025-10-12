@@ -28,6 +28,10 @@ In pathname mode, does not match '/'.")
   "Matches zero or more characters (*).
 In pathname mode, does not match '/'.")
 
+(defstruct (doublestar-node (:include pattern-node))
+  "Matches zero or more directory levels (**).
+Only valid in pathname mode. Matches across '/' boundaries.")
+
 (defstruct (char-class-node (:include pattern-node))
   "Matches one character from a character class [...]."
   (content "" :type string)     ; Original bracket content
@@ -150,6 +154,14 @@ from START position and returns the ending position if successful, or NIL."
            ;; Match to end
            end)))
 
+    (doublestar-node
+     ;; ** matches zero or more directory levels
+     ;; This is a no-op matcher that returns start position
+     ;; The actual logic is handled in sequence-node backtracking
+     (lambda (string start end)
+       (declare (ignore string end))
+       start))
+
     (char-class-node
      ;; Generate optimized character class predicate
      (let ((pred (compile-char-class-predicate
@@ -163,11 +175,11 @@ from START position and returns the ending position if successful, or NIL."
            (1+ start)))))
 
     (sequence-node
-     ;; Generate sequence matcher with backtracking for star nodes
-     ;; Check if sequence contains star nodes that need backtracking
+     ;; Generate sequence matcher with backtracking for star/doublestar nodes
+     ;; Check if sequence contains nodes that need backtracking
      (let ((elements (sequence-node-elements node)))
-       (if (some #'star-node-p elements)
-           ;; Contains stars - need backtracking support
+       (if (some (lambda (elem) (or (star-node-p elem) (doublestar-node-p elem))) elements)
+           ;; Contains stars/doublestars - need backtracking support
            (lambda (string start end)
              (labels ((try-match (remaining-elems pos)
                         (cond
@@ -182,14 +194,29 @@ from START position and returns the ending position if successful, or NIL."
                                               (not (find #\/ string :start pos :end star-end)))
                                        (try-match rest-pattern star-end)))
                                    (loop for i from end downto pos collect i))))
+                          ((doublestar-node-p (first remaining-elems))
+                           ;; Doublestar node - matches zero or more path segments
+                           (let ((rest-pattern (rest remaining-elems)))
+                             (if (null rest-pattern)
+                                 ;; ** at end of pattern - matches everything remaining
+                                 end
+                                 ;; ** with more pattern after it - try matching rest at various positions
+                                 ;; Try from longest match to shortest (greedy, like star-node)
+                                 (some (lambda (try-pos)
+                                         (try-match rest-pattern try-pos))
+                                       ;; Collect positions after each '/' in reverse, then try zero-match last
+                                       (append (reverse (loop for i from pos below end
+                                                              when (char= (char string i) #\/)
+                                                              collect (1+ i)))
+                                               (list pos))))))
                           (t
-                           ;; Non-star node
+                           ;; Non-star/doublestar node
                            (let* ((matcher (generate-matcher (first remaining-elems) pathname period casefold))
                                   (result (funcall matcher string pos end)))
                              (when result
                                (try-match (rest remaining-elems) result)))))))
                (try-match elements start)))
-           ;; No stars - simple sequential matching
+           ;; No stars/doublestars - simple sequential matching
            (let ((element-matchers
                   (mapcar (lambda (elem) (generate-matcher elem pathname period casefold))
                           elements)))
@@ -336,8 +363,23 @@ Returns (values char-class-node next-position) or NIL if invalid."
                  (case ch
                    (#\*
                     (flush-literal)
-                    (push (make-star-node) nodes)
-                    (incf i))
+                    ;; Check for **/ (doublestar with slash)
+                    (cond
+                      ;; **/ - consume the slash too
+                      ((and (< (+ i 2) end)
+                            (char= (char pattern (1+ i)) #\*)
+                            (char= (char pattern (+ i 2)) #\/))
+                       (push (make-doublestar-node) nodes)
+                       (incf i 3))
+                      ;; ** at end or followed by non-slash
+                      ((and (< (1+ i) end)
+                            (char= (char pattern (1+ i)) #\*))
+                       (push (make-doublestar-node) nodes)
+                       (incf i 2))
+                      ;; Just a single *
+                      (t
+                       (push (make-star-node) nodes)
+                       (incf i))))
 
                    (#\?
                     (flush-literal)
@@ -481,26 +523,6 @@ Examples:
     (string path)
     (pathname (namestring path))))
 
-(defun make-directory-substring-matcher (dir-name)
-  "Create a matcher that checks if pathname contains 'dir-name/' anywhere.
-
-Used for patterns like **/build/** or **/build/**/* which should match
-all files recursively within directories named 'build'."
-  (let ((search-string (concatenate 'string dir-name "/")))
-    (lambda (path)
-      (search search-string (ensure-namestring path)))))
-
-(defun make-suffix-at-any-depth-matcher (suffix-pattern)
-  "Create a matcher that tries to match suffix-pattern at any position in the pathname.
-
-Used for patterns like **/src/*.lisp which should match *.lisp anywhere
-after 'src' in the path."
-  (let ((suffix-matcher (compile-pattern suffix-pattern :pathname t)))
-    (lambda (path)
-      (let ((path-str (ensure-namestring path)))
-        (loop for i from 0 below (length path-str)
-              thereis (funcall suffix-matcher (subseq path-str i)))))))
-
 (defun compile-exclusion-pattern (pattern)
   "Compile an exclusion pattern for filtering results.
 
@@ -528,46 +550,17 @@ Examples:
   (compile-exclusion-pattern \"build/**\")      ; Same as above (recursive)
   (compile-exclusion-pattern \"**/build/**\")   ; Same as above (explicit)"
   (check-type pattern string)
-  (let ((normalized (normalize-exclusion-pattern pattern)))
-    ;; Dispatch based on pattern type
-    (cond
-      ;; No slash: match against filename only
-      ((not (find #\/ normalized))
-       (let ((matcher (compile-pattern normalized :pathname nil)))
-         (lambda (path)
-           (funcall matcher (ensure-namestring path)))))
-
-      ;; Absolute path: match literally
-      ((char= (char normalized 0) #\/)
-       (let ((matcher (compile-pattern normalized :pathname t)))
-         (lambda (path)
-           (funcall matcher (ensure-namestring path)))))
-
-      ;; Pattern starts with **/ (depth-agnostic matching)
-      ((and (>= (length normalized) 3)
-            (string= "**/" normalized :end2 3))
-       (let* ((after-doublestar (subseq normalized 3))
-              (nested-doublestar-pos (search "**/" after-doublestar)))
-         (cond
-           ;; Contains nested **/ (e.g., **/build/**/* or **/build/**/sub/**)
-           ;; Extract directory name before the nested **/
-           (nested-doublestar-pos
-            (let ((dir-name (subseq after-doublestar 0 (1- nested-doublestar-pos))))
-              (make-directory-substring-matcher dir-name)))
-
-           ;; Ends with /** (e.g., **/build/**)
-           ;; This is directory exclusion
-           ((and (>= (length after-doublestar) 3)
-                 (string= "/**" after-doublestar
-                          :start2 (- (length after-doublestar) 3)))
-            (let ((dir-name (subseq after-doublestar 0
-                                    (- (length after-doublestar) 3))))
-              (make-directory-substring-matcher dir-name)))
-
-           ;; Regular suffix pattern (e.g., **/src/*.lisp)
-           (t
-            (make-suffix-at-any-depth-matcher after-doublestar)))))
-
-      ;; Should not reach here (normalize-exclusion-pattern should handle all cases)
-      (t
-       (error "Unexpected exclusion pattern form: ~S" normalized)))))
+  (cond
+    ((find #\/ pattern :test 'char=)
+     (let* ((normalized (normalize-exclusion-pattern pattern))
+            (compiled-pattern (compile-pattern normalized)))
+       (lambda (path)
+         (funcall compiled-pattern (ensure-namestring path)))))
+    (t
+     ;; When there's no slash, it matches all files and directories that have the pattern as their name.
+     (let ((as-file (compile-pattern (format nil "**/~A" pattern)))
+           (as-dir (compile-pattern (format nil "**/~A/**" pattern))))
+       (lambda (path)
+         (let ((path-str (ensure-namestring path)))
+           (or (funcall as-file path-str)
+               (funcall as-dir path-str))))))))
