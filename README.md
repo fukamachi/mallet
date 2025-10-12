@@ -6,16 +6,11 @@ A Common Lisp linter focused on catching real mistakes without enforcing subject
 
 ## Philosophy
 
-Works immediately. Grows with your needs.
+Malo works out of the box. Its default rules detect only clear issues—definite mistakes and widely accepted style problems. This keeps the output useful and free from noise.
 
-Run Malo without configuration—it catches real mistakes, not style preferences.
-Unused variables, wrong patterns, obvious bugs. Zero setup, zero noise.
+Projects differ, and so do their rules. Malo also provides a growing set of optional checks that you can enable as needed.
 
-Need more? Enable additional rules. Teams have different standards. Projects
-have different constraints. Malo provides comprehensive rules like ESLint,
-but lets you choose what matters.
-
-Good defaults don't require configuration. Good tools don't limit customization.
+A simple start, with room to grow.
 
 ## Installation
 
