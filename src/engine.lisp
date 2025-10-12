@@ -120,25 +120,35 @@
 
 (defun lint-file (file &key registry config)
   "Lint a single FILE using REGISTRY rules and CONFIG.
-Returns a list of VIOLATION objects."
+Returns (values violations ignored-p).
+If ignored-p is T, the file was ignored and violations will be NIL."
   (check-type file pathname)
-
-  (setf config
-        (or config
-            (let ((config-file (config:find-config-file (uiop:pathname-directory-pathname file))))
-              (if config-file
-                  (let ((config (config:load-config config-file)))
-                    (config:apply-overrides-for-file config file
-                                                     :root-dir (uiop:pathname-directory-pathname config-file)))
-                  (config:get-built-in-config)))))
-
-  (setf registry (or registry (make-registry-from-config config)))
-
-  (check-type registry rules:registry)
-  (check-type config config:config)
 
   (unless (probe-file file)
     (error "File not found: ~A" file))
+
+  ;; Load or use provided config
+  (let ((config-file (when (not config)
+                       (config:find-config-file (uiop:pathname-directory-pathname file)))))
+    ;; Check if explicitly provided config ignores this file
+    (when (and config (config:file-ignored-p config file))
+      (return-from lint-file (values nil t)))
+
+    (setf config
+          (or config
+              (if config-file
+                  (let ((loaded-config (config:load-config config-file)))
+                    ;; Check if file should be ignored before applying overrides
+                    (when (config:file-ignored-p loaded-config file)
+                      (return-from lint-file (values nil t)))
+                    ;; Apply path-specific overrides
+                    (config:apply-overrides-for-file loaded-config file))
+                  (config:get-built-in-config))))
+
+    (setf registry (or registry (make-registry-from-config config)))
+
+    (check-type registry rules:registry)
+    (check-type config config:config))
 
   (let ((text (uiop:read-file-string file))
         (violations '())
@@ -228,9 +238,12 @@ Returns a list of VIOLATION objects."
 
 (defun lint-files (files &key registry config)
   "Lint multiple FILES using REGISTRY rules and CONFIG.
-Returns an alist mapping file paths to violation lists."
+Returns an alist mapping file paths to violation lists.
+Ignored files are excluded from results entirely."
   (check-type files list)
 
   (loop for file in files
-        for violations = (lint-file file :registry registry :config config)
+        for (violations ignored-p) = (multiple-value-list
+                                      (lint-file file :registry registry :config config))
+        unless ignored-p
         collect (cons file violations)))

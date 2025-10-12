@@ -55,6 +55,11 @@ Create `.malo.lisp` in your project root:
 (:malo-config
  (:extends :default)  ; or :all
 
+ ;; Ignore files/directories (uses glob patterns)
+ (:ignore "**/example.lisp"         ; ignore at any level
+          "**/*-generated.lisp"     ; ignore generated files
+          "vendor/**/*.lisp")       ; ignore vendor directory
+
  ;; Enable rules with options
  (:enable :line-length :max-length 100)
  (:enable :consecutive-blank-lines :max-lines 2)

@@ -13,7 +13,10 @@
            #:get-built-in-config
            #:find-config-file
            #:config-overrides
+           #:config-ignore
+           #:config-root-dir
            #:apply-overrides-for-file
+           #:file-ignored-p
            #:*default-preset*))
 (in-package #:malo/config)
 
@@ -32,16 +35,29 @@
     :initform nil
     :accessor config-extends
     :documentation "Base config to extend from")
+   (ignore
+    :initarg :ignore
+    :initform '()
+    :accessor config-ignore
+    :documentation "List of glob patterns for files to ignore")
    (overrides
     :initarg :overrides
     :initform '()
     :accessor config-overrides
-    :documentation "List of (patterns . config) for path-specific overrides"))
+    :documentation "List of (patterns . config) for path-specific overrides")
+   (root-dir
+    :initarg :root-dir
+    :initform nil
+    :accessor config-root-dir
+    :documentation "Root directory where config file is located (nil for built-in configs)"))
   (:documentation "Configuration for Malo linter."))
 
-(defun make-config (&key rules extends overrides)
-  "Create a new config with RULES, optional EXTENDS, and path OVERRIDES."
-  (let ((cfg (make-instance 'config :extends extends :overrides (or overrides '()))))
+(defun make-config (&key rules extends ignore overrides)
+  "Create a new config with RULES, optional EXTENDS, IGNORE patterns, and path OVERRIDES."
+  (let ((cfg (make-instance 'config
+                            :extends extends
+                            :ignore (or ignore '())
+                            :overrides (or overrides '()))))
     (when rules
       (dolist (rule-spec rules)
         (let ((rule-name (first rule-spec))
@@ -94,7 +110,7 @@ Otherwise, treat as directory and expand to 'dir/**/*.{lisp,asd}'."
 
 (defun parse-config (sexp)
   "Parse S-expression SEXP into a config object.
-Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-paths ...)."
+Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...), and (:for-paths ...)."
   (check-type sexp list)
 
   (unless (eq (first sexp) :malo-config)
@@ -102,6 +118,7 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-path
 
   (let ((extends nil)
         (rules '())
+        (ignore-patterns '())
         (overrides '()))
 
     ;; Parse top-level options
@@ -123,6 +140,9 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-path
                   ;; New syntax: (:disable :rule-name)
                   (let ((rule-name (second item)))
                     (push (cons rule-name '(:enabled nil)) rules)))
+                 (:ignore
+                  ;; Ignore patterns: (:ignore "pattern1" "pattern2" ...)
+                  (setf ignore-patterns (rest item)))
                  (:for-paths
                   ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
                   (let* ((patterns (second item))
@@ -134,6 +154,7 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-path
 
     (make-config :rules (nreverse rules)
                  :extends extends
+                 :ignore ignore-patterns
                  :overrides (nreverse overrides))))
 
 (defun parse-override-rules (override-forms)
@@ -155,7 +176,8 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-path
 ;;; Config file loading
 
 (defun load-config (path)
-  "Load configuration from file at PATH."
+  "Load configuration from file at PATH.
+Sets root-dir to the directory containing the config file."
   (let ((pathname (etypecase path
                     (string (uiop:parse-native-namestring path))
                     (pathname path))))
@@ -163,8 +185,11 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-path
       (error "Config file not found: ~A" pathname))
 
     (with-open-file (in pathname :direction :input)
-      (let ((sexp (read in)))
-        (parse-config sexp)))))
+      (let* ((sexp (read in))
+             (config (parse-config sexp)))
+        ;; Set root-dir to the directory containing the config file
+        (setf (config-root-dir config) (uiop:pathname-directory-pathname pathname))
+        config))))
 
 ;;; Config merging
 
@@ -199,6 +224,10 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), and (:for-path
              (setf (gethash rule-name (config-rules merged))
                    (a:copy-hash-table override-options)))))
      (config-rules override))
+
+    ;; Merge ignore patterns (base + override)
+    (setf (config-ignore merged)
+          (append (config-ignore base) (config-ignore override)))
 
     ;; Keep base's extends if override doesn't have one
     (unless (config-extends override)
@@ -276,15 +305,15 @@ Useful for exploration and discovering what rules exist."
 
 ;;; Path-based overrides
 
-(defun apply-overrides-for-file (config file-path &key root-dir)
+(defun apply-overrides-for-file (config file-path)
   "Apply path-specific overrides from CONFIG for FILE-PATH.
 Returns a new config with matching overrides merged in."
   (check-type config config)
   (check-type file-path pathname)
-  (check-type root-dir (or null pathname))
 
   (let ((merged-config config)
-        (file-namestring (namestring file-path)))
+        (file-namestring (namestring file-path))
+        (root-dir (config-root-dir config)))
     ;; Process each override entry
     (dolist (override-entry (config-overrides config))
       (let ((patterns (car override-entry))
@@ -297,6 +326,40 @@ Returns a new config with matching overrides merged in."
           ;; Merge this override into the accumulated config
           (setf merged-config (merge-configs merged-config override-config)))))
     merged-config))
+
+(defun file-ignored-p (config file-path)
+  "Check if FILE-PATH should be ignored according to CONFIG's ignore patterns.
+Returns T if the file matches any ignore pattern, NIL otherwise.
+Recursively checks parent configs via :extends."
+  (check-type config config)
+  (check-type file-path pathname)
+
+  (unless (config-root-dir config)
+    (return-from file-ignored-p nil))
+
+  (let* ((root-dir (config-root-dir config))
+         (ignore-patterns (config-ignore config))
+         ;; If we have a root-dir, make file-path relative to it for matching
+         ;; This allows patterns like **/file.lisp to match file.lisp at any level
+         (match-path (let* ((file-namestring (namestring file-path))
+                            (root-namestring (namestring root-dir)))
+                       ;; If file is under root-dir, make it relative
+                       (if (and (>= (length file-namestring) (length root-namestring))
+                                (string= file-namestring root-namestring
+                                         :end1 (length root-namestring)))
+                           ;; Remove root-dir prefix to get relative path
+                           (concatenate 'string
+                                        '(#\/)
+                                        (subseq file-namestring (length root-namestring)))
+                           ;; File not under root-dir, use full path
+                           file-namestring))))
+    ;; Check if any ignore pattern in current config matches the file
+    (or (some (lambda (pattern)
+                (glob:glob-exclusion-match pattern match-path))
+              ignore-patterns)
+        ;; If not matched in current config, check parent config
+        (when (config-extends config)
+          (file-ignored-p (config-extends config) file-path)))))
 
 ;;; Config file discovery
 

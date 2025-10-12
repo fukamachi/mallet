@@ -67,6 +67,7 @@
   :components
   ((:file "errors-test")
    (:file "config-test")
+   (:file "config-ignore-test")
 
    (:module "parser"
     :pathname "parser"
