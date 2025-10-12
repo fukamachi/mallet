@@ -1,0 +1,27 @@
+Today we release ASDF 3.3.7, "Robbie Burns Night 2024 (belated)," the seventh bugfix release for the 3.3 release series.  I had hoped that this would be the last bugfix release, but "the best laid schemes o' Mice an' Men Gang aft agley."
+
+We urge implementations that are currently bundling previous versions of ASDF to upgrade to 3.3.7 at their earliest convenience.  This is particularly true for Allegro and SBCL.  A primary purpose of the 3.3.7 was to give compatibility with Allegro 11.0. There is also a fix for multi-threaded vs. single-threaded FASLs that should be very useful to SBCL users.
+
+As maintainer, my primary role continues to be coordination and some limited quality control.  Many contributors and bug-reporters have made this possible and the Common Lisp community owes them a vote of thanks.  Their names are listed on the Changelog, appended below. The Changelog is in Debian format, for historical reasons: we used to release a Debian package, but have lost that capability (if you would like to volunteer to do this, please contact me directly or on the ASDF-devel mailing list).
+
+Hope springs eternal that the next release will be 3.4, that will introduce new functionality but, as its numbering suggests, will be backward compatible.
+
+Best,
+Robert
+
+cl-asdf (2:3.3.7-1) unstable; urgency=low
+* Fix bugs in UIOP:WITH-TEMPORARY-FILE, #142.
+* Fix bug in (SETF UIOP:GETENV).  H/T to Michaël Le Barbier, #146.
+* Remember whether or not an SBCL build is single- or multi-threaded,
+	since the two give incompatible FASLs. H/T to Philipp Marek, #143.
+* Remove unused UIOP:WITH-OPTIMIZATION-SETTINGS. This macro was never
+	used, nor was its coding finished and debugged. H/T Yehouda
+	Harpaz. #148.
+* Fix a number of issues with Allegro 11 compatibility.  Many thanks to
+	Duane Rettig and Kevin Layer. #152, #141
+* Fix DEFPACKAGE code-walker for PACKAGE-INFERRED-SYSTEMs. Thanks to
+	Alexander Fedorov. #147.
+* Thanks to Alexander Fedorov for assistance with the CI infrastructure.
+* Thanks to François-René Rideau for assistance in understanding past
+	versions of ASDF and with miscellaneous repairs.
+-- Robert P. Goldman <rpgoldman@sift.net> Sun Jan 28 11:06:39 CST 2024

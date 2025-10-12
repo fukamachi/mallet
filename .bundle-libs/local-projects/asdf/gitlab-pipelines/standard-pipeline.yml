@@ -1,0 +1,181 @@
+###############################################################################
+# Global configuration
+###############################################################################
+
+variables:
+  # Just let the runner fetch and update the submodules for us.
+  GIT_SUBMODULE_STRATEGY: normal
+  I_AGREE_TO_ALLEGRO_EXPRESS_LICENSE: "yes"
+
+# Split regression testing into a separate stage than upgrade tests. The
+# upgrade tests tend to run slower and are generally less important than
+# regression tests for most changes.
+stages:
+  - build
+  - regression
+  - upgrade
+
+# This is needed otherwise the jobs won't always be added to MR pipelines. We
+# can just say when: always because this is run as a child pipeline and only
+# triggered under the desired conditions.
+workflow:
+  rules:
+    - when: always
+
+###############################################################################
+# Build jobs
+###############################################################################
+
+Build ASDF:
+  stage: build
+  image: containers.common-lisp.net/cl-docker-images/sbcl:latest
+  script:
+    - make
+  artifacts:
+    when: always
+    paths:
+      - build/asdf.lisp
+
+Build docs:
+  stage: build
+  image: buildpack-deps:buster
+  script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends texinfo texlive
+    - make -C doc
+  artifacts:
+    when: always
+    paths:
+      - doc/asdf.html
+      - doc/asdf.info
+      - doc/asdf.pdf
+      - doc/*.log
+
+###############################################################################
+# Regression tests
+###############################################################################
+
+.Regression test template:
+  stage: regression
+  image: $IMAGE
+  variables:
+    IMAGE_TAG: latest
+    IMAGE: containers.common-lisp.net/cl-docker-images/$l:$IMAGE_TAG
+  script:
+    - export l=$l$variant
+    - make
+    - make test
+  artifacts:
+    when: always
+    paths:
+      - build/results
+  needs: []
+  retry:
+    max: 2
+    when:
+      - job_execution_timeout
+
+Regression test:
+  extends: .Regression test template
+  parallel:
+    matrix:
+      - l: [abcl, ccl, clisp, cmucl, ecl, sbcl]
+        IMAGE_TAG: latest
+      # Use only bullseye images; bookworm images seem
+      # incompatible with the runner.
+      - l: ccl
+        IMAGE: rpgoldman/ccl:1.13-bullseye
+      - l: sbcl
+        IMAGE: rpgoldman/sbcl:2.4.6-bullseye
+      - l: clasp
+        IMAGE_TAG: "b14e329f49998275579926da2a737885ceb2cea7"
+      # drop ancient ABCL version
+      # - l: abcl
+      #   IMAGE_TAG: 1.7.1-jdk8
+      - l: allegro
+        IMAGE: rpgoldman/allegro11express
+      - l: allegro
+        IMAGE: rpgoldman/allegro11express
+        variant: modern
+
+###############################################################################
+# Upgrade tests
+###############################################################################
+
+.Upgrade test template:
+  stage: upgrade
+  image: $IMAGE
+  variables:
+    IMAGE_TAG: latest
+    IMAGE: containers.common-lisp.net/cl-docker-images/$l:$IMAGE_TAG
+  script:
+    - export l=$l$variant
+    - make
+    - make test-upgrade
+  artifacts:
+    when: always
+    paths:
+      - build/results/$l-upgrade.text
+  needs: []
+  rules:
+    - if: $RUN_UPGRADE_TESTS
+
+Upgrade test:
+  extends: .Upgrade test template
+  parallel:
+    matrix:
+      - l: [abcl, ccl, clisp, cmucl, ecl, sbcl]
+        IMAGE_TAG: latest
+      - l: clasp
+        IMAGE_TAG: "b14e329f49998275579926da2a737885ceb2cea7"
+      - l: allegro
+        IMAGE: rpgoldman/allegro11express
+      - l: allegro
+        IMAGE: rpgoldman/allegro11express
+        variant: modern
+
+# No more tests are known to fail. But leave commented out in case it needs to
+# be resurrected.
+
+# Upgrade test known failure:
+#   extends: .Upgrade test template
+#   parallel:
+#     matrix:
+#       - l: []
+#         IMAGE_TAG: latest
+#   allow_failure: true
+
+.REQUIRE upgrade test template:
+  extends: .Upgrade test template
+  rules:
+    - if: $RUN_UPGRADE_TESTS
+      when: never
+    - when: on_success
+
+REQUIRE upgrade test:
+  extends: .REQUIRE upgrade test template
+  variables:
+    ASDF_UPGRADE_TEST_TAGS: REQUIRE
+  parallel:
+    matrix:
+      - l: [abcl, ccl, clisp, cmucl, ecl, sbcl]
+        IMAGE_TAG: latest
+      - l: allegro
+        IMAGE: rpgoldman/allegro11express
+      - l: allegro
+        IMAGE: rpgoldman/allegro11express
+        variant: modern
+
+
+# No more tests are known to fail. But leave commented out in case it needs to
+# be resurrected.
+
+REQUIRE upgrade test known failure:
+  extends: .REQUIRE upgrade test template
+  variables:
+    ASDF_UPGRADE_TEST_TAGS: REQUIRE
+  parallel:
+    matrix:
+      - l: [clasp]
+        IMAGE_TAG: "b14e329f49998275579926da2a737885ceb2cea7"
+  allow_failure: true
