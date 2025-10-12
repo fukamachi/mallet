@@ -17,6 +17,9 @@
    (:file "utils")
    (:file "utils/scope")
 
+   ;; Error conditions
+   (:file "errors")
+
    ;; Core data structures
    (:file "violation")
    (:file "parser")
@@ -62,7 +65,8 @@
                "rove")
   :pathname "tests"
   :components
-  ((:file "config-test")
+  ((:file "errors-test")
+   (:file "config-test")
 
    (:module "parser"
     :pathname "parser"

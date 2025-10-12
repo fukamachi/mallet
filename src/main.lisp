@@ -7,7 +7,8 @@
    (#:a #:alexandria)
    (#:engine #:malo/engine)
    (#:config #:malo/config)
-   (#:formatter #:malo/formatter))
+   (#:formatter #:malo/formatter)
+   (#:errors #:malo/errors))
   (:export #:main
            #:lint-file
            #:lint-files
@@ -71,7 +72,8 @@
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug files)."
+Returns (values format config-path preset debug files).
+Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
         (preset nil)
@@ -83,24 +85,30 @@ Returns (values format config-path preset debug files)."
           ((string= arg "--format")
            (let ((fmt (pop args)))
              (unless fmt
-               (error "Missing value for --format"))
+               (error 'errors:missing-option-value :option "--format"))
              (setf format (cond
                             ((string= fmt "text") :text)
                             ((string= fmt "json") :json)
-                            (t (error "Unknown format: ~A (must be 'text' or 'json')" fmt))))))
+                            (t (error 'errors:invalid-format
+                                      :option "--format"
+                                      :value fmt
+                                      :expected "text or json"))))))
           ((string= arg "--config")
            (let ((path (pop args)))
              (unless path
-               (error "Missing value for --config"))
+               (error 'errors:missing-option-value :option "--config"))
              (setf config-path path)))
           ((string= arg "--preset")
            (let ((preset-name (pop args)))
              (unless preset-name
-               (error "Missing value for --preset"))
+               (error 'errors:missing-option-value :option "--preset"))
              (setf preset (cond
                             ((string= preset-name "default") :default)
                             ((string= preset-name "all") :all)
-                            (t (error "Unknown preset: ~A (must be 'default' or 'all')" preset-name))))))
+                            (t (error 'errors:invalid-preset
+                                      :option "--preset"
+                                      :value preset-name
+                                      :expected "default or all"))))))
           ((string= arg "--all")
            (setf preset :all))
           ((string= arg "--debug")
@@ -112,7 +120,7 @@ Returns (values format config-path preset debug files)."
            (format t "Malo version 0.1.0~%")
            (uiop:quit 0))
           ((and (> (length arg) 0) (char= (char arg 0) #\-))
-           (error "Unknown option: ~A" arg))
+           (error 'errors:unknown-option :option arg))
           (t
            (push arg files)))))
     (values format config-path preset debug (nreverse files))))
@@ -172,7 +180,7 @@ Handles wildcards and directories, excluding common non-source directories."
             ((probe-file path)
              (push path files))
             (t
-             (error "File not found: ~A" arg))))))
+             (error 'errors:file-not-found :path arg))))))
     (nreverse files)))
 
 (defun has-errors-p (results)
@@ -201,39 +209,54 @@ Lints files specified in ARGS and exits with appropriate status code."
          (args (if (equal (first args) "--")
                    (rest args)
                    args)))
-    (handler-bind ((error (lambda (e)
-                            (format *error-output* "Fatal error: ~A~%" e)
-                            (uiop:print-condition-backtrace e)
-                            (uiop:quit 3))))
-      (multiple-value-bind (format config-path preset debug file-args)
-          (parse-args args)
+    (handler-case
+        (handler-bind
+            ;; Handle CLI errors with nice messages, no stacktrace
+            ((errors:cli-error
+              (lambda (e)
+                (format *error-output* "Error: ~A~%" e)
+                (uiop:quit 3)))
+             ;; Handle unexpected errors with stacktrace
+             (error
+              (lambda (e)
+                (format *error-output* "Fatal error: ~A~%" e)
+                (when *debug-mode*
+                  (uiop:print-condition-backtrace e))
+                (uiop:quit 3))))
 
-        ;; Enable debug mode if requested
-        (setf *debug-mode* debug)
+          (multiple-value-bind (format config-path preset debug file-args)
+              (parse-args args)
 
-        ;; Validate we have files to lint
-        (when (null file-args)
-          (format *error-output* "Error: No files specified~%~%")
-          (print-help)
-          (uiop:quit 3))
+            ;; Enable debug mode if requested
+            (setf *debug-mode* debug)
 
-        (let* ((files (expand-file-args file-args))
-               (config:*default-preset* (or preset :default))
-               (results (engine:lint-files files
-                                           :config (and config-path
-                                                        (config:load-config config-path)))))
+            ;; Validate we have files to lint
+            (when (null file-args)
+              (print-help)
+              (uiop:quit 1))
 
-          ;; Format output
-          (ecase format
-            (:text (formatter:format-text results))
-            (:json (formatter:format-json results)))
+            (let* ((files (expand-file-args file-args))
+                   (config:*default-preset* (or preset :default))
+                   (results (engine:lint-files files
+                                               :config (and config-path
+                                                            (config:load-config config-path)))))
 
-          ;; Exit with appropriate status
-          ;; Exit 2: ERROR severity (objectively wrong)
-          ;; Exit 1: Any other violations (WARNING/CONVENTION/FORMAT/INFO)
-          ;; Exit 0: No violations
-          ;; Teams control strictness via config (enable/disable rules)
-          (cond
-            ((has-errors-p results) (uiop:quit 2))
-            ((has-violations-p results) (uiop:quit 1))
-            (t (uiop:quit 0))))))))
+              ;; Format output
+              (ecase format
+                (:text (formatter:format-text results))
+                (:json (formatter:format-json results)))
+
+              ;; Exit with appropriate status
+              ;; Exit 2: ERROR severity (objectively wrong)
+              ;; Exit 1: Any other violations (WARNING/CONVENTION/FORMAT/INFO)
+              ;; Exit 0: No violations
+              ;; Teams control strictness via config (enable/disable rules)
+              (cond
+                ((has-errors-p results) (uiop:quit 2))
+                ((has-violations-p results) (uiop:quit 1))
+                (t (uiop:quit 0))))))
+      ;; Catch explicit exit to ensure we don't suppress intentional quits
+      (#+sbcl sb-sys:interactive-interrupt
+       #-sbcl error ()
+       (format *error-output* "~&Interrupted.~%")
+       (uiop:quit 130)))))
