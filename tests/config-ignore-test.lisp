@@ -39,21 +39,5 @@
     (let ((cfg (config:parse-config '(:malo-config (:extends :default)))))
       (ok (not (config:file-ignored-p cfg #P"/project/anything.lisp"))))))
 
-(deftest merge-configs-with-ignore
-  (testing "Merge ignore patterns from base and override"
-    (let* ((base (config:make-config :ignore '("vendor/")))
-           (override (config:make-config :ignore '("build/")))
-           (merged (config:merge-configs base override)))
-      (ok (equal (config:config-ignore merged) '("vendor/" "build/")))))
-
-  (testing "Override with empty ignore list"
-    (let* ((base (config:make-config :ignore '("vendor/")))
-           (override (config:make-config))
-           (merged (config:merge-configs base override)))
-      (ok (equal (config:config-ignore merged) '("vendor/")))))
-
-  (testing "Base with empty ignore list"
-    (let* ((base (config:make-config))
-           (override (config:make-config :ignore '("build/")))
-           (merged (config:merge-configs base override)))
-      (ok (equal (config:config-ignore merged) '("build/"))))))
+;; Note: merge-configs was removed during refactoring
+;; Merging is now handled internally by parse-config when using :extends

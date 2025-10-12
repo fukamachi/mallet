@@ -4,10 +4,12 @@
    (#:base #:malo/rules/base)
    (#:violation #:malo/violation))
   (:export #:line-length-rule
+           #:line-length-rule-max-length
            #:trailing-whitespace-rule
            #:no-tabs-rule
            #:final-newline-rule
-           #:consecutive-blank-lines-rule))
+           #:consecutive-blank-lines-rule
+           #:consecutive-blank-lines-rule-max))
 (in-package #:malo/rules/text)
 
 ;;; Line length rule

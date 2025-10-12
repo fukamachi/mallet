@@ -80,8 +80,7 @@
    (:module "rules"
     :pathname "rules"
     :components
-    ((:file "registry-test")
-     (:file "line-length-test")
+    ((:file "line-length-test")
      (:file "if-without-else-test")
      (:file "bare-progn-in-if-test")
      (:file "missing-otherwise-test")

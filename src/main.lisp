@@ -15,13 +15,7 @@
            ;; Debug mode
            #:*debug-mode*
            ;; Public API for library use
-           #:*rule-registry*
-           #:make-registry
-           #:register-rule
-           #:find-rule
-           #:list-rules
-           #:enable-rule
-           #:disable-rule
+           #:make-rule
            ;; Configuration
            #:load-config
            #:make-config

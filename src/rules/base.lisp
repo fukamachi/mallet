@@ -15,11 +15,6 @@
            #:rule-file-types
            #:enable-rule
            #:disable-rule
-           #:registry
-           #:make-registry
-           #:register-rule
-           #:find-rule
-           #:list-rules
            #:symbol-name-from-string
            #:symbol-matches-p
            #:coalton-form-p
@@ -75,51 +70,6 @@
 (defun disable-rule (rule)
   "Disable RULE."
   (setf (rule-enabled-p rule) nil))
-
-;;; Registry
-
-(defclass registry ()
-  ((rules
-    :initform (make-hash-table :test 'eq)
-    :accessor registry-rules
-    :documentation "Hash table mapping rule names to rule objects"))
-  (:documentation "Registry for managing linting rules."))
-
-(defun make-registry ()
-  "Create a new rule registry."
-  (make-instance 'registry))
-
-(defun register-rule (registry name &key description severity (type :form)
-                                      (enabled t) (file-types '(:lisp)))
-  "Register a new rule in REGISTRY with NAME and properties."
-  (check-type registry registry)
-  (check-type name keyword)
-  (check-type description string)
-  (check-type severity (member :error :warning :convention :format :info))
-  (check-type type (member :text :token :form :pattern))
-  (check-type enabled boolean)
-  (check-type file-types list)
-
-  (let ((rule (make-instance 'rule
-                             :name name
-                             :description description
-                             :severity severity
-                             :type type
-                             :enabled enabled
-                             :file-types file-types)))
-    (setf (gethash name (registry-rules registry)) rule)
-    rule))
-
-(defun find-rule (registry name)
-  "Find a rule by NAME in REGISTRY, returning NIL if not found."
-  (check-type registry registry)
-  (check-type name keyword)
-  (gethash name (registry-rules registry)))
-
-(defun list-rules (registry)
-  "List all rules in REGISTRY."
-  (check-type registry registry)
-  (a:hash-table-values (registry-rules registry)))
 
 ;;; Helper functions for string-based symbol handling
 

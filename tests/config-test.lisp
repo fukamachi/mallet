@@ -2,7 +2,8 @@
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:config #:malo/config)))
+   (#:config #:malo/config)
+   (#:rules #:malo/rules)))
 (in-package #:malo/tests/config)
 
 ;;; Config data structure tests
@@ -13,14 +14,14 @@
       (ok (not (null cfg)))
       (ok (typep cfg 'config:config))))
 
-  (testing "Create config with options (internal representation)"
+  (testing "Create config with rules"
     (let ((cfg (config:make-config
-                :rules '((:line-length :enabled t :max-length 100)
-                         (:if-without-else :enabled nil)))))
+                :rules (list (rules:make-rule :line-length :max-length 100)
+                             (rules:make-rule :if-without-else))
+                :disabled-rules '(:if-without-else))))
       (ok (not (null cfg)))
-      (ok (config:rule-enabled-p cfg :line-length))
-      (ok (not (config:rule-enabled-p cfg :if-without-else)))
-      (ok (= 100 (config:get-rule-option cfg :line-length :max-length))))))
+      (ok (= 2 (length (config:config-rules cfg))))
+      (ok (member :if-without-else (config:config-disabled-rules cfg))))))
 
 ;;; Config parsing tests
 
@@ -29,20 +30,23 @@
     (let* ((sexp '(:malo-config
                    (:enable :line-length :max-length 120)))
            (cfg (config:parse-config sexp)))
-      (ok (config:rule-enabled-p cfg :line-length))
-      (ok (= 120 (config:get-rule-option cfg :line-length :max-length)))))
+      (ok (= 1 (length (config:config-rules cfg))))
+      (let ((rule (first (config:config-rules cfg))))
+        (ok (eq :line-length (rules:rule-name rule)))
+        (ok (= 120 (rules:line-length-rule-max-length rule))))))
 
   (testing "Parse config with :disable"
     (let* ((sexp '(:malo-config
                    (:disable :if-without-else)))
            (cfg (config:parse-config sexp)))
-      (ok (not (config:rule-enabled-p cfg :if-without-else)))))
+      (ok (member :if-without-else (config:config-disabled-rules cfg)))))
 
   (testing "Parse config with severity override"
     (let* ((sexp '(:malo-config
                    (:enable :unused-variables :severity :error)))
            (cfg (config:parse-config sexp)))
-      (ok (eq :error (config:get-rule-option cfg :unused-variables :severity))))))
+      (let ((rule (first (config:config-rules cfg))))
+        (ok (eq :error (rules:rule-severity rule)))))))
 
 ;;; Config file loading tests
 
@@ -62,26 +66,10 @@
                               (:enable :line-length :max-length 100))"))
       (with-temporary-config (config-content tmpfile)
         (let ((cfg (config:load-config tmpfile)))
-          (ok (config:rule-enabled-p cfg :line-length))
-          (ok (= 100 (config:get-rule-option cfg :line-length :max-length))))))))
-
-;;; Config merging tests
-
-(deftest merge-configs
-  (testing "Merge two configs"
-    (let ((base (config:make-config
-                 :rules '((:line-length :enabled t :max-length 80)
-                          (:if-without-else :enabled t))))
-          (override (config:make-config
-                    :rules '((:line-length :max-length 120)
-                             (:unused-variables :enabled t)))))
-      (let ((merged (config:merge-configs base override)))
-        ;; line-length should have overridden max-length
-        (ok (= 120 (config:get-rule-option merged :line-length :max-length)))
-        ;; if-without-else should still be enabled from base
-        (ok (config:rule-enabled-p merged :if-without-else))
-        ;; unused-variables should be added from override
-        (ok (config:rule-enabled-p merged :unused-variables))))))
+          (ok (= 1 (length (config:config-rules cfg))))
+          (let ((rule (first (config:config-rules cfg))))
+            (ok (eq :line-length (rules:rule-name rule)))
+            (ok (= 100 (rules:line-length-rule-max-length rule)))))))))
 
 ;;; Built-in config tests
 
@@ -89,23 +77,28 @@
   (testing "Load default config"
     (let ((cfg (config:get-built-in-config :default)))
       (ok (not (null cfg)))
-      ;; Universally-accepted rules should be enabled
-      (ok (config:rule-enabled-p cfg :trailing-whitespace))
-      (ok (config:rule-enabled-p cfg :no-tabs))
-      (ok (config:rule-enabled-p cfg :unused-variables))
-      (ok (config:rule-enabled-p cfg :if-without-else))
-      (ok (config:rule-enabled-p cfg :special-variable-naming))
-      ;; Style preferences should be disabled
-      (ok (not (config:rule-enabled-p cfg :line-length)))
-      (ok (not (config:rule-enabled-p cfg :constant-naming)))))
+      ;; Check that some rules are in the enabled list
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :no-tabs rule-names))
+        (ok (member :unused-variables rule-names))
+        (ok (member :if-without-else rule-names))
+        (ok (member :special-variable-naming rule-names)))
+      ;; Check that some rules are disabled
+      (let ((disabled (config:config-disabled-rules cfg)))
+        (ok (member :line-length disabled))
+        (ok (member :constant-naming disabled)))))
 
   (testing "Load all config"
     (let ((cfg (config:get-built-in-config :all)))
       (ok (not (null cfg)))
-      ;; All rules should be enabled
-      (ok (config:rule-enabled-p cfg :line-length))
-      (ok (config:rule-enabled-p cfg :trailing-whitespace))
-      (ok (config:rule-enabled-p cfg :if-without-else)))))
+      ;; All rules should be enabled (none in disabled list)
+      (ok (null (config:config-disabled-rules cfg)))
+      ;; Check that various rules are present
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :line-length rule-names))
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :if-without-else rule-names))))))
 
 ;;; Config extends tests
 
@@ -116,24 +109,31 @@
                    (:enable :line-length :max-length 100)))
            (cfg (config:parse-config sexp)))
       ;; Should inherit all rules from :all
-      (ok (config:rule-enabled-p cfg :line-length))
-      (ok (config:rule-enabled-p cfg :trailing-whitespace))
-      ;; But override specific options
-      (ok (= 100 (config:get-rule-option cfg :line-length :max-length))))))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :line-length rule-names))
+        (ok (member :trailing-whitespace rule-names)))
+      ;; Check that line-length has the overridden max-length
+      (let ((line-length-rule (find :line-length (config:config-rules cfg)
+                                     :key #'rules:rule-name)))
+        (ok (= 100 (rules:line-length-rule-max-length line-length-rule)))))))
 
 (deftest parse-new-syntax-enable
   (testing "Parse config with :enable syntax"
     (let* ((sexp '(:malo-config
                    (:enable :line-length :max-length 120)))
            (cfg (config:parse-config sexp)))
-      (ok (config:rule-enabled-p cfg :line-length))
-      (ok (= 120 (config:get-rule-option cfg :line-length :max-length)))))
+      (ok (= 1 (length (config:config-rules cfg))))
+      (let ((rule (first (config:config-rules cfg))))
+        (ok (eq :line-length (rules:rule-name rule)))
+        (ok (= 120 (rules:line-length-rule-max-length rule))))))
 
   (testing "Parse config with :enable without options"
     (let* ((sexp '(:malo-config
                    (:enable :unused-variables)))
            (cfg (config:parse-config sexp)))
-      (ok (config:rule-enabled-p cfg :unused-variables))))
+      (ok (= 1 (length (config:config-rules cfg))))
+      (let ((rule (first (config:config-rules cfg))))
+        (ok (eq :unused-variables (rules:rule-name rule))))))
 
   (testing "Parse config with multiple :enable forms"
     (let* ((sexp '(:malo-config
@@ -141,11 +141,20 @@
                    (:enable :unused-variables :severity :error)
                    (:enable :special-variable-naming)))
            (cfg (config:parse-config sexp)))
-      (ok (config:rule-enabled-p cfg :line-length))
-      (ok (= 100 (config:get-rule-option cfg :line-length :max-length)))
-      (ok (config:rule-enabled-p cfg :unused-variables))
-      (ok (eq :error (config:get-rule-option cfg :unused-variables :severity)))
-      (ok (config:rule-enabled-p cfg :special-variable-naming)))))
+      (ok (= 3 (length (config:config-rules cfg))))
+      (let ((rule-map (make-hash-table)))
+        (dolist (rule (config:config-rules cfg))
+          (setf (gethash (rules:rule-name rule) rule-map) rule))
+        ;; Check line-length
+        (let ((rule (gethash :line-length rule-map)))
+          (ok (not (null rule)))
+          (ok (= 100 (rules:line-length-rule-max-length rule))))
+        ;; Check unused-variables
+        (let ((rule (gethash :unused-variables rule-map)))
+          (ok (not (null rule)))
+          (ok (eq :error (rules:rule-severity rule))))
+        ;; Check special-variable-naming
+        (ok (not (null (gethash :special-variable-naming rule-map))))))))
 
 (deftest parse-new-syntax-disable
   (testing "Parse config with :disable syntax"
@@ -153,7 +162,7 @@
                    (:extends :default)
                    (:disable :constant-naming)))
            (cfg (config:parse-config sexp)))
-      (ok (not (config:rule-enabled-p cfg :constant-naming)))))
+      (ok (member :constant-naming (config:config-disabled-rules cfg)))))
 
   (testing "Parse config with multiple :disable forms"
     (let* ((sexp '(:malo-config
@@ -161,8 +170,8 @@
                    (:disable :line-length)
                    (:disable :consecutive-blank-lines)))
            (cfg (config:parse-config sexp)))
-      (ok (not (config:rule-enabled-p cfg :line-length)))
-      (ok (not (config:rule-enabled-p cfg :consecutive-blank-lines))))))
+      (ok (member :line-length (config:config-disabled-rules cfg)))
+      (ok (member :consecutive-blank-lines (config:config-disabled-rules cfg))))))
 
 ;;; Path override tests
 
@@ -175,23 +184,57 @@
                      (:disable :unused-variables))))
            (cfg (config:parse-config sexp)))
       ;; Base config should have default rules
-      (ok (config:rule-enabled-p cfg :unused-variables))
-      ;; Check that overrides are stored
-      (ok (= 1 (length (config:config-overrides cfg))))))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :unused-variables rule-names)))
+      ;; Check that path-rules are stored
+      (ok (= 1 (length (config:config-path-rules cfg))))))
 
   (testing "Parse config with directory name (shorthand)"
     (let* ((sexp '(:malo-config
                    (:for-paths ("tests" "scripts")
                      (:disable :line-length))))
            (cfg (config:parse-config sexp)))
-      ;; Check that overrides are stored
-      (ok (= 1 (length (config:config-overrides cfg))))
+      ;; Check that path-rules are stored
+      (ok (= 1 (length (config:config-path-rules cfg))))
       ;; Patterns should be expanded
-      (let* ((override (first (config:config-overrides cfg)))
-             (patterns (car override)))
+      (let* ((path-rule (first (config:config-path-rules cfg)))
+             (patterns (config:path-override-patterns path-rule)))
         (ok (= 2 (length patterns)))
         (ok (search "tests/**/*.{lisp,asd}" (first patterns)))
         (ok (search "scripts/**/*.{lisp,asd}" (second patterns)))))))
+
+;;; get-rules-for-file tests
+
+(deftest get-rules-for-file
+  (testing "Get rules for file without path-specific overrides"
+    (let ((cfg (config:get-built-in-config :default)))
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        ;; Should get base rules, minus disabled ones
+        (ok (member :trailing-whitespace rule-names))
+        (ok (not (member :line-length rule-names))))))  ; line-length is disabled
+
+  (testing "Get rules for file with path-specific overrides"
+    (let* ((sexp '(:malo-config
+                   (:enable :line-length :max-length 80)
+                   (:enable :unused-variables)
+                   (:for-paths ("tests/**/*.lisp")
+                     (:enable :line-length :max-length 120)
+                     (:disable :unused-variables))))
+           (cfg (config:parse-config sexp)))
+      ;; For a normal file, should get base rules
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :line-length rule-names))
+        (ok (member :unused-variables rule-names)))
+      ;; For a test file, should get overridden rules
+      (let* ((rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :line-length rule-names))
+        (ok (not (member :unused-variables rule-names)))  ; disabled for tests
+        ;; Check that line-length has the overridden max-length
+        (let ((line-length-rule (find :line-length rules :key #'rules:rule-name)))
+          (ok (= 120 (rules:line-length-rule-max-length line-length-rule))))))))
 
 ;;; Config discovery tests
 
