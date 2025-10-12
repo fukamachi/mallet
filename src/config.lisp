@@ -334,25 +334,26 @@ Recursively checks parent configs via :extends."
   (check-type config config)
   (check-type file-path pathname)
 
-  (unless (config-root-dir config)
-    (return-from file-ignored-p nil))
-
-  (let* ((root-dir (config-root-dir config))
+  (let* ((root-dir (or (config-root-dir config) #P"/"))
          (ignore-patterns (config-ignore config))
          ;; If we have a root-dir, make file-path relative to it for matching
          ;; This allows patterns like **/file.lisp to match file.lisp at any level
          (match-path (let* ((file-namestring (namestring file-path))
                             (root-namestring (namestring root-dir)))
                        ;; If file is under root-dir, make it relative
-                       (if (and (>= (length file-namestring) (length root-namestring))
-                                (string= file-namestring root-namestring
-                                         :end1 (length root-namestring)))
-                           ;; Remove root-dir prefix to get relative path
-                           (concatenate 'string
-                                        '(#\/)
-                                        (subseq file-namestring (length root-namestring)))
-                           ;; File not under root-dir, use full path
-                           file-namestring))))
+                       (cond
+                         ((equal root-namestring "/")
+                          file-namestring)
+                         ((and (>= (length file-namestring) (length root-namestring))
+                               (string= file-namestring root-namestring
+                                        :end1 (length root-namestring)))
+                          ;; Remove root-dir prefix to get relative path
+                          (concatenate 'string
+                                       "/"
+                                       (subseq file-namestring (length root-namestring))))
+                         (t
+                          ;; File not under root-dir, use full path
+                          file-namestring)))))
     ;; Check if any ignore pattern in current config matches the file
     (or (some (lambda (pattern)
                 (glob:glob-exclusion-match pattern match-path))
