@@ -240,7 +240,8 @@ NAME-MATCHER and TYPE-MATCHER are compiled functions (or NIL for no wildcard)."
                                   name-pattern name-matcher
                                   type-pattern type-matcher
                                   follow-symlinks visited)
-  "Walk through REMAINING-DIR-COMPONENTS using compiled matchers."
+  "Walk through REMAINING-DIR-COMPONENTS using compiled matchers.
+Uses uiop:collect-sub*directories for memory-efficient iteration."
   (if (null remaining-dir-components)
       (match-files-in-directory base-dir name-pattern name-matcher
                                 type-pattern type-matcher)
@@ -248,64 +249,84 @@ NAME-MATCHER and TYPE-MATCHER are compiled functions (or NIL for no wildcard)."
             (rest-components (rest remaining-dir-components))
             (results nil))
 
-        ;; Get subdirectories, filtering symlinks if needed
-        (let ((all-subdirs (uiop:subdirectories base-dir)))
-          (let ((subdirs (if follow-symlinks
-                             all-subdirs
-                             (remove-if #'symlink-p all-subdirs))))
+        ;; Handle ** pattern specially
+        (cond
+          ((string= current-component "**")
+           ;; ** matches zero or more directory levels
+           ;; First, try matching at current level (zero directories)
+           (setf results (nconc results
+                                (match-through-directories
+                                 base-dir rest-components
+                                 name-pattern name-matcher
+                                 type-pattern type-matcher
+                                 follow-symlinks visited)))
 
-            ;; Handle ** pattern specially
-            (cond
-              ((string= current-component "**")
-               ;; ** matches zero or more directory levels
-               ;; First, try matching at current level (zero directories)
-               (let ((zero-match (match-through-directories base-dir
-                                                            rest-components
-                                                            name-pattern name-matcher
-                                                            type-pattern type-matcher
-                                                            follow-symlinks
-                                                            visited)))
-                 (setf results (nconc results zero-match)))
+           ;; Then use collect-sub*directories for memory-efficient recursive search
+           (uiop:collect-sub*directories
+            base-dir
+            ;; collectp - process all directories
+            (constantly t)
+            ;; recursep - control recursion based on symlinks and visited
+            (lambda (dir)
+              (and (or follow-symlinks (not (symlink-p dir)))
+                   (let ((truename-str (namestring (truename dir))))
+                     (not (gethash truename-str visited)))))
+            ;; collector - process each directory found
+            (lambda (subdir)
+              ;; Skip the base directory itself
+              (unless (equal (truename subdir) (truename base-dir))
+                (let ((truename-str (namestring (truename subdir))))
+                  (unless (gethash truename-str visited)
+                    (setf (gethash truename-str visited) t)
+                    ;; Continue the ** search in this subdirectory
+                    (let ((sub-results (match-through-directories
+                                        subdir
+                                        remaining-dir-components ; Keep the **
+                                        name-pattern name-matcher
+                                        type-pattern type-matcher
+                                        follow-symlinks
+                                        visited)))
+                      (setf results (nconc results sub-results)))
+                    (remhash truename-str visited)))))))
 
-               ;; Then recursively search all subdirectories
-               (dolist (subdir subdirs)
-                 (let ((truename-str (namestring (truename subdir))))
-                   (unless (gethash truename-str visited)
-                     (setf (gethash truename-str visited) t)
-                     ;; Continue the ** search in this subdirectory
-                     (let ((sub-results (match-through-directories
-                                         subdir
-                                         remaining-dir-components ; Keep the ** component
-                                         name-pattern name-matcher
-                                         type-pattern type-matcher
-                                         follow-symlinks
-                                         visited)))
-                       (setf results (nconc results sub-results)))
-                     (remhash truename-str visited)))))
-
-              (t
-               ;; Regular directory component (not **)
-               (let ((dir-matcher (when (has-wildcards-p current-component)
-                                    (compiler:compile-pattern current-component
-                                                              :period (not compiler:*match-dotfiles*)))))
-                 (dolist (subdir subdirs)
-                   (let ((subdir-name (first (last (pathname-directory subdir)))))
-                     (when (and subdir-name
-                                (if dir-matcher
-                                    (funcall dir-matcher subdir-name)
-                                    (string= current-component subdir-name)))
-                       (let ((truename-str (namestring (truename subdir))))
-                         (unless (gethash truename-str visited)
-                           (setf (gethash truename-str visited) t)
-                           ;; Recursively match in this subdirectory
-                           (let ((sub-results (match-through-directories
-                                               subdir
-                                               rest-components
-                                               name-pattern name-matcher
-                                               type-pattern type-matcher
-                                               follow-symlinks
-                                               visited)))
-                             (setf results (nconc results sub-results)))
-                           (remhash truename-str visited)))))))))))
+          (t
+           ;; Regular directory component (not **)
+           ;; Use collect-sub*directories to get only immediate children
+           (let ((dir-matcher (when (has-wildcards-p current-component)
+                                (compiler:compile-pattern current-component
+                                                          :period (not compiler:*match-dotfiles*)))))
+             (uiop:collect-sub*directories
+              base-dir
+              ;; collectp - only collect immediate children
+              (lambda (dir)
+                (and (not (equal (truename dir) (truename base-dir)))
+                     (= (length (pathname-directory dir))
+                        (1+ (length (pathname-directory base-dir))))))
+              ;; recursep - don't recurse (only want immediate children)
+              (lambda (dir)
+                ;; Only recurse one level to find immediate children
+                (= (length (pathname-directory dir))
+                   (length (pathname-directory base-dir))))
+              ;; collector - process matching directories
+              (lambda (subdir)
+                (let ((subdir-name (first (last (pathname-directory subdir)))))
+                  (when (and subdir-name
+                             (if dir-matcher
+                                 (funcall dir-matcher subdir-name)
+                                 (string= current-component subdir-name))
+                             (or follow-symlinks (not (symlink-p subdir))))
+                    (let ((truename-str (namestring (truename subdir))))
+                      (unless (gethash truename-str visited)
+                        (setf (gethash truename-str visited) t)
+                        ;; Recursively match in this subdirectory
+                        (let ((sub-results (match-through-directories
+                                            subdir
+                                            rest-components
+                                            name-pattern name-matcher
+                                            type-pattern type-matcher
+                                            follow-symlinks
+                                            visited)))
+                          (setf results (nconc results sub-results)))
+                        (remhash truename-str visited))))))))))
 
         results)))
