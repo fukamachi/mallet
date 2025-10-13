@@ -8,8 +8,16 @@
    (#:violation #:mallet/violation)
    (#:suppression #:mallet/suppression))
   (:export #:lint-file
-           #:lint-files))
+           #:lint-files
+           #:*suppression-state*))
 (in-package #:mallet/engine)
+
+;;; Special variable for dynamic suppression state
+
+(defvar *suppression-state* nil
+  "Dynamic suppression state during linting.
+   Bound per-file, available to all rules during recursive checking.
+   This allows rules to check if they're suppressed without explicit passing.")
 
 (defun lint-file (file &key config)
   "Lint a single FILE using CONFIG.
@@ -81,8 +89,8 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                                :fix nil)
                 violations))
 
-        ;; Create suppression state for this file
-        (let ((suppression-state (suppression:make-suppression-state))
+        ;; Create suppression state for this file and bind it dynamically
+        (let ((*suppression-state* (suppression:make-suppression-state))
               (pending-next-form-suppression nil))
 
           ;; Process forms and check rules
@@ -101,7 +109,7 @@ If ignored-p is T, the file was ignored and violations will be NIL."
 
                 ;; Handle other mallet declarations (disable/enable/suppress-function)
                 ((suppression:mallet-declaim-p form-expr)
-                 (suppression:update-suppression-for-declaim form-expr suppression-state))
+                 (suppression:update-suppression-for-declaim form-expr *suppression-state*))
 
                 ;; Regular form - check with rules
                 (t
@@ -109,24 +117,20 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                  (unwind-protect
                      (progn
                        (when pending-next-form-suppression
-                         (suppression:push-scope-suppression suppression-state
+                         (suppression:push-scope-suppression *suppression-state*
                                                             pending-next-form-suppression))
                        ;; Check form with all rules
                        (dolist (rule rules)
                          (when (and (eq (rules:rule-type rule) :form)
                                     ;; Only run rule if file has extension AND it matches rule's file-types
                                     (and file-type
-                                         (member file-type (rules:rule-file-types rule)))
-                                    ;; Check if rule is not suppressed
-                                    (not (suppression:rule-suppressed-p
-                                          suppression-state
-                                          (rules:rule-name rule))))
+                                         (member file-type (rules:rule-file-types rule))))
                            (setf violations
                                  (nconc violations
                                         (rules:check-form rule form file))))))
                    ;; AUTOMATIC CLEANUP: Pop scope and clear pending
                    (when pending-next-form-suppression
-                     (suppression:pop-scope-suppression suppression-state)
+                     (suppression:pop-scope-suppression *suppression-state*)
                      (setf pending-next-form-suppression nil)))))))))) ; close cond, let, dolist, let, multiple-value-bind, when
 
     violations))

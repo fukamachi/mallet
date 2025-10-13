@@ -33,4 +33,5 @@
       (when (>= (length violations) 1)
         (let ((v (first violations)))
           (ok (eq (violation:violation-rule v) :if-without-else))
-          (ok (= (violation:violation-line v) 16) "Should be line 16 (if in bar function)"))))))
+          ;; After migration, violations are reported at the defun line (15) instead of the if line (16)
+          (ok (= (violation:violation-line v) 15) "Should be line 15 (bar function)"))))))
