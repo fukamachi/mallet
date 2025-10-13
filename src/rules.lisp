@@ -1,15 +1,15 @@
-(uiop:define-package #:malo/rules
+(uiop:define-package #:mallet/rules
   (:use #:cl)
-  (:use-reexport #:malo/rules/base
-                 #:malo/rules/text
-                 #:malo/rules/forms/control-flow
-                 #:malo/rules/forms/variables
-                 #:malo/rules/forms/package
-                 #:malo/rules/forms/naming
-                 #:malo/rules/forms/lambda-list
-                 #:malo/rules/forms/asdf)
+  (:use-reexport #:mallet/rules/base
+                 #:mallet/rules/text
+                 #:mallet/rules/forms/control-flow
+                 #:mallet/rules/forms/variables
+                 #:mallet/rules/forms/package
+                 #:mallet/rules/forms/naming
+                 #:mallet/rules/forms/lambda-list
+                 #:mallet/rules/forms/asdf)
   (:export #:make-rule))
-(in-package #:malo/rules)
+(in-package #:mallet/rules)
 
 (defun make-rule (name &rest options &key severity &allow-other-keys)
   "Create a rule instance based on NAME and OPTIONS.

@@ -1,4 +1,4 @@
-(defpackage #:malo/violation
+(defpackage #:mallet/violation
   (:use #:cl)
   (:export #:violation
            #:violation-rule
@@ -8,7 +8,7 @@
            #:violation-severity
            #:violation-message
            #:violation-fix))
-(in-package #:malo/violation)
+(in-package #:mallet/violation)
 
 (defclass violation ()
   ((rule

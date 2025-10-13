@@ -1,11 +1,11 @@
-(defpackage #:malo/formatter
+(defpackage #:mallet/formatter
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:violation #:malo/violation))
+   (#:violation #:mallet/violation))
   (:export #:format-text
            #:format-json))
-(in-package #:malo/formatter)
+(in-package #:mallet/formatter)
 
 ;;; ANSI color codes
 

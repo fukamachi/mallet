@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/bare-progn-in-if
+(defpackage #:mallet/tests/rules/bare-progn-in-if
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/bare-progn-in-if)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/bare-progn-in-if)
 
 (deftest bare-progn-in-if-valid
   (testing "Valid: if without progn"

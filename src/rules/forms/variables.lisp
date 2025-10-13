@@ -1,15 +1,15 @@
-(defpackage #:malo/rules/forms/variables
+(defpackage #:mallet/rules/forms/variables
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malo/rules/base)
-   (#:parser #:malo/parser)
-   (#:loop-parser #:malo/parser/loop)
-   (#:violation #:malo/violation)
-   (#:scope #:malo/utils/scope))
+   (#:base #:mallet/rules/base)
+   (#:parser #:mallet/parser)
+   (#:loop-parser #:mallet/parser/loop)
+   (#:violation #:mallet/violation)
+   (#:scope #:mallet/utils/scope))
   (:export #:unused-variables-rule
            #:unused-loop-variables-rule))
-(in-package #:malo/rules/forms/variables)
+(in-package #:mallet/rules/forms/variables)
 
 ;;; Utilities
 

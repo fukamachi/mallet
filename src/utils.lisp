@@ -1,8 +1,8 @@
-(defpackage #:malo/utils
+(defpackage #:mallet/utils
   (:use #:cl)
   (:export
    #:symbol-name-from-string))
-(in-package #:malo/utils)
+(in-package #:mallet/utils)
 
 (defun symbol-name-from-string (str)
   "Extract the symbol name from a string representation.

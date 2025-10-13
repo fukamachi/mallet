@@ -1,13 +1,13 @@
-(defpackage #:malo/rules/forms/naming
+(defpackage #:mallet/rules/forms/naming
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malo/rules/base)
-   (#:violation #:malo/violation)
-   (#:parser #:malo/parser))
+   (#:base #:mallet/rules/base)
+   (#:violation #:mallet/violation)
+   (#:parser #:mallet/parser))
   (:export #:special-variable-naming-rule
            #:constant-naming-rule))
-(in-package #:malo/rules/forms/naming)
+(in-package #:mallet/rules/forms/naming)
 
 ;;; Special Variable Naming Rule
 

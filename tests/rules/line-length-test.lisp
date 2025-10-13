@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/line-length
+(defpackage #:mallet/tests/rules/line-length
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:violation #:malo/violation)
+   (#:rules #:mallet/rules)
+   (#:violation #:mallet/violation)
    (#:ppcre #:cl-ppcre)))
-(in-package #:malo/tests/rules/line-length)
+(in-package #:mallet/tests/rules/line-length)
 
 (deftest line-length-within-limit
   (testing "Line within default limit (80 chars)"

@@ -1,4 +1,4 @@
-(defpackage #:malo/utils/scope
+(defpackage #:mallet/utils/scope
   (:use #:cl)
   (:export #:*scope-stack*
            #:push-scope
@@ -6,7 +6,7 @@
            #:record-variable
            #:lookup-variable-position
            #:with-new-scope))
-(in-package #:malo/utils/scope)
+(in-package #:mallet/utils/scope)
 
 ;;; Scope Stack - proper lexical scope management for variable tracking
 ;;;

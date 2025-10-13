@@ -1,13 +1,13 @@
-(defpackage #:malo/rules/forms/package
+(defpackage #:mallet/rules/forms/package
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malo/rules/base)
-   (#:violation #:malo/violation)
-   (#:parser #:malo/parser))
+   (#:base #:mallet/rules/base)
+   (#:violation #:mallet/violation)
+   (#:parser #:mallet/parser))
   (:export #:unused-local-nicknames-rule
            #:unused-imported-symbols-rule))
-(in-package #:malo/rules/forms/package)
+(in-package #:mallet/rules/forms/package)
 
 ;;; Unused Local Nicknames Rule
 

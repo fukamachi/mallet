@@ -1,8 +1,8 @@
-(defpackage #:malo/rules/text
+(defpackage #:mallet/rules/text
   (:use #:cl)
   (:local-nicknames
-   (#:base #:malo/rules/base)
-   (#:violation #:malo/violation))
+   (#:base #:mallet/rules/base)
+   (#:violation #:mallet/violation))
   (:export #:line-length-rule
            #:line-length-rule-max-length
            #:trailing-whitespace-rule
@@ -10,7 +10,7 @@
            #:final-newline-rule
            #:consecutive-blank-lines-rule
            #:consecutive-blank-lines-rule-max))
-(in-package #:malo/rules/text)
+(in-package #:mallet/rules/text)
 
 ;;; Line length rule
 

@@ -1,4 +1,4 @@
-(in-package #:malo/parser)
+(in-package #:mallet/parser)
 
 (defun make-token (type value file line column raw)
   "Create a token object."

@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/wrong-otherwise
+(defpackage #:mallet/tests/rules/wrong-otherwise
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/wrong-otherwise)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/wrong-otherwise)
 
 (deftest wrong-otherwise-valid
   (testing "Valid: ecase without otherwise"

@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/missing-otherwise
+(defpackage #:mallet/tests/rules/missing-otherwise
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/missing-otherwise)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/missing-otherwise)
 
 (deftest missing-otherwise-valid
   (testing "Valid: case with otherwise"

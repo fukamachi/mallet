@@ -1,9 +1,9 @@
-(defpackage #:malo/tests/parser/unknown-reader-macros
+(defpackage #:mallet/tests/parser/unknown-reader-macros
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:parser #:malo/parser)))
-(in-package #:malo/tests/parser/unknown-reader-macros)
+   (#:parser #:mallet/parser)))
+(in-package #:mallet/tests/parser/unknown-reader-macros)
 
 (deftest parse-with-unknown-reader-macro
   (testing "Parse forms with unknown reader macro (#?\"...\" from cl-interpol)"

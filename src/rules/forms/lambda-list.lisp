@@ -1,12 +1,12 @@
-(defpackage #:malo/rules/forms/lambda-list
+(defpackage #:mallet/rules/forms/lambda-list
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malo/rules/base)
-   (#:violation #:malo/violation)
-   (#:parser #:malo/parser))
+   (#:base #:mallet/rules/base)
+   (#:violation #:mallet/violation)
+   (#:parser #:mallet/parser))
   (:export #:mixed-optional-and-key-rule))
-(in-package #:malo/rules/forms/lambda-list)
+(in-package #:mallet/rules/forms/lambda-list)
 
 ;;; Mixed &optional and &key Rule
 

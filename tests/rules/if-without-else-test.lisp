@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/if-without-else
+(defpackage #:mallet/tests/rules/if-without-else
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/if-without-else)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/if-without-else)
 
 (deftest if-without-else-valid
   (testing "Valid: if with else clause"

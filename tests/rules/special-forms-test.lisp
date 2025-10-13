@@ -1,10 +1,10 @@
-(defpackage #:malo/tests/rules/special-forms
+(defpackage #:mallet/tests/rules/special-forms
   (:use #:cl #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/special-forms)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/special-forms)
 
 (deftest defstruct-no-false-positives
   (testing "DEFSTRUCT slots should not be treated as variable bindings"

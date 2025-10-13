@@ -1,6 +1,6 @@
-(defpackage #:malo-test-formatting
+(defpackage #:mallet-test-formatting
   (:use #:cl))
-(in-package #:malo-test-formatting)
+(in-package #:mallet-test-formatting)
 
 ;; This file has various text-level formatting violations
 

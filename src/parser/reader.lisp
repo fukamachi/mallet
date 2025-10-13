@@ -1,4 +1,4 @@
-(in-package #:malo/parser)
+(in-package #:mallet/parser)
 
 ;;; Eclector parse-result based parser for precise source tracking
 ;;;

@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/naming
+(defpackage #:mallet/tests/rules/naming
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/naming)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/naming)
 
 ;;; Special variable naming tests
 

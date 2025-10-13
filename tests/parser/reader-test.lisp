@@ -1,9 +1,9 @@
-(defpackage #:malo/tests/parser/reader
+(defpackage #:mallet/tests/parser/reader
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:parser #:malo/parser)))
-(in-package #:malo/tests/parser/reader)
+   (#:parser #:mallet/parser)))
+(in-package #:mallet/tests/parser/reader)
 
 (deftest parse-simple-forms
   (testing "Single number"

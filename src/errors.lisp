@@ -1,7 +1,7 @@
-(defpackage #:malo/errors
+(defpackage #:mallet/errors
   (:use #:cl)
-  (:export #:malo-error
-           #:malo-simple-error
+  (:export #:mallet-error
+           #:mallet-simple-error
            #:cli-error
            #:unknown-option
            #:unknown-option-option
@@ -21,21 +21,21 @@
            #:config-parse-failed
            #:config-parse-failed-path
            #:config-parse-failed-cause))
-(in-package #:malo/errors)
+(in-package #:mallet/errors)
 
 ;;; Base error conditions
 
-(define-condition malo-error (error)
+(define-condition mallet-error (error)
   ()
-  (:documentation "Base error condition for all Malo errors."))
+  (:documentation "Base error condition for all Mallet errors."))
 
-(define-condition malo-simple-error (malo-error simple-error)
+(define-condition mallet-simple-error (mallet-error simple-error)
   ()
   (:documentation "Simple error with format control and args."))
 
 ;;; CLI-specific error conditions
 
-(define-condition cli-error (malo-error)
+(define-condition cli-error (mallet-error)
   ()
   (:documentation "Base condition for CLI-related errors."))
 
@@ -44,7 +44,7 @@
            :reader unknown-option-option))
   (:report (lambda (condition stream)
              (format stream "Unknown option: ~A~%~
-                            Run 'malo --help' to see available options."
+                            Run 'mallet --help' to see available options."
                      (unknown-option-option condition))))
   (:documentation "Signaled when an unknown command-line option is encountered."))
 
@@ -84,7 +84,7 @@
   (:report (lambda (condition stream)
              (declare (ignore condition))
              (format stream "No files specified~%~
-                            Run 'malo --help' for usage information.")))
+                            Run 'mallet --help' for usage information.")))
   (:documentation "Signaled when no files are specified for linting."))
 
 (define-condition invalid-format (invalid-option-value)

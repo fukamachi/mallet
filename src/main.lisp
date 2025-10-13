@@ -1,14 +1,14 @@
-(defpackage #:malo
+(defpackage #:mallet
   (:use #:cl
-        #:malo/violation
-        #:malo/parser
-        #:malo/rules)
+        #:mallet/violation
+        #:mallet/parser
+        #:mallet/rules)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:engine #:malo/engine)
-   (#:config #:malo/config)
-   (#:formatter #:malo/formatter)
-   (#:errors #:malo/errors))
+   (#:engine #:mallet/engine)
+   (#:config #:mallet/config)
+   (#:formatter #:mallet/formatter)
+   (#:errors #:mallet/errors))
   (:export #:main
            #:lint-file
            #:lint-files
@@ -27,7 +27,7 @@
            #:rule-type
            #:rule-enabled-p
            #:config
-           ;; Re-exported from malo/violation
+           ;; Re-exported from mallet/violation
            #:violation
            #:violation-rule
            #:violation-file
@@ -36,7 +36,7 @@
            #:violation-severity
            #:violation-message
            #:violation-fix
-           ;; Re-exported from malo/parser
+           ;; Re-exported from mallet/parser
            #:token
            #:token-type
            #:token-value
@@ -55,7 +55,7 @@
            #:form-source
            #:parse-forms
            #:analyze-text))
-(in-package #:malo)
+(in-package #:mallet)
 
 ;;; Special variables
 
@@ -111,7 +111,7 @@ Signals specific error conditions for invalid input."
            (print-help)
            (uiop:quit 0))
           ((string= arg "--version")
-           (format t "Malo version 0.1.0~%")
+           (format t "Mallet version 0.1.0~%")
            (uiop:quit 0))
           ((and (> (length arg) 0) (char= (char arg 0) #\-))
            (error 'errors:unknown-option :option arg))
@@ -122,13 +122,13 @@ Signals specific error conditions for invalid input."
 (defun print-help ()
   "Print CLI usage information."
   (format t "~
-Malo - A relentless guardian of code integrity for Common Lisp
+Mallet - A relentless guardian of code integrity for Common Lisp
 
-Usage: malo [options] <file>...
+Usage: mallet [options] <file>...
 
 Options:
   --format <format>   Output format (text or json, default: text)
-  --config <path>     Path to config file (default: auto-discover .malo.lisp)
+  --config <path>     Path to config file (default: auto-discover .mallet.lisp)
   --preset <name>     Use built-in preset (default or all)
   --all               Alias for --preset all
   --debug             Enable debug mode with detailed diagnostics
@@ -140,11 +140,11 @@ Presets:
   all                 All rules enabled (useful for exploration)
 
 Examples:
-  malo src/main.lisp
-  malo --all src/*.lisp
-  malo --format json src/*.lisp
-  malo --config .malo.lisp src/
-  malo --debug src/
+  mallet src/main.lisp
+  mallet --all src/*.lisp
+  mallet --format json src/*.lisp
+  mallet --config .mallet.lisp src/
+  mallet --debug src/
 "))
 
 (defun expand-file-args (file-args)
@@ -197,7 +197,7 @@ Handles wildcards and directories, excluding common non-source directories."
         thereis (not (null violations))))
 
 (defun main ()
-  "Main entry point for the Malo CLI.
+  "Main entry point for the Mallet CLI.
 Lints files specified in ARGS and exits with appropriate status code."
   (let* ((args (uiop:command-line-arguments))
          (args (if (equal (first args) "--")

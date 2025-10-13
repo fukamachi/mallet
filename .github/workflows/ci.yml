@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: |
           qlot install --no-deps
-          qlot exec ros -e '(ql:quickload :malo/tests)'
+          qlot exec ros -e '(ql:quickload :mallet/tests)'
 
       - name: Run test suite
         run: |
@@ -46,4 +46,4 @@ jobs:
       - name: Build binary
         run: |
           make build
-          ./malo --version
+          ./mallet --version

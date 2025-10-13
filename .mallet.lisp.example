@@ -1,4 +1,4 @@
-(:malo-config
+(:mallet-config
  ;; Extend the default configuration
  (:extends :default)
 

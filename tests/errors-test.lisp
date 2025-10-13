@@ -1,9 +1,9 @@
-(defpackage #:malo/tests/errors
+(defpackage #:mallet/tests/errors
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:errors #:malo/errors)))
-(in-package #:malo/tests/errors)
+   (#:errors #:mallet/errors)))
+(in-package #:mallet/tests/errors)
 
 (deftest error-condition-hierarchy
   (testing "CLI errors are of type cli-error"
@@ -21,9 +21,9 @@
     (ok (typep (make-condition 'errors:no-files-specified)
                'errors:cli-error)))
 
-  (testing "CLI errors are of type malo-error"
+  (testing "CLI errors are of type mallet-error"
     (ok (typep (make-condition 'errors:unknown-option :option "--foo")
-               'errors:malo-error)))
+               'errors:mallet-error)))
 
   (testing "All CLI errors are of type error"
     (ok (typep (make-condition 'errors:unknown-option :option "--foo")
@@ -33,7 +33,7 @@
   (testing "unknown-option has helpful message"
     (let ((err (make-condition 'errors:unknown-option :option "--foo")))
       (ok (search "Unknown option: --foo" (format nil "~A" err)))
-      (ok (search "malo --help" (format nil "~A" err)))))
+      (ok (search "mallet --help" (format nil "~A" err)))))
 
   (testing "missing-option-value has clear message"
     (let ((err (make-condition 'errors:missing-option-value :option "--format")))
@@ -62,7 +62,7 @@
   (testing "no-files-specified has helpful message"
     (let ((err (make-condition 'errors:no-files-specified)))
       (ok (search "No files specified" (format nil "~A" err)))
-      (ok (search "malo --help" (format nil "~A" err))))))
+      (ok (search "mallet --help" (format nil "~A" err))))))
 
 (deftest error-accessors
   (testing "unknown-option has option accessor"
@@ -87,12 +87,12 @@
       (ok (equal (errors:file-not-found-path err) "test.lisp"))))
 
   (testing "config-not-found has path accessor"
-    (let ((err (make-condition 'errors:config-not-found :path ".malo.lisp")))
-      (ok (equal (errors:config-not-found-path err) ".malo.lisp"))))
+    (let ((err (make-condition 'errors:config-not-found :path ".mallet.lisp")))
+      (ok (equal (errors:config-not-found-path err) ".mallet.lisp"))))
 
   (testing "config-parse-failed has accessors"
     (let ((err (make-condition 'errors:config-parse-failed
-                               :path ".malo.lisp"
+                               :path ".mallet.lisp"
                                :cause "Invalid syntax")))
-      (ok (equal (errors:config-parse-failed-path err) ".malo.lisp"))
+      (ok (equal (errors:config-parse-failed-path err) ".mallet.lisp"))
       (ok (equal (errors:config-parse-failed-cause err) "Invalid syntax")))))

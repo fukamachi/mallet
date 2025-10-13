@@ -1,15 +1,15 @@
-(defpackage #:malo/parser/loop
+(defpackage #:mallet/parser/loop
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:utils #:malo/utils))
+   (#:utils #:mallet/utils))
   (:export
    #:loop-binding
    #:loop-binding-pattern
    #:loop-binding-init-form
    #:loop-binding-is-parallel
    #:parse-loop-clauses))
-(in-package #:malo/parser/loop)
+(in-package #:mallet/parser/loop)
 
 ;;; LOOP Clause Parser
 ;;;

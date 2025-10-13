@@ -1,15 +1,15 @@
-(defpackage #:malo/rules/forms/control-flow
+(defpackage #:mallet/rules/forms/control-flow
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malo/rules/base)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation))
+   (#:base #:mallet/rules/base)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation))
   (:export #:if-without-else-rule
            #:bare-progn-in-if-rule
            #:missing-otherwise-rule
            #:wrong-otherwise-rule))
-(in-package #:malo/rules/forms/control-flow)
+(in-package #:mallet/rules/forms/control-flow)
 
 ;;; If-without-else rule
 

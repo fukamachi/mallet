@@ -3,11 +3,11 @@
 all: build
 
 help:
-	@echo "Malo Linter - Make targets:"
+	@echo "Mallet Linter - Make targets:"
 	@echo ""
 	@echo "Build:"
-	@echo "  make               - Build the malo executable (default)"
-	@echo "  make build         - Build the malo executable"
+	@echo "  make               - Build the mallet executable (default)"
+	@echo "  make build         - Build the mallet executable"
 	@echo "  make bundle        - Bundle dependencies for standalone distribution"
 	@echo ""
 	@echo "Testing:"
@@ -25,8 +25,8 @@ test: test-unit test-cli
 test-unit:
 	@echo "Running unit tests..."
 	@qlot exec sbcl --noinform --non-interactive \
-		--eval '(asdf:load-system :malo/tests)' \
-		--eval '(or (rove:run :malo/tests) (uiop:quit -1))'
+		--eval '(asdf:load-system :mallet/tests)' \
+		--eval '(or (rove:run :mallet/tests) (uiop:quit -1))'
 
 test-cli:
 	@echo ""
@@ -34,14 +34,14 @@ test-cli:
 	@./tests/cli-integration-test.sh
 
 bundle:
-	@qlot bundle --exclude malo/tests
+	@qlot bundle --exclude mallet/tests
 
 build:
 	@sbcl --noinform --non-interactive \
-		--load init.lisp --eval "(asdf:make :malo)"
+		--load init.lisp --eval "(asdf:make :mallet)"
 
 clean:
 	@echo "Cleaning compilation cache and build artifacts..."
-	@rm -f malo
+	@rm -f mallet
 	@find . -name "*.fasl" -type f -delete
 	@echo "Clean complete"

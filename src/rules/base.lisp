@@ -1,10 +1,10 @@
-(defpackage #:malo/rules/base
+(defpackage #:mallet/rules/base
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:utils #:malo/utils)
-   (#:violation #:malo/violation))
-  (:import-from #:malo/utils
+   (#:utils #:mallet/utils)
+   (#:violation #:mallet/violation))
+  (:import-from #:mallet/utils
                 #:symbol-name-from-string)
   (:export #:rule
            #:rule-name
@@ -23,7 +23,7 @@
            #:check-form
            #:traverse-expr
            #:with-safe-cons-expr))
-(in-package #:malo/rules/base)
+(in-package #:mallet/rules/base)
 
 ;;; Rule class
 
@@ -86,7 +86,7 @@ Form-level linting rules should skip Coalton forms as they have different semant
   (when form
     ;; Extract expression from form object (try form-expr accessor, fall back to form itself)
     (let ((expr (handler-case
-                    (malo/parser:form-expr form)
+                    (mallet/parser:form-expr form)
                   (error () form))))
       (when (consp expr)
         (let* ((head (first expr))

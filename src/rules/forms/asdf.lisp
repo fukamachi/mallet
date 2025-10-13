@@ -1,12 +1,12 @@
-(defpackage #:malo/rules/forms/asdf
+(defpackage #:mallet/rules/forms/asdf
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:base #:malo/rules/base)
-   (#:violation #:malo/violation)
-   (#:parser #:malo/parser))
+   (#:base #:mallet/rules/base)
+   (#:violation #:mallet/violation)
+   (#:parser #:mallet/parser))
   (:export #:asdf-component-strings-rule))
-(in-package #:malo/rules/forms/asdf)
+(in-package #:mallet/rules/forms/asdf)
 
 ;;; ASDF Component Strings Rule
 

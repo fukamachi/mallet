@@ -1,4 +1,4 @@
-(defpackage #:malo/parser
+(defpackage #:mallet/parser
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria))
@@ -39,7 +39,7 @@
            #:case-form-p
            #:defpackage-form-p
            #:defun-form-p))
-(in-package #:malo/parser)
+(in-package #:mallet/parser)
 
 ;;; Token data structure
 

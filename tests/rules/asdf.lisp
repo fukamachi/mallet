@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/asdf
+(defpackage #:mallet/tests/rules/asdf
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/asdf)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/asdf)
 
 ;;; ASDF component strings tests
 

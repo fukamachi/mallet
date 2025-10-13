@@ -1,9 +1,9 @@
-(defpackage #:malo/config
+(defpackage #:mallet/config
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
    (#:glob #:trivial-glob)
-   (#:rules #:malo/rules))
+   (#:rules #:mallet/rules))
   (:export #:config
            #:make-config
            #:parse-config
@@ -23,7 +23,7 @@
            #:path-override-patterns
            #:path-override-rules
            #:path-override-disabled-rules))
-(in-package #:malo/config)
+(in-package #:mallet/config)
 
 (defvar *default-preset* :default)
 
@@ -153,8 +153,8 @@ Returns (values rules disabled-rules) where:
 Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...), and (:for-paths ...)."
   (check-type sexp list)
 
-  (unless (eq (first sexp) :malo-config)
-    (error "Config must start with :malo-config"))
+  (unless (eq (first sexp) :mallet-config)
+    (error "Config must start with :mallet-config"))
 
   (let ((rule-specs '())
         (disabled-rules '())
@@ -397,7 +397,7 @@ Returns T if the file matches any ignore pattern, NIL otherwise."
                       '(".bzr" ".git" ".hg" ".qlot"))
              (find-if (lambda (file)
                         (uiop:file-exists-p (merge-pathnames file pathname)))
-                      '("qlfile" ".malo.lisp")))
+                      '("qlfile" ".mallet.lisp")))
          pathname)
         ((equal (user-homedir-pathname) pathname)
          nil)
@@ -408,7 +408,7 @@ Returns T if the file matches any ignore pattern, NIL otherwise."
                (find-project-root parent))))))))
 
 (defun find-config-file (start-directory)
-  "Find .malo.lisp config file starting from START-DIRECTORY.
+  "Find .mallet.lisp config file starting from START-DIRECTORY.
 Walks up parent directories until found or reaches root."
   (let ((dir (etypecase start-directory
                (pathname
@@ -420,4 +420,4 @@ Walks up parent directories until found or reaches root."
       (let ((project-root (find-project-root dir)))
         (when project-root
           (uiop:file-exists-p
-           (merge-pathnames ".malo.lisp" project-root)))))))
+           (merge-pathnames ".mallet.lisp" project-root)))))))

@@ -1,4 +1,4 @@
-(defsystem "malo"
+(defsystem "mallet"
   :version "0.1.0"
   :description "A relentless guardian of code integrity for Common Lisp"
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
@@ -6,11 +6,11 @@
   :depends-on ("alexandria"
                "eclector"
                "trivial-glob")
-  :in-order-to ((test-op (test-op "malo/tests")))
+  :in-order-to ((test-op (test-op "mallet/tests")))
   :pathname "src"
   :build-operation "program-op"
-  :build-pathname "../malo"
-  :entry-point "malo:main"
+  :build-pathname "../mallet"
+  :entry-point "mallet:main"
   :serial t
   :components
   (;; Shared utilities
@@ -59,8 +59,8 @@
 
    (:file "main")))
 
-(defsystem "malo/tests"
-  :depends-on ("malo"
+(defsystem "mallet/tests"
+  :depends-on ("mallet"
                "cl-ppcre"
                "rove")
   :pathname "tests"

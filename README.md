@@ -1,53 +1,53 @@
-# Malo
+# Mallet
 
-[![CI](https://github.com/fukamachi/malo/actions/workflows/ci.yml/badge.svg)](https://github.com/fukamachi/malo/actions/workflows/ci.yml)
+[![CI](https://github.com/fukamachi/mallet/actions/workflows/ci.yml/badge.svg)](https://github.com/fukamachi/mallet/actions/workflows/ci.yml)
 
 A Common Lisp linter focused on catching real mistakes without enforcing subjective style preferences.
 
 ## Philosophy
 
-Malo works out of the box. Its default rules detect only clear issues—definite mistakes and widely accepted style problems. This keeps the output useful and free from noise.
+Mallet works out of the box. Its default rules detect only clear issues—definite mistakes and widely accepted style problems. This keeps the output useful and free from noise.
 
-Projects differ, and so do their rules. Malo also provides a growing set of optional checks that you can enable as needed.
+Projects differ, and so do their rules. Mallet also provides a growing set of optional checks that you can enable as needed.
 
 A simple start, with room to grow.
 
 ## Installation
 
 ```bash
-git clone https://github.com/fukamachi/malo.git
-cd malo
+git clone https://github.com/fukamachi/mallet.git
+cd mallet
 make
 ```
 
-This creates a standalone executable `./malo`. You can run it directly or move it anywhere you want:
+This creates a standalone executable `./mallet`. You can run it directly or move it anywhere you want:
 
 ```bash
 # Run directly from the build directory
-./malo src
+./mallet src
 
 # Or move to a directory in your PATH
-mv malo ~/.local/bin/malo  # or /usr/local/bin/malo, ~/bin/malo, etc.
+mv mallet ~/.local/bin/mallet  # or /usr/local/bin/mallet, ~/bin/mallet, etc.
 ```
 
 ## Usage
 
 ```bash
 # Lint files
-malo src/main.lisp
-malo src/*.lisp
-malo src  # recursively lints .lisp and .asd files
+mallet src/main.lisp
+mallet src/*.lisp
+mallet src  # recursively lints .lisp and .asd files
 
 # Enable all rules
-malo --all src
+mallet --all src
 ```
 
 ## Configuration
 
-Create `.malo.lisp` in your project root:
+Create `.mallet.lisp` in your project root:
 
 ```lisp
-(:malo-config
+(:mallet-config
  (:extends :default)  ; or :all
 
  ;; Ignore files/directories (uses glob patterns)
@@ -79,7 +79,7 @@ Use `:for-paths` to apply different rules to specific directories or files:
 - Directory names: `"tests"` → matches `tests/**/*.{lisp,asd}`
 - Glob patterns: `"src/**/*.lisp"` → matches pattern exactly
 
-Malo auto-discovers `.malo.lisp` by walking up from the current directory.
+Mallet auto-discovers `.mallet.lisp` by walking up from the current directory.
 
 ## Rules
 
@@ -91,7 +91,7 @@ MIT License - see [LICENSE](LICENSE)
 
 ## Bundled Libraries
 
-Malo bundles the following Common Lisp libraries for standalone distribution:
+Mallet bundles the following Common Lisp libraries for standalone distribution:
 
 - **acclimation** - Internationalization/localization (BSD 2-Clause)
 - **alexandria** - Utility library (Public Domain/MIT)

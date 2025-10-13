@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/with-macros
+(defpackage #:mallet/tests/rules/with-macros
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/with-macros)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/with-macros)
 
 ;;; Tests for WITH-* and DO-SYMBOLS family macros
 

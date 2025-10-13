@@ -1,10 +1,10 @@
-(defpackage #:malo/tests/rules/text-formatting
+(defpackage #:mallet/tests/rules/text-formatting
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/text-formatting)
+   (#:rules #:mallet/rules)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/text-formatting)
 
 ;;; Trailing whitespace tests
 

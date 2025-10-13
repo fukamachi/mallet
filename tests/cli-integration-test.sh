@@ -1,5 +1,5 @@
 #!/bin/bash
-# CLI Integration Tests for Malo
+# CLI Integration Tests for Mallet
 # Tests the full CLI pipeline with fixture files
 
 set -e
@@ -18,13 +18,13 @@ TESTS_FAILED=0
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-CLI="$PROJECT_DIR/bin/malo"
+CLI="$PROJECT_DIR/bin/mallet"
 FIXTURES="$SCRIPT_DIR/fixtures"
 CLEAN_DIR="$FIXTURES/clean"
 VIOLATIONS_DIR="$FIXTURES/violations"
 
 echo "========================================="
-echo "Malo CLI Integration Tests"
+echo "Mallet CLI Integration Tests"
 echo "========================================="
 echo ""
 

@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/parser/loop
+(defpackage #:mallet/tests/parser/loop
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:loop-parser #:malo/parser/loop)
-   (#:parser #:malo/parser)
-   (#:utils #:malo/utils)))
-(in-package #:malo/tests/parser/loop)
+   (#:loop-parser #:mallet/parser/loop)
+   (#:parser #:mallet/parser)
+   (#:utils #:mallet/utils)))
+(in-package #:mallet/tests/parser/loop)
 
 ;;; Unit tests for LOOP clause parsing
 ;;;

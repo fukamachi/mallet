@@ -1,5 +1,5 @@
-;;; Malo configuration for test fixtures
+;;; Mallet configuration for test fixtures
 ;;; Enable all rules so that violation tests can properly detect issues
 
-(:malo-config
+(:mallet-config
  (:extends :all))

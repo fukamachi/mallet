@@ -1,9 +1,9 @@
-(defpackage #:malo/tests/parser/tokenizer
+(defpackage #:mallet/tests/parser/tokenizer
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:parser #:malo/parser)))
-(in-package #:malo/tests/parser/tokenizer)
+   (#:parser #:mallet/parser)))
+(in-package #:mallet/tests/parser/tokenizer)
 
 (deftest tokenize-simple-comment
   (testing "Single semicolon inline comment"

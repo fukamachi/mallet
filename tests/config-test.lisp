@@ -1,10 +1,10 @@
-(defpackage #:malo/tests/config
+(defpackage #:mallet/tests/config
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:config #:malo/config)
-   (#:rules #:malo/rules)))
-(in-package #:malo/tests/config)
+   (#:config #:mallet/config)
+   (#:rules #:mallet/rules)))
+(in-package #:mallet/tests/config)
 
 ;;; Config data structure tests
 
@@ -27,7 +27,7 @@
 
 (deftest parse-config
   (testing "Parse simple config with :enable"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:enable :line-length :max-length 120)))
            (cfg (config:parse-config sexp)))
       (ok (= 1 (length (config:config-rules cfg))))
@@ -36,13 +36,13 @@
         (ok (= 120 (rules:line-length-rule-max-length rule))))))
 
   (testing "Parse config with :disable"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:disable :if-without-else)))
            (cfg (config:parse-config sexp)))
       (ok (member :if-without-else (config:config-disabled-rules cfg)))))
 
   (testing "Parse config with severity override"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:enable :unused-variables :severity :error)))
            (cfg (config:parse-config sexp)))
       (let ((rule (first (config:config-rules cfg))))
@@ -54,7 +54,7 @@
   `(uiop:with-temporary-file (:stream out
                               :pathname ,pathname
                               :direction :output
-                              :prefix "malo-config"
+                              :prefix "mallet-config"
                               :type "lisp")
      (write-string ,content out)
      (force-output out)
@@ -62,7 +62,7 @@
 
 (deftest load-config-file
   (testing "Load config from file"
-    (let ((config-content "(:malo-config
+    (let ((config-content "(:mallet-config
                               (:enable :line-length :max-length 100))"))
       (with-temporary-config (config-content tmpfile)
         (let ((cfg (config:load-config tmpfile)))
@@ -104,7 +104,7 @@
 
 (deftest config-extends
   (testing "Parse config with extends"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:extends :all)
                    (:enable :line-length :max-length 100)))
            (cfg (config:parse-config sexp)))
@@ -119,7 +119,7 @@
 
 (deftest parse-new-syntax-enable
   (testing "Parse config with :enable syntax"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:enable :line-length :max-length 120)))
            (cfg (config:parse-config sexp)))
       (ok (= 1 (length (config:config-rules cfg))))
@@ -128,7 +128,7 @@
         (ok (= 120 (rules:line-length-rule-max-length rule))))))
 
   (testing "Parse config with :enable without options"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:enable :unused-variables)))
            (cfg (config:parse-config sexp)))
       (ok (= 1 (length (config:config-rules cfg))))
@@ -136,7 +136,7 @@
         (ok (eq :unused-variables (rules:rule-name rule))))))
 
   (testing "Parse config with multiple :enable forms"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:enable :line-length :max-length 100)
                    (:enable :unused-variables :severity :error)
                    (:enable :special-variable-naming)))
@@ -158,14 +158,14 @@
 
 (deftest parse-new-syntax-disable
   (testing "Parse config with :disable syntax"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:extends :default)
                    (:disable :constant-naming)))
            (cfg (config:parse-config sexp)))
       (ok (member :constant-naming (config:config-disabled-rules cfg)))))
 
   (testing "Parse config with multiple :disable forms"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:extends :default)
                    (:disable :line-length)
                    (:disable :consecutive-blank-lines)))
@@ -177,7 +177,7 @@
 
 (deftest parse-for-paths
   (testing "Parse config with :for-paths"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:extends :default)
                    (:for-paths ("tests/**/*.lisp")
                      (:enable :line-length :max-length 120)
@@ -190,7 +190,7 @@
       (ok (= 1 (length (config:config-path-rules cfg))))))
 
   (testing "Parse config with directory name (shorthand)"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:for-paths ("tests" "scripts")
                      (:disable :line-length))))
            (cfg (config:parse-config sexp)))
@@ -215,7 +215,7 @@
         (ok (not (member :line-length rule-names))))))  ; line-length is disabled
 
   (testing "Get rules for file with path-specific overrides"
-    (let* ((sexp '(:malo-config
+    (let* ((sexp '(:mallet-config
                    (:enable :line-length :max-length 80)
                    (:enable :unused-variables)
                    (:for-paths ("tests/**/*.lisp")
@@ -240,14 +240,14 @@
 
 (deftest find-config-file
   (testing "Find config in current directory"
-    (let* ((tmpdir-str (format nil "/tmp/malo-test-dir-~A" (get-universal-time)))
+    (let* ((tmpdir-str (format nil "/tmp/mallet-test-dir-~A" (get-universal-time)))
            (tmpdir (uiop:ensure-directory-pathname tmpdir-str))
-           (config-file (merge-pathnames ".malo.lisp" tmpdir)))
+           (config-file (merge-pathnames ".mallet.lisp" tmpdir)))
       (unwind-protect
           (progn
             (ensure-directories-exist tmpdir)
             (with-open-file (out config-file :direction :output :if-exists :supersede)
-              (write-string "(:malo-config)" out))
+              (write-string "(:mallet-config)" out))
             (let ((found (config:find-config-file tmpdir)))
               (ok (not (null found)))
               ;; Compare truenames to handle pathname variations
@@ -259,15 +259,15 @@
           (uiop:delete-directory-tree tmpdir :validate t)))))
 
   (testing "Find config in parent directory"
-    (let* ((tmpdir-str (format nil "/tmp/malo-test-parent-~A" (get-universal-time)))
+    (let* ((tmpdir-str (format nil "/tmp/mallet-test-parent-~A" (get-universal-time)))
            (tmpdir (uiop:ensure-directory-pathname tmpdir-str))
            (subdir (merge-pathnames "sub/" tmpdir))
-           (config-file (merge-pathnames ".malo.lisp" tmpdir)))
+           (config-file (merge-pathnames ".mallet.lisp" tmpdir)))
       (unwind-protect
           (progn
             (ensure-directories-exist subdir)
             (with-open-file (out config-file :direction :output :if-exists :supersede)
-              (write-string "(:malo-config)" out))
+              (write-string "(:mallet-config)" out))
             ;; Search from subdir should find config in parent
             (let ((found (config:find-config-file subdir)))
               (ok (not (null found)))

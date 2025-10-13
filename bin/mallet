@@ -1,5 +1,5 @@
 #!/bin/sh
-# Malo CLI wrapper script
+# Mallet CLI wrapper script
 
 # Find the script directory
 SCRIPT="$0"
@@ -15,12 +15,12 @@ if [ -f "$PROJECT_DIR/.qlot/setup.lisp" ]; then
 elif [ -f "$PROJECT_DIR/.bundle-libs/setup.lisp" ]; then
   SETUP_FILE="$PROJECT_DIR/init.lisp"
 else
-  echo "Malo is not setup yet." >&2
+  echo "Mallet is not setup yet." >&2
   exit 1
 fi
 
 # Run with SBCL
 exec sbcl --noinform --non-interactive \
     --load "$SETUP_FILE" \
-    --eval '(let ((*standard-output* (make-broadcast-stream)) (*error-output* (make-broadcast-stream)) (*trace-output* (make-broadcast-stream))) (asdf:load-system :malo))' \
-    --eval "(malo:main)" -- "$@"
+    --eval '(let ((*standard-output* (make-broadcast-stream)) (*error-output* (make-broadcast-stream)) (*trace-output* (make-broadcast-stream))) (asdf:load-system :mallet))' \
+    --eval "(mallet:main)" -- "$@"

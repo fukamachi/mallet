@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/lambda-list
+(defpackage #:mallet/tests/rules/lambda-list
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/lambda-list)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/lambda-list)
 
 ;;; Mixed &optional and &key tests
 

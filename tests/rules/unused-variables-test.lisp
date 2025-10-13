@@ -1,11 +1,11 @@
-(defpackage #:malo/tests/rules/unused-variables
+(defpackage #:mallet/tests/rules/unused-variables
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:rules #:malo/rules)
-   (#:parser #:malo/parser)
-   (#:violation #:malo/violation)))
-(in-package #:malo/tests/rules/unused-variables)
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/rules/unused-variables)
 
 (deftest unused-variables-valid
   (testing "Valid: all parameters used"

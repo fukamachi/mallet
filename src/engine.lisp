@@ -1,14 +1,14 @@
-(defpackage #:malo/engine
+(defpackage #:mallet/engine
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
-   (#:parser #:malo/parser)
-   (#:rules #:malo/rules)
-   (#:config #:malo/config)
-   (#:violation #:malo/violation))
+   (#:parser #:mallet/parser)
+   (#:rules #:mallet/rules)
+   (#:config #:mallet/config)
+   (#:violation #:mallet/violation))
   (:export #:lint-file
            #:lint-files))
-(in-package #:malo/engine)
+(in-package #:mallet/engine)
 
 (defun lint-file (file &key config)
   "Lint a single FILE using CONFIG.
