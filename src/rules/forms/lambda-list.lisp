@@ -47,7 +47,8 @@
                         (when (>= (length current-expr) 3)
                           (let* ((lambda-list (third current-expr))
                                  (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "defun")))
-                            (when result
+                            (when (and result
+                                       (base:should-create-violation-p rule))
                               (push (make-instance 'violation:violation
                                                    :rule :mixed-optional-and-key
                                                    :file file
@@ -62,7 +63,8 @@
                           (loop for item in (cddr current-expr)
                                 when (consp item)
                                 do (let ((result (check-lambda-list-mixed item position-map fallback-line fallback-column "defmethod")))
-                                     (when result
+                                     (when (and result
+                                                (base:should-create-violation-p rule))
                                        (push (make-instance 'violation:violation
                                                             :rule :mixed-optional-and-key
                                                             :file file
@@ -77,7 +79,8 @@
                         (when (>= (length current-expr) 2)
                           (let* ((lambda-list (second current-expr))
                                  (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "lambda")))
-                            (when result
+                            (when (and result
+                                       (base:should-create-violation-p rule))
                               (push (make-instance 'violation:violation
                                                    :rule :mixed-optional-and-key
                                                    :file file
@@ -91,7 +94,8 @@
                         (when (>= (length current-expr) 3)
                           (let* ((lambda-list (third current-expr))
                                  (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "defmacro")))
-                            (when result
+                            (when (and result
+                                       (base:should-create-violation-p rule))
                               (push (make-instance 'violation:violation
                                                    :rule :mixed-optional-and-key
                                                    :file file
@@ -110,7 +114,8 @@
                                 (when (and (consp binding) (>= (length binding) 2))
                                   (let* ((lambda-list (second binding))
                                          (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "flet/labels function")))
-                                    (when result
+                                    (when (and result
+                                               (base:should-create-violation-p rule))
                                       (push (make-instance 'violation:violation
                                                            :rule :mixed-optional-and-key
                                                            :file file
@@ -124,7 +129,8 @@
                         (when (>= (length current-expr) 3)
                           (let* ((lambda-list (second current-expr))
                                  (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "destructuring-bind")))
-                            (when result
+                            (when (and result
+                                       (base:should-create-violation-p rule))
                               (push (make-instance 'violation:violation
                                                    :rule :mixed-optional-and-key
                                                    :file file

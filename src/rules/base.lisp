@@ -24,7 +24,8 @@
            #:check-form
            #:check-form-recursive
            #:traverse-expr
-           #:with-safe-cons-expr))
+           #:with-safe-cons-expr
+           #:should-create-violation-p))
 (in-package #:mallet/rules/base)
 
 ;;; Rule class
@@ -147,23 +148,22 @@ This :around method checks for (declare (mallet:suppress ...)) forms and manages
   ;; The *suppression-state* special variable is bound by the engine during linting
   (let ((state-symbol (find-symbol "*SUPPRESSION-STATE*" "MALLET/ENGINE")))
     (if (and state-symbol (boundp state-symbol) (symbol-value state-symbol))
-        (let ((state (symbol-value state-symbol)))
-          ;; Check if rule is suppressed at current scope
-          (if (suppression:rule-suppressed-p state (rule-name rule)
-                                              :form-type (if function-name :function-body :lexical-scope)
-                                              :function-name function-name)
-              nil  ; Return empty violations list if suppressed
-              ;; Look for declare forms and manage suppression scope
-              (let ((declare-suppressions (extract-declare-suppressions expr)))
-                (if declare-suppressions
-                    ;; Push suppression scope, call method, then pop
-                    (progn
-                      (suppression:push-scope-suppression state declare-suppressions)
-                      (unwind-protect
-                          (call-next-method)
-                        (suppression:pop-scope-suppression state)))
-                    ;; No suppressions, just call method
-                    (call-next-method)))))
+        (let ((state (symbol-value state-symbol))
+              (declare-suppressions (extract-declare-suppressions expr)))
+          ;; First, push any declare suppressions from this form onto the scope
+          (when declare-suppressions
+            (suppression:push-scope-suppression state declare-suppressions))
+
+          ;; Now check if rule is suppressed at current scope (includes newly pushed suppressions)
+          (unwind-protect
+              (if (suppression:rule-suppressed-p state (rule-name rule)
+                                                  :form-type (if function-name :function-body :lexical-scope)
+                                                  :function-name function-name)
+                  nil  ; Return empty violations list if suppressed
+                  (call-next-method))  ; Not suppressed, proceed with checking
+            ;; Always pop the suppression scope if we pushed one
+            (when declare-suppressions
+              (suppression:pop-scope-suppression state))))
         ;; No suppression state bound (e.g., in unit tests), just call method
         (call-next-method))))
 
@@ -302,6 +302,25 @@ Returns the body portion where declarations and code would be, or NIL if not app
 
         ;; Default - no known body structure
         (t nil)))))
+
+;;; Suppression checking helper
+
+(defun should-create-violation-p (rule)
+  "Check if a violation should be created for RULE based on current suppression state.
+Returns T if violation should be created, NIL if rule is currently suppressed.
+
+This function checks the dynamic *SUPPRESSION-STATE* variable and determines
+if the rule is suppressed at the current scope."
+  ;; Use dynamic lookup to avoid circular dependency
+  (let ((state-symbol (find-symbol "*SUPPRESSION-STATE*" "MALLET/ENGINE")))
+    (if (and state-symbol (boundp state-symbol) (symbol-value state-symbol))
+        ;; Check if rule is suppressed
+        (not (funcall (find-symbol "RULE-SUPPRESSED-P" "MALLET/SUPPRESSION")
+                      (symbol-value state-symbol)
+                      (rule-name rule)
+                      :form-type :lexical-scope))
+        ;; No suppression state (e.g., in unit tests), allow violation
+        t)))
 
 ;;; Generic traversal with cycle detection
 

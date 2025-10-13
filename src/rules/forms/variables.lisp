@@ -6,7 +6,8 @@
    (#:parser #:mallet/parser)
    (#:loop-parser #:mallet/parser/loop)
    (#:violation #:mallet/violation)
-   (#:scope #:mallet/utils/scope))
+   (#:scope #:mallet/utils/scope)
+   (#:utils #:mallet/utils))
   (:export #:unused-variables-rule
            #:unused-loop-variables-rule))
 (in-package #:mallet/rules/forms/variables)
@@ -52,12 +53,10 @@ Bound in find-shadows and accessible to all helper functions.")
   (cond
     ;; Simple variable
     ((stringp pattern)
-     (let ((symbol-name (base:symbol-name-from-string pattern)))
-       (if (and (> (length symbol-name) 0)
-                (or (char= (char symbol-name 0) #\&)   ; Lambda-list keywords
-                    (char= (char symbol-name 0) #\:))) ; Keyword arguments
-           nil  ; Skip lambda-list keywords and keyword arguments
-           (list pattern))))
+     (if (or (utils:lambda-list-keyword-p pattern)   ; Lambda-list keywords
+             (utils:keyword-string-p pattern))       ; Keyword arguments
+         nil  ; Skip lambda-list keywords and keyword arguments
+         (list pattern)))
     ;; Dotted pair - extract both parts
     ((and (consp pattern) (stringp (cdr pattern)))
      (append (extract-from-pattern (car pattern))
@@ -129,18 +128,11 @@ CONTEXT determines interpretation of ambiguous 2-element lists:
 
 ;;; Lambda list processing
 
-(defun lambda-list-keyword-p (elem)
-  "Check if ELEM is a lambda-list keyword (&optional, &key, etc.)."
-  (and (stringp elem)
-       (let ((name (base:symbol-name-from-string elem)))
-         (and (> (length name) 0)
-              (char= (char name 0) #\&)))))
-
 (defun contains-lambda-list-keyword-p (pattern)
   "Check if PATTERN (a list) contains any lambda-list keywords.
 This indicates it's a nested lambda list rather than a simple destructuring pattern."
   (when (and (consp pattern) (a:proper-list-p pattern))
-    (some #'lambda-list-keyword-p pattern)))
+    (some #'utils:lambda-list-keyword-p pattern)))
 
 (defun extract-lambda-list-vars (lambda-list allow-destructuring)
   "Extract all variable names from a lambda list.
@@ -153,10 +145,7 @@ Returns list of variable names."
           for elem = (nth i lambda-list)
           do (cond
                ;; Lambda-list keywords
-               ((and (stringp elem)
-                     (let ((name (base:symbol-name-from-string elem)))
-                       (and (> (length name) 0)
-                            (char= (char name 0) #\&))))
+               ((utils:lambda-list-keyword-p elem)
                 (let ((kw (base:symbol-name-from-string elem)))
                   (cond
                     ((or (string-equal kw "&OPTIONAL"))
@@ -256,10 +245,7 @@ Returns a list of default forms that can reference earlier parameters."
           for elem = (nth i lambda-list)
           do (cond
                ;; Lambda-list keywords
-               ((and (stringp elem)
-                     (let ((name (base:symbol-name-from-string elem)))
-                       (and (> (length name) 0)
-                            (char= (char name 0) #\&))))
+               ((utils:lambda-list-keyword-p elem)
                 (let ((kw (base:symbol-name-from-string elem)))
                   (cond
                     ((string-equal kw "&OPTIONAL")
@@ -304,7 +290,7 @@ Returns a list of default forms that can reference earlier parameters."
              (incf i))
     (nreverse defaults)))
 
-(defun calculate-scope (form-type binding remaining-bindings body aux-context &optional optional-key-defaults)
+(defun calculate-scope (form-type remaining-bindings body aux-context &optional optional-key-defaults)
   "Calculate the scope where a variable binding is available.
 Returns a list of forms where the variable should be checked for usage.
 OPTIONAL-KEY-DEFAULTS is a list of default forms from &optional and &key parameters (for :defun-regular only)."
@@ -408,6 +394,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
 
         ;; LET - check for shadowing in bindings
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (string-equal (base:symbol-name-from-string head) "LET"))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
            (let ((bindings (first rest-args)))
@@ -435,6 +422,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
 
         ;; LET* - check for shadowing in bindings
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (string-equal (base:symbol-name-from-string head) "LET*"))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
            (let ((bindings (first rest-args)))
@@ -463,6 +451,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
 
         ;; DEFUN/LAMBDA/DEFMACRO - check parameters for shadowing
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (or (string-equal (base:symbol-name-from-string head) "DEFUN")
                   (string-equal (base:symbol-name-from-string head) "LAMBDA")
                   (string-equal (base:symbol-name-from-string head) "DEFMACRO")))
@@ -472,7 +461,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
            (when (and (a:proper-list-p lambda-list)
                       (some (lambda (param)
                               (and (stringp param)
-                                   (not (char= (char (base:symbol-name-from-string param) 0) #\&))
+                                   (not (utils:lambda-list-keyword-p param))
                                    (string-equal (base:symbol-name-from-string param) target-name)))
                             lambda-list))
              ;; Complete shadow - parameter shadows the variable
@@ -485,7 +474,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
            (unless (and (a:proper-list-p lambda-list)
                         (some (lambda (param)
                                 (and (stringp param)
-                                     (not (char= (char (base:symbol-name-from-string param) 0) #\&))
+                                     (not (utils:lambda-list-keyword-p param))
                                      (string-equal (base:symbol-name-from-string param) target-name)))
                               lambda-list))
              (dolist (arg rest-args)
@@ -493,6 +482,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
 
         ;; DESTRUCTURING-BIND, MULTIPLE-VALUE-BIND
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (or (string-equal (base:symbol-name-from-string head) "DESTRUCTURING-BIND")
                   (string-equal (base:symbol-name-from-string head) "MULTIPLE-VALUE-BIND")))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
@@ -522,6 +512,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
         ;; The list-form/count-form is evaluated in outer scope (searchable)
         ;; The result-form and body are evaluated with variable bound (not searchable)
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (or (string-equal (base:symbol-name-from-string head) "DOLIST")
                   (string-equal (base:symbol-name-from-string head) "DOTIMES")))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 1))
@@ -545,6 +536,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
 
         ;; DO
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (string-equal (base:symbol-name-from-string head) "DO"))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
            (let ((var-clauses (first rest-args)))
@@ -564,6 +556,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
 
         ;; DO*
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (string-equal (base:symbol-name-from-string head) "DO*"))
          (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
            (let ((var-clauses (first rest-args)))
@@ -583,6 +576,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
 
         ;; LOOP - check for FOR/AS/WITH variables with AND detection
         ((and (stringp head)
+              (not (utils:keyword-string-p head))  ; Not a keyword
               (string-equal (base:symbol-name-from-string head) "LOOP"))
          (when (a:proper-list-p rest-args)
            (multiple-value-bind (loop-bindings body)
@@ -863,7 +857,7 @@ Pushes violations to *violations* special variable."
                  (let ((scope (cond
                                 ;; DO*: sequential init forms (like LET*) + all step forms except own
                                 ((eq form-type :do*)
-                                 (let* ((base-scope (calculate-scope form-type binding subsequent-bindings body-without-declares aux-context optional-key-defaults))
+                                 (let* ((base-scope (calculate-scope form-type subsequent-bindings body-without-declares aux-context optional-key-defaults))
                                         (var-clauses (first aux-context))
                                         (var-index (position binding bindings))
                                         (own-clause (when (and var-index var-clauses)
@@ -890,26 +884,35 @@ Pushes violations to *violations* special variable."
                                    (append other-step-forms rest-context)))
                                 ;; Normal scope calculation for other forms
                                 (t
-                                 (calculate-scope form-type binding subsequent-bindings body-without-declares aux-context optional-key-defaults)))))
+                                 (calculate-scope form-type subsequent-bindings body-without-declares aux-context optional-key-defaults)))))
                    (let ((is-ignored (ignored-var-p var-name ignored-vars))
                          (is-referenced (find-references var-name scope)))
                      (unless (or is-ignored is-referenced)
-                       ;; Look up position from scope stack for violation reporting
-                       (multiple-value-bind (scope-line scope-column)
-                           (scope:lookup-variable-position var-name)
-                         (when (and scope-line scope-column)
-                           (push (make-instance 'violation:violation
-                                                :rule (base:rule-name rule)
-                                                :file *file*
-                                                :line scope-line
-                                                :column scope-column
-                                                :severity (base:rule-severity rule)
-                                                :message
-                                                (format nil "~A '~A' is unused"
-                                                        (or message-prefix "Variable")
-                                                        (base:symbol-name-from-string var-name))
-                                                :fix nil)
-                                 *violations*)))))))))))
+                       ;; Check if rule is suppressed before creating violation
+                       (let ((state-symbol (find-symbol "*SUPPRESSION-STATE*" "MALLET/ENGINE")))
+                         (unless (and state-symbol
+                                      (boundp state-symbol)
+                                      (symbol-value state-symbol)
+                                      (funcall (find-symbol "RULE-SUPPRESSED-P" "MALLET/SUPPRESSION")
+                                               (symbol-value state-symbol)
+                                               (base:rule-name rule)))
+                           ;; Look up position from scope stack for violation reporting
+                           (multiple-value-bind (scope-line scope-column)
+                               (scope:lookup-variable-position var-name)
+                             (when (and scope-line scope-column)
+                               (push (make-instance 'violation:violation
+                                                    :rule (base:rule-name rule)
+                                                    :file *file*
+                                                    :line scope-line
+                                                    :column scope-column
+                                                    :severity (base:rule-severity rule)
+                                                    :message
+                                                    (format nil "~A '~A' is unused"
+                                                            (or message-prefix "Variable")
+                                                            (base:symbol-name-from-string var-name))
+                                                    :fix nil)
+                                     *violations*)))))))))))))
+
 (defun check-defun-bindings (expr line column position-map rule)
   "Check DEFUN for unused parameter bindings."
   (let ((rest-args (rest expr)))
@@ -1123,11 +1126,11 @@ Returns the original string object that should be in the position-map."
              (body (cddr rest-args)))
         (when (a:proper-list-p accessor-specs)
           (let ((bindings (mapcar (lambda (spec)
-                                   (when (and (consp spec) (>= (length spec) 2))
-                                     (list (first spec))))  ; (var accessor-name)
-                                 accessor-specs)))
+                                    (when (and (consp spec) (>= (length spec) 2))
+                                      (list (first spec))))  ; (var accessor-name)
+                                  accessor-specs)))
             (scope:with-new-scope
-                (check-binding-form :let (remove nil bindings) body line column position-map rule))))))))
+              (check-binding-form :let (remove nil bindings) body line column position-map rule))))))))
 
 (defun check-with-input-from-string-bindings (expr line column position-map rule)
   "Check WITH-INPUT-FROM-STRING for unused variable bindings."
@@ -1310,11 +1313,16 @@ Returns the original string object that should be in the position-map."
                ;; Look up the position of this subexpression before recursing
                (multiple-value-bind (subexpr-line subexpr-column)
                    (parser:find-position subexpr position-map line column)
-                 (check-expr subexpr
-                            (or subexpr-line line)
-                            (or subexpr-column column)
-                            position-map
-                            rule))))))))))
+                 ;; Recurse using check-form-recursive to get suppression handling
+                 ;; But we need to accumulate violations from nested calls
+                 (let ((nested-violations
+                        (base:check-form-recursive rule subexpr *file*
+                                                  (or subexpr-line line)
+                                                  (or subexpr-column column)
+                                                  nil
+                                                  position-map)))
+                   ;; Accumulate violations from nested call
+                   (setf *violations* (append *violations* nested-violations))))))))))))
 
 ;;; Unused-variables rules
 
@@ -1344,32 +1352,41 @@ Skips LOOP forms - use unused-loop-variables-rule for those."
   (check-type form parser:form)
   (check-type file pathname)
 
+  ;; Delegate to check-form-recursive for automatic suppression handling
+  (base:check-form-recursive rule
+                             (parser:form-expr form)
+                             file
+                             (parser:form-line form)
+                             (parser:form-column form)
+                             nil ; no function-name context
+                             (parser:form-position-map form)))
+
+(defmethod base:check-form-recursive ((rule unused-variables-rule) expr file line column
+                                       &optional function-name position-map)
+  "Recursively check for unused variables with automatic suppression handling."
+  (declare (ignore function-name))
+
   (handler-case
       (handler-bind ((type-error
                        (lambda (e)
                          (when (debug-mode-p)
-                           (let ((form-head (when (consp (parser:form-expr form))
-                                              (let ((head (first (parser:form-expr form))))
+                           (let ((form-head (when (consp expr)
+                                              (let ((head (first expr)))
                                                 (when (stringp head)
                                                   (base:symbol-name-from-string head))))))
                              (format *error-output* "~%Warning: Skipping unused-variables check for ~A form at ~A:~A~%  Error: ~A~%"
-                                     (or form-head "unknown") file (parser:form-line form) e)
+                                     (or form-head "unknown") file line e)
                              (uiop:print-condition-backtrace e))))))
         ;; Bind special variables and call check-expr
         (let ((*violations* '())
               (*file* file)
               (scope:*scope-stack* nil))  ; Initialize clean scope stack for this form
-          (let ((position-map (parser:form-position-map form)))
-            (check-expr (parser:form-expr form)
-                        (parser:form-line form)
-                        (parser:form-column form)
-                        position-map
-                        rule))
+          (check-expr expr line column position-map rule)
           (nreverse *violations*)))
     (type-error (e)
       (declare (ignore e))
-      ;; Print warning message only in debug mode
-      nil)))
+      ;; Return empty list on error
+      '())))
 
 (defun check-loop-expr (expr line column position-map rule)
   "Recursively check expression for LOOP forms with unused variables.
@@ -1455,7 +1472,19 @@ Similar to check-expr but only processes LOOP forms."
          (when (and (a:proper-list-p rest-args))
            (dolist (subexpr rest-args)
              (when (consp subexpr)
-               (check-loop-expr subexpr line column position-map rule)))))))))
+               ;; Look up the position of this subexpression before recursing
+               (multiple-value-bind (subexpr-line subexpr-column)
+                   (parser:find-position subexpr position-map line column)
+                 ;; Recurse using check-form-recursive to get suppression handling
+                 ;; But we need to accumulate violations from nested calls
+                 (let ((nested-violations
+                        (base:check-form-recursive rule subexpr *file*
+                                                  (or subexpr-line line)
+                                                  (or subexpr-column column)
+                                                  nil
+                                                  position-map)))
+                   ;; Accumulate violations from nested call
+                   (setf *violations* (append *violations* nested-violations))))))))))))
 
 (defmethod base:check-form ((rule unused-loop-variables-rule) form file)
   "Check that LOOP variables are either used or explicitly ignored.
@@ -1463,24 +1492,34 @@ Recursively descends into all forms to find nested LOOPs."
   (check-type form parser:form)
   (check-type file pathname)
 
+  ;; Delegate to check-form-recursive for automatic suppression handling
+  (base:check-form-recursive rule
+                             (parser:form-expr form)
+                             file
+                             (parser:form-line form)
+                             (parser:form-column form)
+                             nil ; no function-name context
+                             (parser:form-position-map form)))
+
+(defmethod base:check-form-recursive ((rule unused-loop-variables-rule) expr file line column
+                                       &optional function-name position-map)
+  "Recursively check for unused LOOP variables with automatic suppression handling."
+  (declare (ignore function-name))
+
   (handler-case
       (handler-bind ((type-error
                        (lambda (e)
                          (when (debug-mode-p)
                            (format *error-output* "~%Warning: Skipping unused-loop-variables check at ~A:~A~%  Error: ~A~%"
-                                   file (parser:form-line form) e)
+                                   file line e)
                            (uiop:print-condition-backtrace e)))))
         ;; Bind special variables and recursively check for LOOPs
         (let ((*violations* '())
               (*file* file)
               (scope:*scope-stack* nil))  ; Initialize clean scope stack for this form
-          (let ((position-map (parser:form-position-map form)))
-            (check-loop-expr (parser:form-expr form)
-                            (parser:form-line form)
-                            (parser:form-column form)
-                            position-map
-                            rule))
+          (check-loop-expr expr line column position-map rule)
           (nreverse *violations*)))
     (type-error (e)
       (declare (ignore e))
-      nil)))
+      ;; Return empty list on error
+      '())))

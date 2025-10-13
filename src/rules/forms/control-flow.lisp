@@ -51,7 +51,8 @@ Suppressions are handled automatically by the :around method."
                    (when (base:symbol-matches-p head "IF")
                      ;; IF should have 3 args (condition then else)
                      ;; If it has only 2 args, it's missing else clause
-                     (when (= (length rest-args) 2)
+                     (when (and (= (length rest-args) 2)
+                                (base:should-create-violation-p rule))
                        (push (make-instance 'violation:violation
                                             :rule :if-without-else
                                             :file file
@@ -130,7 +131,8 @@ Suppressions are handled automatically by the :around method."
                              (else-clause (when (>= (length rest-args) 3)
                                             (third rest-args))))
                          ;; Check if then clause is a bare progn
-                         (when (is-progn-p then-clause)
+                         (when (and (is-progn-p then-clause)
+                                    (base:should-create-violation-p rule))
                            (push (make-instance 'violation:violation
                                                 :rule :bare-progn-in-if
                                                 :file file
@@ -143,7 +145,8 @@ Suppressions are handled automatically by the :around method."
                                  violations))
 
                          ;; Check if else clause is a bare progn
-                         (when (is-progn-p else-clause)
+                         (when (and (is-progn-p else-clause)
+                                    (base:should-create-violation-p rule))
                            (push (make-instance 'violation:violation
                                                 :rule :bare-progn-in-if
                                                 :file file
@@ -237,7 +240,8 @@ Suppressions are handled automatically by the :around method."
                        (declare (ignore keyform))
 
                        ;; Check if it has T instead of OTHERWISE
-                       (when t-clause
+                       (when (and t-clause
+                                  (base:should-create-violation-p rule))
                          (push (make-instance 'violation:violation
                                               :rule :missing-otherwise
                                               :file file
@@ -252,7 +256,9 @@ Suppressions are handled automatically by the :around method."
                                violations))
 
                        ;; Check if it has OTHERWISE clause
-                       (unless (or (has-otherwise-clause-p clauses) t-clause)
+                       (unless (or (has-otherwise-clause-p clauses)
+                                   t-clause
+                                   (not (base:should-create-violation-p rule)))
                          (push (make-instance 'violation:violation
                                               :rule :missing-otherwise
                                               :file file
@@ -341,7 +347,8 @@ Suppressions are handled automatically by the :around method."
                        (declare (ignore keyform))
 
                        ;; Check if it has OTHERWISE or T clause
-                       (when catch-all-clause
+                       (when (and catch-all-clause
+                                  (base:should-create-violation-p rule))
                          (push (make-instance 'violation:violation
                                               :rule :wrong-otherwise
                                               :file file

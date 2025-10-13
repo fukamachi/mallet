@@ -54,12 +54,13 @@
                                                 (char= (char var-name (1- (length var-name))) #\*)))
                                       (not (and (char= (char var-name 0) #\+)
                                                 (char= (char var-name (1- (length var-name))) #\+))))
-                             (multiple-value-bind (var-line var-column)
-                                 (if position-map
-                                     (parser:find-position var-name-expr position-map
-                                                          fallback-line fallback-column)
-                                     (values fallback-line fallback-column))
-                               (push (make-instance 'violation:violation
+                             (when (base:should-create-violation-p rule)
+                               (multiple-value-bind (var-line var-column)
+                                   (if position-map
+                                       (parser:find-position var-name-expr position-map
+                                                            fallback-line fallback-column)
+                                       (values fallback-line fallback-column))
+                                 (push (make-instance 'violation:violation
                                                     :rule :special-variable-naming
                                                     :file file
                                                     :line var-line
@@ -68,7 +69,7 @@
                                                     :message (format nil "Special variable '~A' should be named *~A*"
                                                                      var-name
                                                                      (string-trim '(#\*) var-name)))
-                                     violations))))))))
+                                       violations)))))))))
 
                  ;; Recursively check nested forms
                  (when (consp current-expr)
@@ -123,12 +124,13 @@
                                       (plusp (length const-name))
                                       (not (and (char= (char const-name 0) #\+)
                                                 (char= (char const-name (1- (length const-name))) #\+))))
-                             (multiple-value-bind (const-line const-column)
-                                 (if position-map
-                                     (parser:find-position const-name-expr position-map
-                                                          fallback-line fallback-column)
-                                     (values fallback-line fallback-column))
-                               (push (make-instance 'violation:violation
+                             (when (base:should-create-violation-p rule)
+                               (multiple-value-bind (const-line const-column)
+                                   (if position-map
+                                       (parser:find-position const-name-expr position-map
+                                                            fallback-line fallback-column)
+                                       (values fallback-line fallback-column))
+                                 (push (make-instance 'violation:violation
                                                     :rule :constant-naming
                                                     :file file
                                                     :line const-line
@@ -137,7 +139,7 @@
                                                     :message (format nil "Constant '~A' should be named +~A+"
                                                                      const-name
                                                                      (string-trim '(#\+) const-name)))
-                                     violations))))))))
+                                       violations)))))))))
 
                  ;; Recursively check nested forms
                  (when (consp current-expr)
