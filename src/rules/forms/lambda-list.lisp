@@ -141,7 +141,9 @@
                                     violations))))))))
 
                  ;; Recursively check nested forms
-                 (when (consp current-expr)
+                 ;; Only recurse on proper lists to avoid issues with dotted lists (e.g., loop destructuring)
+                 (when (and (consp current-expr)
+                            (a:proper-list-p current-expr))
                    (dolist (subexpr current-expr)
                      (when (consp subexpr)
                        (let ((nested-violations (base:check-form-recursive rule subexpr file
@@ -155,7 +157,9 @@
 (defun check-lambda-list-mixed (lambda-list position-map fallback-line fallback-column context)
   "Check a single lambda list for mixed &optional and &key.
 Returns (line column message) if violation found, NIL otherwise."
-  (when (consp lambda-list)
+  ;; Only check proper lists - dotted lists in destructuring-bind can't have &optional/&key
+  (when (and (consp lambda-list)
+             (a:proper-list-p lambda-list))
     (let ((has-optional nil)
           (has-key nil))
       (dolist (item lambda-list)

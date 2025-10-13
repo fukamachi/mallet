@@ -72,7 +72,9 @@
                                        violations)))))))))
 
                  ;; Recursively check nested forms
-                 (when (consp current-expr)
+                 ;; Only recurse on proper lists to avoid issues with dotted lists (e.g., loop destructuring)
+                 (when (and (consp current-expr)
+                            (a:proper-list-p current-expr))
                    (dolist (subexpr current-expr)
                      (when (consp subexpr)
                        (let ((nested-violations (base:check-form-recursive rule subexpr file
@@ -142,7 +144,9 @@
                                        violations)))))))))
 
                  ;; Recursively check nested forms
-                 (when (consp current-expr)
+                 ;; Only recurse on proper lists to avoid issues with dotted lists (e.g., loop destructuring)
+                 (when (and (consp current-expr)
+                            (a:proper-list-p current-expr))
                    (dolist (subexpr current-expr)
                      (when (consp subexpr)
                        (let ((nested-violations (base:check-form-recursive rule subexpr file
