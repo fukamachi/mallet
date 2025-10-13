@@ -34,10 +34,10 @@
                              (parser:form-line form)
                              (parser:form-column form)))
 
-(defmethod base:check-form-recursive ((rule if-without-else-rule) expr file line column &optional function-name)
+(defmethod base:check-form-recursive ((rule if-without-else-rule) expr file line column &optional function-name position-map)
   "Recursively check for IF forms without else clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name))
+  (declare (ignore function-name position-map))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
@@ -104,10 +104,10 @@ Suppressions are handled automatically by the :around method."
                              (parser:form-line form)
                              (parser:form-column form)))
 
-(defmethod base:check-form-recursive ((rule bare-progn-in-if-rule) expr file line column &optional function-name)
+(defmethod base:check-form-recursive ((rule bare-progn-in-if-rule) expr file line column &optional function-name position-map)
   "Recursively check for bare PROGN in IF clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name))
+  (declare (ignore function-name position-map))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
@@ -196,10 +196,10 @@ Suppressions are handled automatically by the :around method."
                              (parser:form-line form)
                              (parser:form-column form)))
 
-(defmethod base:check-form-recursive ((rule missing-otherwise-rule) expr file line column &optional function-name)
+(defmethod base:check-form-recursive ((rule missing-otherwise-rule) expr file line column &optional function-name position-map)
   "Recursively check for CASE/TYPECASE without otherwise clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name))
+  (declare (ignore function-name position-map))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
@@ -307,10 +307,10 @@ Suppressions are handled automatically by the :around method."
                              (parser:form-line form)
                              (parser:form-column form)))
 
-(defmethod base:check-form-recursive ((rule wrong-otherwise-rule) expr file line column &optional function-name)
+(defmethod base:check-form-recursive ((rule wrong-otherwise-rule) expr file line column &optional function-name position-map)
   "Recursively check for ECASE/ETYPECASE with otherwise/t clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name))  ; Not tracking function context for this rule
+  (declare (ignore function-name position-map))  ; Not tracking function context for this rule
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))  ; Track visited cons cells

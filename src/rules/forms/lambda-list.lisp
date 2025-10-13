@@ -20,36 +20,135 @@
 
 (defmethod base:check-form ((rule mixed-optional-and-key-rule) form file)
   "Check that lambda lists don't mix &optional and &key."
-  (let ((expr (parser:form-expr form)))
-    (when (and (consp expr)
-               (stringp (first expr)))
-      (let ((operator (base:symbol-name-from-string (first expr))))
-        (cond
-          ;; defun (defun name lambda-list ...)
-          ((base:symbol-matches-p operator "DEFUN")
-           (when (>= (length expr) 3)
-             (check-lambda-list (third expr) form file (base:rule-severity rule) "defun")))
-          ;; defmethod (defmethod name qualifiers* (specializers) ...)
-          ((base:symbol-matches-p operator "DEFMETHOD")
-           (check-defmethod-lambda-lists expr form file (base:rule-severity rule)))
-          ;; lambda (lambda lambda-list ...)
-          ((base:symbol-matches-p operator "LAMBDA")
-           (when (>= (length expr) 2)
-             (check-lambda-list (second expr) form file (base:rule-severity rule) "lambda")))
-          ;; defmacro (defmacro name lambda-list ...)
-          ((base:symbol-matches-p operator "DEFMACRO")
-           (when (>= (length expr) 3)
-             (check-lambda-list (third expr) form file (base:rule-severity rule) "defmacro")))
-          ;; flet and labels
-          ((or (base:symbol-matches-p operator "FLET")
-               (base:symbol-matches-p operator "LABELS"))
-           (when (>= (length expr) 2)
-             (check-flet-functions (second expr) form file (base:rule-severity rule)))))))))
+  (base:check-form-recursive rule
+                             (parser:form-expr form)
+                             file
+                             (parser:form-line form)
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
+
+(defmethod base:check-form-recursive ((rule mixed-optional-and-key-rule) expr file line column &optional function-name position-map)
+  "Recursively check for mixed &optional and &key violations."
+  (declare (ignore function-name))
+  (let ((violations '())
+        (visited (make-hash-table :test 'eq)))
+    (labels ((check-expr (current-expr fallback-line fallback-column)
+               (when (and (consp current-expr)
+                          (not (gethash current-expr visited)))
+                 (setf (gethash current-expr visited) t)
+
+                 ;; Check if this form has a lambda list
+                 (when (stringp (first current-expr))
+                   (let ((operator (base:symbol-name-from-string (first current-expr))))
+                     (cond
+                       ;; defun (defun name lambda-list ...)
+                       ((base:symbol-matches-p operator "DEFUN")
+                        (when (>= (length current-expr) 3)
+                          (let* ((lambda-list (third current-expr))
+                                 (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "defun")))
+                            (when result
+                              (push (make-instance 'violation:violation
+                                                   :rule :mixed-optional-and-key
+                                                   :file file
+                                                   :line (first result)
+                                                   :column (second result)
+                                                   :severity (base:rule-severity rule)
+                                                   :message (third result))
+                                    violations)))))
+                       ;; defmethod (defmethod name qualifiers* (specializers) ...)
+                       ((base:symbol-matches-p operator "DEFMETHOD")
+                        (when (>= (length current-expr) 3)
+                          (loop for item in (cddr current-expr)
+                                when (consp item)
+                                do (let ((result (check-lambda-list-mixed item position-map fallback-line fallback-column "defmethod")))
+                                     (when result
+                                       (push (make-instance 'violation:violation
+                                                            :rule :mixed-optional-and-key
+                                                            :file file
+                                                            :line (first result)
+                                                            :column (second result)
+                                                            :severity (base:rule-severity rule)
+                                                            :message (third result))
+                                             violations)))
+                                   (return))))
+                       ;; lambda (lambda lambda-list ...)
+                       ((base:symbol-matches-p operator "LAMBDA")
+                        (when (>= (length current-expr) 2)
+                          (let* ((lambda-list (second current-expr))
+                                 (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "lambda")))
+                            (when result
+                              (push (make-instance 'violation:violation
+                                                   :rule :mixed-optional-and-key
+                                                   :file file
+                                                   :line (first result)
+                                                   :column (second result)
+                                                   :severity (base:rule-severity rule)
+                                                   :message (third result))
+                                    violations)))))
+                       ;; defmacro (defmacro name lambda-list ...)
+                       ((base:symbol-matches-p operator "DEFMACRO")
+                        (when (>= (length current-expr) 3)
+                          (let* ((lambda-list (third current-expr))
+                                 (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "defmacro")))
+                            (when result
+                              (push (make-instance 'violation:violation
+                                                   :rule :mixed-optional-and-key
+                                                   :file file
+                                                   :line (first result)
+                                                   :column (second result)
+                                                   :severity (base:rule-severity rule)
+                                                   :message (third result))
+                                    violations)))))
+                       ;; flet and labels
+                       ((or (base:symbol-matches-p operator "FLET")
+                            (base:symbol-matches-p operator "LABELS"))
+                        (when (>= (length current-expr) 2)
+                          (let ((bindings (second current-expr)))
+                            (when (consp bindings)
+                              (dolist (binding bindings)
+                                (when (and (consp binding) (>= (length binding) 2))
+                                  (let* ((lambda-list (second binding))
+                                         (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "flet/labels function")))
+                                    (when result
+                                      (push (make-instance 'violation:violation
+                                                           :rule :mixed-optional-and-key
+                                                           :file file
+                                                           :line (first result)
+                                                           :column (second result)
+                                                           :severity (base:rule-severity rule)
+                                                           :message (third result))
+                                            violations)))))))))
+                       ;; destructuring-bind
+                       ((base:symbol-matches-p operator "DESTRUCTURING-BIND")
+                        (when (>= (length current-expr) 3)
+                          (let* ((lambda-list (second current-expr))
+                                 (result (check-lambda-list-mixed lambda-list position-map fallback-line fallback-column "destructuring-bind")))
+                            (when result
+                              (push (make-instance 'violation:violation
+                                                   :rule :mixed-optional-and-key
+                                                   :file file
+                                                   :line (first result)
+                                                   :column (second result)
+                                                   :severity (base:rule-severity rule)
+                                                   :message (third result))
+                                    violations))))))))
+
+                 ;; Recursively check nested forms
+                 (when (consp current-expr)
+                   (dolist (subexpr current-expr)
+                     (when (consp subexpr)
+                       (let ((nested-violations (base:check-form-recursive rule subexpr file
+                                                                           fallback-line fallback-column)))
+                         (setf violations (nconc violations nested-violations)))))))))
+      (check-expr expr line column))
+    violations))
 
 ;;; Helper functions
 
-(defun check-lambda-list (lambda-list form file severity context)
-  "Check a single lambda list for mixed &optional and &key."
+(defun check-lambda-list-mixed (lambda-list position-map fallback-line fallback-column context)
+  "Check a single lambda list for mixed &optional and &key.
+Returns (line column message) if violation found, NIL otherwise."
   (when (consp lambda-list)
     (let ((has-optional nil)
           (has-key nil))
@@ -63,39 +162,10 @@
                (setf has-key t))))))
       (when (and has-optional has-key)
         (multiple-value-bind (line column)
-            (let ((position-map (parser:form-position-map form)))
-              (if position-map
-                  (parser:find-position lambda-list position-map
-                                       (parser:form-line form)
-                                       (parser:form-column form))
-                  (values (parser:form-line form) (parser:form-column form))))
-          (list (make-instance 'violation:violation
-                               :rule :mixed-optional-and-key
-                               :file file
-                               :line line
-                               :column column
-                               :severity severity
-                               :message (format nil "Lambda list in ~A mixes &optional and &key (confusing and problematic)"
-                                              context))))))))
-
-(defun check-defmethod-lambda-lists (expr form file severity)
-  "Check defmethod specialized lambda list for mixed &optional and &key."
-  (when (>= (length expr) 3)
-    ;; defmethod can have qualifiers, so we need to find the lambda list
-    ;; (defmethod name qualifier* (specializers) ...)
-    ;; The lambda list is the first list after the name
-    (loop for item in (cddr expr)
-          when (consp item)
-          return (check-lambda-list item form file severity "defmethod"))))
-
-(defun check-flet-functions (bindings form file severity)
-  "Check flet/labels function bindings for mixed &optional and &key."
-  (when (consp bindings)
-    (let ((violations '()))
-      (dolist (binding bindings)
-        ;; Each binding is (name lambda-list ...)
-        (when (and (consp binding) (>= (length binding) 2))
-          (let ((result (check-lambda-list (second binding) form file severity "flet/labels function")))
-            (when result
-              (setf violations (nconc violations result))))))
-      violations)))
+            (if position-map
+                (parser:find-position lambda-list position-map
+                                     fallback-line fallback-column)
+                (values fallback-line fallback-column))
+          (list line column
+                (format nil "Lambda list in ~A mixes &optional and &key (confusing and problematic)"
+                        context)))))))

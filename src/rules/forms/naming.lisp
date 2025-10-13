@@ -21,13 +21,64 @@
 
 (defmethod base:check-form ((rule special-variable-naming-rule) form file)
   "Check that special variables follow *foo* naming convention."
-  (let ((expr (parser:form-expr form)))
-    (when (and (consp expr)
-               (stringp (first expr)))
-      (let ((operator (base:symbol-name-from-string (first expr))))
-        (when (or (base:symbol-matches-p operator "DEFVAR")
-                  (base:symbol-matches-p operator "DEFPARAMETER"))
-          (check-earmuff-name expr form file (base:rule-severity rule) "Special variable"))))))
+  (base:check-form-recursive rule
+                             (parser:form-expr form)
+                             file
+                             (parser:form-line form)
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
+
+(defmethod base:check-form-recursive ((rule special-variable-naming-rule) expr file line column &optional function-name position-map)
+  "Recursively check for special variable naming violations."
+  (declare (ignore function-name))
+  (let ((violations '())
+        (visited (make-hash-table :test 'eq)))
+    (labels ((check-expr (current-expr fallback-line fallback-column)
+               (when (and (consp current-expr)
+                          (not (gethash current-expr visited)))
+                 (setf (gethash current-expr visited) t)
+
+                 ;; Check if this form is a defvar/defparameter
+                 (when (stringp (first current-expr))
+                   (let ((operator (base:symbol-name-from-string (first current-expr))))
+                     (when (or (base:symbol-matches-p operator "DEFVAR")
+                               (base:symbol-matches-p operator "DEFPARAMETER"))
+                       ;; Found a defvar/defparameter - check naming
+                       (when (>= (length current-expr) 2)
+                         (let* ((var-name-expr (second current-expr))
+                                (var-name (base:symbol-name-from-string var-name-expr)))
+                           (when (and var-name
+                                      (plusp (length var-name))
+                                      (not (and (char= (char var-name 0) #\*)
+                                                (char= (char var-name (1- (length var-name))) #\*)))
+                                      (not (and (char= (char var-name 0) #\+)
+                                                (char= (char var-name (1- (length var-name))) #\+))))
+                             (multiple-value-bind (var-line var-column)
+                                 (if position-map
+                                     (parser:find-position var-name-expr position-map
+                                                          fallback-line fallback-column)
+                                     (values fallback-line fallback-column))
+                               (push (make-instance 'violation:violation
+                                                    :rule :special-variable-naming
+                                                    :file file
+                                                    :line var-line
+                                                    :column var-column
+                                                    :severity (base:rule-severity rule)
+                                                    :message (format nil "Special variable '~A' should be named *~A*"
+                                                                     var-name
+                                                                     (string-trim '(#\*) var-name)))
+                                     violations))))))))
+
+                 ;; Recursively check nested forms
+                 (when (consp current-expr)
+                   (dolist (subexpr current-expr)
+                     (when (consp subexpr)
+                       (let ((nested-violations (base:check-form-recursive rule subexpr file
+                                                                           fallback-line fallback-column)))
+                         (setf violations (nconc violations nested-violations)))))))))
+      (check-expr expr line column))
+    violations))
 
 ;;; Constant Naming Rule
 
@@ -41,66 +92,60 @@
 
 (defmethod base:check-form ((rule constant-naming-rule) form file)
   "Check that constants follow +foo+ naming convention."
-  (let ((expr (parser:form-expr form)))
-    (when (and (consp expr)
-               (stringp (first expr)))
-      (let ((operator (base:symbol-name-from-string (first expr))))
-        (when (or (base:symbol-matches-p operator "DEFCONSTANT")
-                  (base:symbol-matches-p operator "DEFINE-CONSTANT"))
-          (check-plus-name expr form file (base:rule-severity rule) "Constant"))))))
+  (base:check-form-recursive rule
+                             (parser:form-expr form)
+                             file
+                             (parser:form-line form)
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
 
-;;; Helper functions
+(defmethod base:check-form-recursive ((rule constant-naming-rule) expr file line column &optional function-name position-map)
+  "Recursively check for constant naming violations."
+  (declare (ignore function-name))
+  (let ((violations '())
+        (visited (make-hash-table :test 'eq)))
+    (labels ((check-expr (current-expr fallback-line fallback-column)
+               (when (and (consp current-expr)
+                          (not (gethash current-expr visited)))
+                 (setf (gethash current-expr visited) t)
 
-(defun check-earmuff-name (expr form file severity label)
-  "Check that variable name follows *foo* convention."
-  (when (and (consp expr) (>= (length expr) 2))
-    (let* ((var-name-expr (second expr))
-           (var-name (base:symbol-name-from-string var-name-expr))
-           (position-map (parser:form-position-map form)))
-      (when (and var-name
-                 (plusp (length var-name))
-                 (not (and (char= (char var-name 0) #\*)
-                           (char= (char var-name (1- (length var-name))) #\*)))
-                 (not (and (char= (char var-name 0) #\+)
-                           (char= (char var-name (1- (length var-name))) #\+))))
-        (multiple-value-bind (line column)
-            (if position-map
-                (parser:find-position var-name-expr position-map
-                                     (parser:form-line form)
-                                     (parser:form-column form))
-                (values (parser:form-line form) (parser:form-column form)))
-          (list (make-instance 'violation:violation
-                               :rule :special-variable-naming
-                               :file file
-                               :line line
-                               :column column
-                               :severity severity
-                               :message (format nil "~A '~A' should be named *~A*"
-                                              label var-name
-                                              (string-trim '(#\*) var-name)))))))))
+                 ;; Check if this form is a defconstant/define-constant
+                 (when (stringp (first current-expr))
+                   (let ((operator (base:symbol-name-from-string (first current-expr))))
+                     (when (or (base:symbol-matches-p operator "DEFCONSTANT")
+                               (base:symbol-matches-p operator "DEFINE-CONSTANT"))
+                       ;; Found a defconstant - check naming
+                       (when (>= (length current-expr) 2)
+                         (let* ((const-name-expr (second current-expr))
+                                (const-name (base:symbol-name-from-string const-name-expr)))
+                           (when (and const-name
+                                      (plusp (length const-name))
+                                      (not (and (char= (char const-name 0) #\+)
+                                                (char= (char const-name (1- (length const-name))) #\+))))
+                             (multiple-value-bind (const-line const-column)
+                                 (if position-map
+                                     (parser:find-position const-name-expr position-map
+                                                          fallback-line fallback-column)
+                                     (values fallback-line fallback-column))
+                               (push (make-instance 'violation:violation
+                                                    :rule :constant-naming
+                                                    :file file
+                                                    :line const-line
+                                                    :column const-column
+                                                    :severity (base:rule-severity rule)
+                                                    :message (format nil "Constant '~A' should be named +~A+"
+                                                                     const-name
+                                                                     (string-trim '(#\+) const-name)))
+                                     violations))))))))
 
-(defun check-plus-name (expr form file severity label)
-  "Check that constant name follows +foo+ convention."
-  (when (and (consp expr) (>= (length expr) 2))
-    (let* ((const-name-expr (second expr))
-           (const-name (base:symbol-name-from-string const-name-expr))
-           (position-map (parser:form-position-map form)))
-      (when (and const-name
-                 (plusp (length const-name))
-                 (not (and (char= (char const-name 0) #\+)
-                           (char= (char const-name (1- (length const-name))) #\+))))
-        (multiple-value-bind (line column)
-            (if position-map
-                (parser:find-position const-name-expr position-map
-                                     (parser:form-line form)
-                                     (parser:form-column form))
-                (values (parser:form-line form) (parser:form-column form)))
-          (list (make-instance 'violation:violation
-                               :rule :constant-naming
-                               :file file
-                               :line line
-                               :column column
-                               :severity severity
-                               :message (format nil "~A '~A' should be named +~A+"
-                                              label const-name
-                                              (string-trim '(#\+) const-name)))))))))
+                 ;; Recursively check nested forms
+                 (when (consp current-expr)
+                   (dolist (subexpr current-expr)
+                     (when (consp subexpr)
+                       (let ((nested-violations (base:check-form-recursive rule subexpr file
+                                                                           fallback-line fallback-column)))
+                         (setf violations (nconc violations nested-violations)))))))))
+      (check-expr expr line column))
+    violations))
+

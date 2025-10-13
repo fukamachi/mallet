@@ -124,7 +124,7 @@ Returns a list of VIOLATION objects."))
 
 ;;; Recursive form checking with suppression support
 
-(defgeneric check-form-recursive (rule expr file line column &optional function-name)
+(defgeneric check-form-recursive (rule expr file line column &optional function-name position-map)
   (:documentation "Recursively check an expression and its nested forms.
 This generic function is provided for rules to use when they need to recursively check nested forms.
 It automatically handles declare-based suppressions through its :around method.
@@ -135,12 +135,14 @@ FILE - The file being checked
 LINE - Line number of the expression
 COLUMN - Column number of the expression
 FUNCTION-NAME - Optional function name context for function-specific suppressions
+POSITION-MAP - Optional position map for looking up exact positions of subexpressions
 
 Rules should call this method when recursing into nested forms to ensure suppressions are handled."))
 
-(defmethod check-form-recursive :around ((rule rule) expr file line column &optional function-name)
+(defmethod check-form-recursive :around ((rule rule) expr file line column &optional function-name position-map)
   "Handle declare-based suppressions automatically for recursive checking.
 This :around method checks for (declare (mallet:suppress ...)) forms and manages the suppression scope."
+  (declare (ignore position-map))
   ;; Use dynamic lookup to avoid circular dependency with engine package
   ;; The *suppression-state* special variable is bound by the engine during linting
   (let ((state-symbol (find-symbol "*SUPPRESSION-STATE*" "MALLET/ENGINE")))
@@ -222,7 +224,8 @@ Handles forms like:
                                               ((symbolp rule)
                                                (intern (symbol-name rule) :keyword))
                                               ((stringp rule)
-                                               (let ((name (string-upcase rule)))
+                                               ;; Strip package prefix first, then intern as keyword
+                                               (let ((name (string-upcase (symbol-name-from-string rule))))
                                                  (intern (if (and (> (length name) 0)
                                                                   (char= (char name 0) #\:))
                                                              (subseq name 1)
