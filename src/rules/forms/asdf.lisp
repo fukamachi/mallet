@@ -4,7 +4,8 @@
    (#:a #:alexandria)
    (#:base #:mallet/rules/base)
    (#:violation #:mallet/violation)
-   (#:parser #:mallet/parser))
+   (#:parser #:mallet/parser)
+   (#:utils #:mallet/utils))
   (:export #:asdf-component-strings-rule))
 (in-package #:mallet/rules/forms/asdf)
 
@@ -40,10 +41,10 @@ For plain strings like 'main', check SOURCE for '#:' pattern if provided."
   (and (stringp str)
        (or
         ;; Keyword: starts with ":"
-        (and (> (length str) 0) (char= (char str 0) #\:))
+        (utils:keyword-string-p str)
         ;; Package-qualified: has ":" but not at start (e.g., "CURRENT:FOO")
         (and (find #\: str)
-             (not (char= (char str 0) #\:)))
+             (not (utils:keyword-string-p str)))
         ;; Plain string - check source for #: pattern if available
         (and source
              (stringp source)
@@ -56,7 +57,7 @@ For plain strings like 'main', check SOURCE for '#:' pattern if provided."
 Examples: ':ALEXANDRIA' -> 'alexandria', 'CURRENT:FOO' -> 'foo'"
   (cond
     ;; Keyword: ":ALEXANDRIA" -> "alexandria"
-    ((and (> (length str) 0) (char= (char str 0) #\:))
+    ((utils:keyword-string-p str)
      (string-downcase (subseq str 1)))
     ;; Uninterned: "#:FOO" -> "foo"
     ((and (> (length str) 1) (char= (char str 0) #\#) (char= (char str 1) #\:))
@@ -75,7 +76,7 @@ Examples: 'my-system' with '#:my-system' in source -> '#:my-system'
   (let ((name (extract-symbol-name str)))
     (cond
       ;; Check if it's a keyword in the parsed string
-      ((and (> (length str) 0) (char= (char str 0) #\:))
+      ((utils:keyword-string-p str)
        (format nil ":~A" name))
       ;; Check source for #: pattern
       ((and source (stringp source)

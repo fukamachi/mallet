@@ -1,7 +1,8 @@
 (defpackage #:mallet/suppression
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria))
+   (#:a #:alexandria)
+   (#:utils #:mallet/utils))
   (:export #:suppression-state
            #:make-suppression-state
            #:region-disabled-rules
@@ -204,8 +205,7 @@
                                ;; Strip leading colon if present
                                ((stringp arg)
                                 (let ((name (string-upcase arg)))
-                                  (intern (if (and (> (length name) 0)
-                                                   (char= (char name 0) #\:))
+                                  (intern (if (utils:keyword-string-p name)
                                               (subseq name 1)
                                               name)
                                           :keyword)))
@@ -227,8 +227,7 @@
                          ;; String from parser - convert to keyword
                          ((stringp rule-arg)
                           (let ((name (string-upcase rule-arg)))
-                            (intern (if (and (> (length name) 0)
-                                             (char= (char name 0) #\:))
+                            (intern (if (utils:keyword-string-p name)
                                         (subseq name 1)
                                         name)
                                     :keyword)))
@@ -299,8 +298,7 @@
                                ;; Strip leading colon if present
                                ((stringp arg)
                                 (let ((name (string-upcase arg)))
-                                  (intern (if (and (> (length name) 0)
-                                                   (char= (char name 0) #\:))
+                                  (intern (if (utils:keyword-string-p name)
                                               (subseq name 1)
                                               name)
                                           :keyword)))

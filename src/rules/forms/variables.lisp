@@ -83,8 +83,7 @@ CONTEXT determines interpretation of ambiguous 2-element lists:
     ;; The second element is code (the init form), not a variable binding
     ;; BUT: In :destructuring context, all strings are variables
     ((and (consp binding-form)
-          (a:proper-list-p binding-form)
-          (= (length binding-form) 2)
+          (utils:proper-list-of-exact-length-p binding-form 2)
           (stringp (first binding-form))
           (eq context :binding))  ; Only treat as LET binding in :binding context
      ;; Extract only the variable (first element), not the init form
@@ -92,9 +91,7 @@ CONTEXT determines interpretation of ambiguous 2-element lists:
     ;; Lambda list binding with default/supplied-p: (var default) or (var default supplied-p)
     ;; Check if this has non-string elements indicating it's not pure destructuring
     ((and (consp binding-form)
-          (a:proper-list-p binding-form)
-          (>= (length binding-form) 2)
-          (<= (length binding-form) 3)
+          (utils:proper-list-of-length-range-p binding-form 2 3)
           ;; At least one element after the first is not a string (value/init form)
           (some (lambda (elem) (not (stringp elem))) (rest binding-form)))
      ;; Extract only variable(s) from first element, skip init forms
@@ -204,7 +201,7 @@ Returns list of variable names."
                       (push elem vars))
                      ((and (consp elem)
                            (consp (first elem))
-                           (= (length (first elem)) 2)
+                           (utils:proper-list-of-exact-length-p (first elem) 2)
                            (stringp (second (first elem))))
                       ;; ((:keyword var) ...) - extract var
                       (push (second (first elem)) vars)
@@ -329,7 +326,7 @@ OPTIONAL-KEY-DEFAULTS is a list of default forms from &optional and &key paramet
         ;; All step forms (including this variable's own - we'll filter later)
         (when (a:proper-list-p var-clauses)
           (mapcar (lambda (clause)
-                    (when (and (a:proper-list-p clause) (>= (length clause) 3))
+                    (when (utils:proper-list-of-min-length-p clause 3)
                       (third clause)))  ; step form
                   var-clauses))
         ;; Test, result, and body
@@ -342,13 +339,13 @@ OPTIONAL-KEY-DEFAULTS is a list of default forms from &optional and &key paramet
        (append
         ;; Subsequent bindings' init forms (sequential like LET*)
         (mapcar (lambda (clause)
-                  (when (and (a:proper-list-p clause) (>= (length clause) 2))
+                  (when (utils:proper-list-of-min-length-p clause 2)
                     (second clause)))  ; init form
                 remaining-bindings)
         ;; All step forms (including this variable's own - we'll filter later)
         (when (a:proper-list-p var-clauses)
           (mapcar (lambda (clause)
-                    (when (and (a:proper-list-p clause) (>= (length clause) 3))
+                    (when (utils:proper-list-of-min-length-p clause 3)
                       (third clause)))  ; step form
                   var-clauses))
         ;; Test, result, and body
@@ -393,10 +390,8 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
          nil)
 
         ;; LET - check for shadowing in bindings
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (string-equal (base:symbol-name-from-string head) "LET"))
-         (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+        ((utils:form-head-matches-p head "LET")
+         (when (utils:proper-list-of-min-length-p rest-args 2)
            (let ((bindings (first rest-args)))
              (when (and (a:proper-list-p bindings)
                         (some (lambda (b) (binds-same-name-p b target-name)) bindings))
@@ -421,10 +416,8 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
                  (find-shadows-in-expr form target-name))))))
 
         ;; LET* - check for shadowing in bindings
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (string-equal (base:symbol-name-from-string head) "LET*"))
-         (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+        ((utils:form-head-matches-p head "LET*")
+         (when (utils:proper-list-of-min-length-p rest-args 2)
            (let ((bindings (first rest-args)))
              (when (and (a:proper-list-p bindings)
                         (some (lambda (b) (binds-same-name-p b target-name)) bindings))
@@ -450,13 +443,11 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
                  (find-shadows-in-expr form target-name))))))
 
         ;; DEFUN/LAMBDA/DEFMACRO - check parameters for shadowing
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (or (string-equal (base:symbol-name-from-string head) "DEFUN")
-                  (string-equal (base:symbol-name-from-string head) "LAMBDA")
-                  (string-equal (base:symbol-name-from-string head) "DEFMACRO")))
+        ((or (utils:form-head-matches-p head "DEFUN")
+             (utils:form-head-matches-p head "LAMBDA")
+             (utils:form-head-matches-p head "DEFMACRO"))
          (let* ((lambda-list-pos (if (string-equal (base:symbol-name-from-string head) "LAMBDA") 0 1))
-                (lambda-list (when (and (a:proper-list-p rest-args) (> (length rest-args) lambda-list-pos))
+                (lambda-list (when (utils:proper-list-of-min-length-p rest-args (1+ lambda-list-pos))
                                (nth lambda-list-pos rest-args))))
            (when (and (a:proper-list-p lambda-list)
                       (some (lambda (param)
@@ -481,11 +472,9 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
                (find-shadows-in-expr arg target-name)))))
 
         ;; DESTRUCTURING-BIND, MULTIPLE-VALUE-BIND
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (or (string-equal (base:symbol-name-from-string head) "DESTRUCTURING-BIND")
-                  (string-equal (base:symbol-name-from-string head) "MULTIPLE-VALUE-BIND")))
-         (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+        ((or (utils:form-head-matches-p head "DESTRUCTURING-BIND")
+             (utils:form-head-matches-p head "MULTIPLE-VALUE-BIND"))
+         (when (utils:proper-list-of-min-length-p rest-args 2)
            (let ((vars (first rest-args))
                  (init-form (second rest-args)))  ; The init-form is evaluated in outer scope
              (let ((all-vars (extract-bindings vars :destructuring)))
@@ -511,14 +500,12 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
         ;; (dotimes (var count-form [result-form]) body...)
         ;; The list-form/count-form is evaluated in outer scope (searchable)
         ;; The result-form and body are evaluated with variable bound (not searchable)
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (or (string-equal (base:symbol-name-from-string head) "DOLIST")
-                  (string-equal (base:symbol-name-from-string head) "DOTIMES")))
-         (when (and (a:proper-list-p rest-args) (>= (length rest-args) 1))
+        ((or (utils:form-head-matches-p head "DOLIST")
+             (utils:form-head-matches-p head "DOTIMES"))
+         (when (utils:proper-list-of-min-length-p rest-args 1)
            (let* ((spec (first rest-args))
                   (var (when (a:proper-list-p spec) (first spec)))
-                  (source-form (when (and (a:proper-list-p spec) (>= (length spec) 2))
+                  (source-form (when (utils:proper-list-of-min-length-p spec 2)
                                 (second spec))))
              (when (and (stringp var)
                         (string-equal (base:symbol-name-from-string var) target-name))
@@ -535,10 +522,8 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
                  (find-shadows-in-expr arg target-name))))))
 
         ;; DO
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (string-equal (base:symbol-name-from-string head) "DO"))
-         (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+        ((utils:form-head-matches-p head "DO")
+         (when (utils:proper-list-of-min-length-p rest-args 2)
            (let ((var-clauses (first rest-args)))
              (when (and (a:proper-list-p var-clauses)
                         (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
@@ -555,10 +540,8 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
                  (find-shadows-in-expr arg target-name))))))
 
         ;; DO*
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (string-equal (base:symbol-name-from-string head) "DO*"))
-         (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+        ((utils:form-head-matches-p head "DO*")
+         (when (utils:proper-list-of-min-length-p rest-args 2)
            (let ((var-clauses (first rest-args)))
              (when (and (a:proper-list-p var-clauses)
                         (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
@@ -575,9 +558,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
                  (find-shadows-in-expr arg target-name))))))
 
         ;; LOOP - check for FOR/AS/WITH variables with AND detection
-        ((and (stringp head)
-              (not (utils:keyword-string-p head))  ; Not a keyword
-              (string-equal (base:symbol-name-from-string head) "LOOP"))
+        ((utils:form-head-matches-p head "LOOP")
          (when (a:proper-list-p rest-args)
            (multiple-value-bind (loop-bindings body)
                (loop-parser:parse-loop-clauses rest-args)
@@ -862,7 +843,7 @@ Pushes violations to *violations* special variable."
                                         (var-index (position binding bindings))
                                         (own-clause (when (and var-index var-clauses)
                                                       (nth var-index var-clauses)))
-                                        (own-step-form (when (and (a:proper-list-p own-clause) (>= (length own-clause) 3))
+                                        (own-step-form (when (utils:proper-list-of-min-length-p own-clause 3)
                                                          (third own-clause))))
                                    ;; Filter out own step form from base-scope
                                    (remove own-step-form base-scope :test #'eq)))
@@ -873,11 +854,11 @@ Pushes violations to *violations* special variable."
                                         (var-index (position binding bindings))
                                         (own-clause (when (and var-index var-clauses)
                                                       (nth var-index var-clauses)))
-                                        (own-step-form (when (and (a:proper-list-p own-clause) (>= (length own-clause) 3))
+                                        (own-step-form (when (utils:proper-list-of-min-length-p own-clause 3)
                                                          (third own-clause)))
                                         (all-step-forms (when (a:proper-list-p var-clauses)
                                                           (mapcar (lambda (clause)
-                                                                    (when (and (a:proper-list-p clause) (>= (length clause) 3))
+                                                                    (when (utils:proper-list-of-min-length-p clause 3)
                                                                       (third clause)))
                                                                   var-clauses)))
                                         (other-step-forms (remove own-step-form all-step-forms)))
@@ -958,7 +939,7 @@ Pushes violations to *violations* special variable."
 (defun check-let-bindings (expr line column position-map rule)
   "Check LET for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (handler-case
           (let ((bindings (first rest-args))
                 (body (rest rest-args)))
@@ -972,7 +953,7 @@ Pushes violations to *violations* special variable."
 (defun check-let*-bindings (expr line column position-map rule)
   "Check LET* for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (let ((bindings (first rest-args))
             (body (rest rest-args)))
         (scope:with-new-scope
@@ -1024,7 +1005,7 @@ Returns the original string object that should be in the position-map."
 (defun check-do-bindings (expr line column position-map rule)
   "Check DO for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (let* ((var-clauses (first rest-args))
              (end-test-clause (second rest-args))
              (body (cddr rest-args))
@@ -1044,7 +1025,7 @@ Returns the original string object that should be in the position-map."
 (defun check-do*-bindings (expr line column position-map rule)
   "Check DO* for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (let* ((var-clauses (first rest-args))
              (end-test-clause (second rest-args))
              (body (cddr rest-args))
@@ -1060,7 +1041,7 @@ Returns the original string object that should be in the position-map."
 (defun check-destructuring-bind-bindings (expr line column position-map rule)
   "Check DESTRUCTURING-BIND for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 3))
+    (when (utils:proper-list-of-min-length-p rest-args 3)
       (let* ((lambda-list (first rest-args))
              (body (cddr rest-args))
              (var-names (extract-lambda-list-vars lambda-list t))
@@ -1072,7 +1053,7 @@ Returns the original string object that should be in the position-map."
 (defun check-multiple-value-bind-bindings (expr line column position-map rule)
   "Check MULTIPLE-VALUE-BIND for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 3))
+    (when (utils:proper-list-of-min-length-p rest-args 3)
       (let* ((vars (first rest-args))
              (body (cddr rest-args))
              (bindings (list vars)))
@@ -1082,10 +1063,10 @@ Returns the original string object that should be in the position-map."
 (defun check-dolist-bindings (expr line column position-map rule)
   "Check DOLIST for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (let* ((spec (first rest-args))
              (body (rest rest-args)))
-        (when (and (a:proper-list-p spec) (>= (length spec) 2))
+        (when (utils:proper-list-of-min-length-p spec 2)
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope
@@ -1094,10 +1075,10 @@ Returns the original string object that should be in the position-map."
 (defun check-do-symbols-bindings (expr line column position-map rule)
   "Check DO-SYMBOLS/DO-EXTERNAL-SYMBOLS/DO-ALL-SYMBOLS for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (let* ((spec (first rest-args))
              (body (rest rest-args)))
-        (when (and (a:proper-list-p spec) (>= (length spec) 1))
+        (when (utils:proper-list-of-min-length-p spec 1)
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope
@@ -1106,7 +1087,7 @@ Returns the original string object that should be in the position-map."
 (defun check-with-slots-bindings (expr line column position-map rule)
   "Check WITH-SLOTS for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 3))
+    (when (utils:proper-list-of-min-length-p rest-args 3)
       (let* ((slot-specs (first rest-args))
              (body (cddr rest-args)))
         (when (a:proper-list-p slot-specs)
@@ -1121,7 +1102,7 @@ Returns the original string object that should be in the position-map."
 (defun check-with-accessors-bindings (expr line column position-map rule)
   "Check WITH-ACCESSORS for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 3))
+    (when (utils:proper-list-of-min-length-p rest-args 3)
       (let* ((accessor-specs (first rest-args))
              (body (cddr rest-args)))
         (when (a:proper-list-p accessor-specs)
@@ -1135,10 +1116,10 @@ Returns the original string object that should be in the position-map."
 (defun check-with-input-from-string-bindings (expr line column position-map rule)
   "Check WITH-INPUT-FROM-STRING for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (let* ((spec (first rest-args))
              (body (rest rest-args)))
-        (when (and (a:proper-list-p spec) (>= (length spec) 2))
+        (when (utils:proper-list-of-min-length-p spec 2)
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope
@@ -1147,7 +1128,7 @@ Returns the original string object that should be in the position-map."
 (defun check-with-output-to-string-bindings (expr line column position-map rule)
   "Check WITH-OUTPUT-TO-STRING for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 1))
+    (when (utils:proper-list-of-min-length-p rest-args 1)
       (let* ((spec (first rest-args))
              (body (rest rest-args)))
         (when (a:proper-list-p spec)
@@ -1159,10 +1140,10 @@ Returns the original string object that should be in the position-map."
 (defun check-with-open-file-bindings (expr line column position-map rule)
   "Check WITH-OPEN-FILE for unused variable bindings."
   (let ((rest-args (rest expr)))
-    (when (and (a:proper-list-p rest-args) (>= (length rest-args) 2))
+    (when (utils:proper-list-of-min-length-p rest-args 2)
       (let* ((spec (first rest-args))
              (body (rest rest-args)))
-        (when (and (a:proper-list-p spec) (>= (length spec) 2))
+        (when (utils:proper-list-of-min-length-p spec 2)
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope

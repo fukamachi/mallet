@@ -226,8 +226,7 @@ Handles forms like:
                                               ((stringp rule)
                                                ;; Strip package prefix first, then intern as keyword
                                                (let ((name (string-upcase (symbol-name-from-string rule))))
-                                                 (intern (if (and (> (length name) 0)
-                                                                  (char= (char name 0) #\:))
+                                                 (intern (if (utils:keyword-string-p name)
                                                              (subseq name 1)
                                                              name)
                                                          :keyword)))
