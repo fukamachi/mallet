@@ -22,6 +22,9 @@ Use it when you need richer patterns than basic wildcards provided by UIOP.
 
 ;; Test if a string matches a pattern
 (glob-match "*.txt" "readme.txt")  ; => T
+
+;; Test if a path matches with special path-aware semantics
+(glob-path-match "docs/" #P"/project/docs/api.md")  ; => T
 ```
 
 ## Usage
@@ -103,6 +106,28 @@ Use it when you need richer patterns than basic wildcards provided by UIOP.
 ;; Period flag (leading . must be matched explicitly)
 (glob-match "*" ".hidden" :period t)      ; => NIL
 (glob-match ".*" ".hidden" :period t)     ; => T
+```
+
+### Gitignore-Style Path Matching
+
+The `glob-path-match` function implements `.gitignore`-style pattern matching semantics, making it perfect for configuration files, build tools, and any scenario where you need path-based rules:
+
+```lisp
+;; Patterns without '/' match any file/directory at any depth
+(glob-path-match "*.log" #P"/var/log/app.log")      ; => T
+(glob-path-match "build" #P"/src/build/output.txt") ; => T
+
+;; Patterns with '/' are relative and match at any depth
+(glob-path-match "src/*.c" #P"/project/src/main.c")     ; => T
+(glob-path-match "*/test/*" #P"/app/lib/test/suite.lisp") ; => T
+
+;; Trailing '/' matches directories and their contents recursively
+(glob-path-match "vendor/" #P"/project/vendor/lib/foo.lisp") ; => T
+(glob-path-match "build/" #P"/src/build/cache/data.tmp")     ; => T
+
+;; Leading '/' makes patterns absolute
+(glob-path-match "/tmp/*.log" #P"/tmp/debug.log")   ; => T
+(glob-path-match "/tmp/*.log" #P"/var/tmp/debug.log") ; => NIL
 ```
 
 ## Pattern Syntax
@@ -195,6 +220,26 @@ Test whether STRING matches the glob PATTERN.
 - `casefold` - If true, perform case-insensitive matching (default: `nil`)
 
 **Returns:** `T` if the string matches, `NIL` otherwise
+
+#### `glob-path-match`
+
+```lisp
+(glob-path-match pattern pathname) => boolean
+```
+
+Test whether PATHNAME matches the PATTERN with gitignore-style semantics.
+
+This function implements the same pattern matching rules as `.gitignore` files, making it ideal for configuration files, build tools, linters, and any scenario requiring intuitive path-based rules. Unlike basic glob matching, it understands the context of paths and directories.
+
+**Arguments:**
+- `pattern` - A pattern string with special path semantics:
+  - Patterns with `/` match against the full pathname
+  - Patterns without `/` match against just the filename
+  - Relative paths are auto-prefixed with `**/` to match at any depth
+  - Trailing `/` or `/**` matches directories and all files within recursively
+- `pathname` - A pathname designator to test against the pattern
+
+**Returns:** `T` if the pathname matches the pattern, `NIL` otherwise
 
 ### Variables
 

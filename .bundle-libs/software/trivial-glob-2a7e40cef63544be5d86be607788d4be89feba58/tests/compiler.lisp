@@ -279,34 +279,34 @@
       ;; Not in core directory
       (ng (funcall matcher "src/main.lisp")))))
 
-(deftest normalize-exclusion-pattern
+(deftest normalize-path-pattern
   (testing "Filename-only patterns unchanged"
-    (ok (string= "**/*.log" (compiler::normalize-exclusion-pattern "*.log")))
-    (ok (string= "**/test*.txt" (compiler::normalize-exclusion-pattern "test*.txt"))))
+    (ok (string= "**/*.log" (compiler::normalize-path-pattern "*.log")))
+    (ok (string= "**/test*.txt" (compiler::normalize-path-pattern "test*.txt"))))
 
   (testing "Trailing slash converted to /** and prefixed with **/"
     ;; Trailing / becomes /**, then relative path gets **/ prefix
-    (ok (string= "**/build/**" (compiler::normalize-exclusion-pattern "build/")))
-    (ok (string= "**/src/core/**" (compiler::normalize-exclusion-pattern "src/core/"))))
+    (ok (string= "**/build/**" (compiler::normalize-path-pattern "build/")))
+    (ok (string= "**/src/core/**" (compiler::normalize-path-pattern "src/core/"))))
 
   (testing "Relative paths prefixed with **/"
-    (ok (string= "**/build/*.log" (compiler::normalize-exclusion-pattern "build/*.log")))
-    (ok (string= "**/src/core/*.lisp" (compiler::normalize-exclusion-pattern "src/core/*.lisp"))))
+    (ok (string= "**/build/*.log" (compiler::normalize-path-pattern "build/*.log")))
+    (ok (string= "**/src/core/*.lisp" (compiler::normalize-path-pattern "src/core/*.lisp"))))
 
   (testing "Leading */ converted to **/"
-    (ok (string= "**/core/*.lisp" (compiler::normalize-exclusion-pattern "*/core/*.lisp")))
-    (ok (string= "**/utils/**" (compiler::normalize-exclusion-pattern "*/utils/**"))))
+    (ok (string= "**/core/*.lisp" (compiler::normalize-path-pattern "*/core/*.lisp")))
+    (ok (string= "**/utils/**" (compiler::normalize-path-pattern "*/utils/**"))))
 
   (testing "Absolute paths unchanged"
-    (ok (string= "/tmp/out.txt" (compiler::normalize-exclusion-pattern "/tmp/out.txt")))
-    (ok (string= "/var/log/*.log" (compiler::normalize-exclusion-pattern "/var/log/*.log"))))
+    (ok (string= "/tmp/out.txt" (compiler::normalize-path-pattern "/tmp/out.txt")))
+    (ok (string= "/var/log/*.log" (compiler::normalize-path-pattern "/var/log/*.log"))))
 
   (testing "Patterns already starting with **/ unchanged"
-    (ok (string= "**/build/**" (compiler::normalize-exclusion-pattern "**/build/**")))
-    (ok (string= "**/core/*.lisp" (compiler::normalize-exclusion-pattern "**/core/*.lisp"))))
+    (ok (string= "**/build/**" (compiler::normalize-path-pattern "**/build/**")))
+    (ok (string= "**/core/*.lisp" (compiler::normalize-path-pattern "**/core/*.lisp"))))
 
   (testing "Combined transformations"
     ;; Trailing / + relative path
-    (ok (string= "**/build/**" (compiler::normalize-exclusion-pattern "build/")))
+    (ok (string= "**/build/**" (compiler::normalize-path-pattern "build/")))
     ;; */ + trailing /
-    (ok (string= "**/core/**" (compiler::normalize-exclusion-pattern "*/core/")))))
+    (ok (string= "**/core/**" (compiler::normalize-path-pattern "*/core/")))))

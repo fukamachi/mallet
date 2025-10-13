@@ -5,7 +5,7 @@
 ("trivial-glob" .
  (:class qlot/source/github:source-github
   :initargs (:repos "fukamachi/trivial-glob" :ref nil :branch nil :tag nil)
-  :version "github-768d3c495931f3b3b0903d2c2faa598c429a515e"))
+  :version "github-2a7e40cef63544be5d86be607788d4be89feba58"))
 ("rove" .
  (:class qlot/source/github:source-github
   :initargs (:repos "fukamachi/rove" :ref nil :branch nil :tag nil)

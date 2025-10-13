@@ -60,7 +60,7 @@ on all platforms. It resolves relative paths to absolute before checking."
 (defun filter-excluded (pathnames exclude-matchers)
   "Filter out pathnames that match any exclude pattern.
 PATHNAMES - List of pathnames to filter.
-EXCLUDE-MATCHERS - List of compiled exclusion matcher functions, or NIL.
+EXCLUDE-MATCHERS - List of compiled path matcher functions, or NIL.
 Returns filtered list of pathnames."
   (if (null exclude-matchers)
       pathnames
@@ -82,7 +82,7 @@ Returns a list of pathnames matching the pattern."
   (let ((exclude-matchers
           (when exclude
             (let ((patterns (if (listp exclude) exclude (list exclude))))
-              (mapcar #'compiler:compile-exclusion-pattern patterns))))
+              (mapcar #'compiler:compile-path-pattern patterns))))
         (pattern-string (etypecase pathname-or-pattern
                           (pathname (namestring pathname-or-pattern))
                           (string

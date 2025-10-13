@@ -4,7 +4,7 @@
    #:*match-dotfiles*
    ;; Main compilation function - returns a matcher function
    #:compile-pattern
-   #:compile-exclusion-pattern))
+   #:compile-path-pattern))
 (in-package #:trivial-glob/compiler)
 
 (defvar *match-dotfiles* nil
@@ -473,13 +473,13 @@ Returns a function (string) -> boolean that tests if a string matches the patter
       ;; Generate and return matcher function
       (generate-pattern-matcher root-node pathname period casefold))))
 
-;;; Exclusion Pattern Helpers
+;;; Path Pattern Helpers
 
-(defun normalize-exclusion-pattern (pattern)
-  "Normalize an exclusion pattern for consistent matching.
+(defun normalize-path-pattern (pattern)
+  "Normalize a path pattern for consistent matching.
 
 Returns the normalized pattern string with the following transformations:
-- Trailing '/' is converted to '/**' for directory exclusion
+- Trailing '/' is converted to '/**' for directory matching
 - Relative paths (with '/' but not starting with '/' or '**') are prefixed with '**/'
 - Leading '*/' is converted to '**/'
 
@@ -523,36 +523,35 @@ Examples:
     (string path)
     (pathname (namestring path))))
 
-(defun compile-exclusion-pattern (pattern)
-  "Compile an exclusion pattern for filtering results.
+(defun compile-path-pattern (pattern)
+  "Compile a path pattern for matching files and directories.
 
-PATTERN - A glob pattern string used for exclusion.
+PATTERN - A glob pattern string for path matching.
 
 Returns a function (pathname) -> boolean that returns T if the pathname
-should be excluded.
+matches the pattern.
 
-Exclusion patterns have special semantics:
+Path patterns have special semantics:
 - If pattern contains '/', it matches against the full pathname string
 - If pattern has no '/', it matches against just the filename
 - Patterns with '/' that don't start with '/' are treated as relative and
   automatically prefixed with '**/' to match at any depth
 - Patterns starting with '/' match absolute paths literally
-- Patterns ending with '/' or '/**' are treated as directory exclusions and
-  match all files recursively within that directory
+- Patterns ending with '/' or '/**' match directories and all files within recursively
 
 Examples:
-  (compile-exclusion-pattern \"*.log\")         ; Matches any .log file
-  (compile-exclusion-pattern \"test*.txt\")     ; Matches test*.txt anywhere
-  (compile-exclusion-pattern \"build/*.log\")   ; Matches build/*.log at any depth
-  (compile-exclusion-pattern \"*/core/*.lisp\") ; Matches core/*.lisp at any depth
-  (compile-exclusion-pattern \"/tmp/out.txt\")  ; Matches absolute path only
-  (compile-exclusion-pattern \"build/\")        ; Matches all files in build/ recursively
-  (compile-exclusion-pattern \"build/**\")      ; Same as above (recursive)
-  (compile-exclusion-pattern \"**/build/**\")   ; Same as above (explicit)"
+  (compile-path-pattern \"*.log\")         ; Matches any .log file
+  (compile-path-pattern \"test*.txt\")     ; Matches test*.txt anywhere
+  (compile-path-pattern \"build/*.log\")   ; Matches build/*.log at any depth
+  (compile-path-pattern \"*/core/*.lisp\") ; Matches core/*.lisp at any depth
+  (compile-path-pattern \"/tmp/out.txt\")  ; Matches absolute path only
+  (compile-path-pattern \"build/\")        ; Matches all files in build/ recursively
+  (compile-path-pattern \"build/**\")      ; Same as above (recursive)
+  (compile-path-pattern \"**/build/**\")   ; Same as above (explicit)"
   (check-type pattern string)
   (cond
     ((find #\/ pattern :test 'char=)
-     (let* ((normalized (normalize-exclusion-pattern pattern))
+     (let* ((normalized (normalize-path-pattern pattern))
             (compiled-pattern (compile-pattern normalized)))
        (lambda (path)
          (funcall compiled-pattern (ensure-namestring path)))))

@@ -7,7 +7,7 @@
   (:export
    #:glob
    #:glob-match
-   #:glob-exclusion-match))
+   #:glob-path-match))
 (in-package #:trivial-glob)
 
 (defun find-brace-group (pattern start)
@@ -101,23 +101,23 @@ Examples:
                                            :casefold casefold)))
     (funcall matcher string)))
 
-(defun glob-exclusion-match (pattern pathname)
-  "Test whether PATHNAME matches the exclusion PATTERN.
+(defun glob-path-match (pattern pathname)
+  "Test whether PATHNAME matches the PATTERN with path-aware semantics.
 
-PATTERN - An exclusion pattern string with special semantics:
+PATTERN - A pattern string with special path semantics:
           - Patterns with '/' match against the full pathname
           - Patterns without '/' match against just the filename
           - Relative paths are auto-prefixed with '**/' to match at any depth
-          - Trailing '/' or '/**' excludes directories recursively
+          - Trailing '/' or '/**' matches directories recursively
 PATHNAME - A pathname designator to test against the pattern.
 
-Returns T if the pathname should be excluded, NIL otherwise.
+Returns T if the pathname matches the pattern, NIL otherwise.
 
 Examples:
-  (glob-exclusion-match \"*.log\" #P\"/tmp/foo.log\") => T
-  (glob-exclusion-match \"build/\" #P\"/tmp/build/out.txt\") => T
-  (glob-exclusion-match \"**/test/*.lisp\" #P\"/src/test/foo.lisp\") => T
-  (glob-exclusion-match \"*.txt\" #P\"/tmp/foo.log\") => NIL"
-  (when (funcall (compiler:compile-exclusion-pattern pattern)
+  (glob-path-match \"*.log\" #P\"/tmp/foo.log\") => T
+  (glob-path-match \"build/\" #P\"/tmp/build/out.txt\") => T
+  (glob-path-match \"**/test/*.lisp\" #P\"/src/test/foo.lisp\") => T
+  (glob-path-match \"*.txt\" #P\"/tmp/foo.log\") => NIL"
+  (when (funcall (compiler:compile-path-pattern pattern)
                  pathname)
     t))
