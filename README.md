@@ -81,6 +81,23 @@ Use `:for-paths` to apply different rules to specific directories or files:
 
 Mallet auto-discovers `.mallet.lisp` by walking up from the current directory.
 
+## Suppressing Violations
+
+Mallet supports suppressing specific violations using Common Lisp's native `declaim` syntax with `#+mallet` feature flags.
+
+### Suppress Next Form
+
+Suppress violations for the immediately following form:
+
+```lisp
+;; This function violates if-without-else, but it's suppressed
+#+mallet
+(declaim (mallet:suppress-next :if-without-else))
+(defun conditional-print (x)
+  (if x
+      (print "yes")))  ; No else clause - but suppressed!
+```
+
 ## Rules
 
 See [RULES.md](RULES.md) for the complete list.

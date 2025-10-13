@@ -2,6 +2,8 @@
 
 Rules are organized by severity level. See README.md for severity meanings.
 
+**Suppressing violations**: Any rule can be suppressed using `#+mallet (declaim (mallet:suppress-next :rule-name))`. See the README for details.
+
 ## ERROR
 
 ### `:wrong-otherwise`

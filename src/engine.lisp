@@ -5,7 +5,8 @@
    (#:parser #:mallet/parser)
    (#:rules #:mallet/rules)
    (#:config #:mallet/config)
-   (#:violation #:mallet/violation))
+   (#:violation #:mallet/violation)
+   (#:suppression #:mallet/suppression))
   (:export #:lint-file
            #:lint-files))
 (in-package #:mallet/engine)
@@ -59,8 +60,13 @@ If ignored-p is T, the file was ignored and violations will be NIL."
 
     ;; Run form-level rules
     (when (some (lambda (r) (eq (rules:rule-type r) :form)) rules)
+      ;; Ensure mallet package exists for reading #+mallet declarations
+      (suppression:ensure-mallet-package-exists)
+
       (multiple-value-bind (forms parse-errors)
-          (parser:parse-forms text file)
+          ;; Add :mallet to *features* so #+mallet declarations are read
+          (let ((*features* (cons :mallet *features*)))
+            (parser:parse-forms text file))
 
         ;; Convert parse errors to violations (always reported - not configurable)
         ;; Parse errors are :error severity since they prevent compilation
@@ -75,16 +81,53 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                                :fix nil)
                 violations))
 
-        (dolist (form forms)
-          (dolist (rule rules)
-            (when (and (eq (rules:rule-type rule) :form)
-                       ;; Only run rule if file has extension AND it matches rule's file-types
-                       ;; Files without extensions (LICENSE, README, etc.) are skipped
-                       (and file-type
-                            (member file-type (rules:rule-file-types rule))))
-              (setf violations
-                    (nconc violations
-                           (rules:check-form rule form file))))))))
+        ;; Create suppression state for this file
+        (let ((suppression-state (suppression:make-suppression-state))
+              (pending-next-form-suppression nil))
+
+          ;; Process forms and check rules
+          (dolist (form forms)
+            (let ((form-expr (parser:form-expr form)))
+              (cond
+                ;; Handle mallet suppress-next declaration
+                ((and (suppression:mallet-declaim-p form-expr)
+                      (suppression:mallet-suppress-next-p form-expr))
+                 ;; Accumulate rules to suppress for next form
+                 (let ((next-rules (suppression:extract-suppress-next-rules form-expr)))
+                   (setf pending-next-form-suppression
+                         (if pending-next-form-suppression
+                             (union pending-next-form-suppression next-rules :test #'eq)
+                             next-rules))))
+
+                ;; Handle other mallet declarations (disable/enable/suppress-function)
+                ((suppression:mallet-declaim-p form-expr)
+                 (suppression:update-suppression-for-declaim form-expr suppression-state))
+
+                ;; Regular form - check with rules
+                (t
+                 ;; Apply pending suppress-next if we have one
+                 (unwind-protect
+                     (progn
+                       (when pending-next-form-suppression
+                         (suppression:push-scope-suppression suppression-state
+                                                            pending-next-form-suppression))
+                       ;; Check form with all rules
+                       (dolist (rule rules)
+                         (when (and (eq (rules:rule-type rule) :form)
+                                    ;; Only run rule if file has extension AND it matches rule's file-types
+                                    (and file-type
+                                         (member file-type (rules:rule-file-types rule)))
+                                    ;; Check if rule is not suppressed
+                                    (not (suppression:rule-suppressed-p
+                                          suppression-state
+                                          (rules:rule-name rule))))
+                           (setf violations
+                                 (nconc violations
+                                        (rules:check-form rule form file))))))
+                   ;; AUTOMATIC CLEANUP: Pop scope and clear pending
+                   (when pending-next-form-suppression
+                     (suppression:pop-scope-suppression suppression-state)
+                     (setf pending-next-form-suppression nil)))))))))) ; close cond, let, dolist, let, multiple-value-bind, when
 
     violations))
 

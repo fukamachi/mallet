@@ -51,11 +51,16 @@ Delegates to default implementation."
 
 (defmethod eclector.reader:evaluate-feature-expression ((client string-parse-result-client) feature-expression)
   "Evaluate feature expressions for reader conditionals.
-Always returns T to include all conditional code during linting."
-  (declare (ignore feature-expression))
-  ;; Always return T to include all conditional code
-  ;; This ensures we lint all code regardless of features
-  t)
+
+   For most features, returns T to include all conditional code during linting.
+   However, #+mallet is special - it should only be included when :mallet is in *features*,
+   so suppression declarations don't affect normal code loading."
+  ;; For :mallet feature, actually check *features*
+  ;; This allows #+mallet declarations to be invisible during normal code loading
+  (if (eq feature-expression :mallet)
+      (member :mallet *features*)
+      ;; For all other features, return T to lint all code paths
+      t))
 
 (defmethod eclector.reader:evaluate-expression ((client string-parse-result-client) expression)
   "Handle read-time evaluation (#. reader macro).

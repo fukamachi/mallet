@@ -22,6 +22,7 @@
 
    ;; Core data structures
    (:file "violation")
+   (:file "suppression")
    (:file "parser")
 
    ;; Parsing implementations
@@ -68,6 +69,9 @@
   ((:file "errors-test")
    (:file "config-test")
    (:file "config-ignore-test")
+   (:file "suppression")
+   (:file "suppression-declarations")
+   (:file "suppression-integration")
 
    (:module "parser"
     :pathname "parser"
