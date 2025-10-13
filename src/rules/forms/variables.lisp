@@ -28,8 +28,8 @@ Bound in find-shadows and accessible to all helper functions.")
 
 (defun debug-mode-p ()
   "Check if debug mode is enabled."
-  (and (find-symbol "*DEBUG-MODE*" "MALO")
-       (symbol-value (find-symbol "*DEBUG-MODE*" "MALO"))))
+  (and (find-symbol "*DEBUG-MODE*" "MALLET")
+       (symbol-value (find-symbol "*DEBUG-MODE*" "MALLET"))))
 
 (defun special-variable-p (name)
   "Check if NAME follows special variable convention (*name*)."

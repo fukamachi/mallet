@@ -403,8 +403,8 @@ enabling accurate violation reporting."
           (let ((pos (file-position stream)))
             (multiple-value-bind (line column)
                 (char-pos-to-line-column pos line-starts)
-              (let ((message (if (and (find-symbol "*DEBUG-MODE*" "MALO")
-                                      (symbol-value (find-symbol "*DEBUG-MODE*" "MALO")))
+              (let ((message (if (and (find-symbol "*DEBUG-MODE*" "MALLET")
+                                      (symbol-value (find-symbol "*DEBUG-MODE*" "MALLET")))
                                  (format nil "Parse error: ~A" e)
                                  "Parse error (use --debug for details)")))
                 (push (make-instance 'parse-error-info

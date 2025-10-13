@@ -64,7 +64,7 @@ Stores patterns that match files and the rules/disabled-rules that apply."
     :initform nil
     :accessor config-root-dir
     :documentation "Root directory where config file is located (nil for built-in configs)"))
-  (:documentation "Configuration for Malo linter containing rule instances."))
+  (:documentation "Configuration for Mallet linter containing rule instances."))
 
 (defun make-config (&key rules disabled-rules path-rules ignore root-dir)
   "Create a new config with RULES (list of rule instances), DISABLED-RULES (list of keywords),
