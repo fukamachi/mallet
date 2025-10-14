@@ -8,7 +8,8 @@
    #:proper-list-length
    #:proper-list-of-min-length-p
    #:proper-list-of-exact-length-p
-   #:proper-list-of-length-range-p))
+   #:proper-list-of-length-range-p
+   #:debug-mode-p))
 (in-package #:mallet/utils)
 
 (defun symbol-name-from-string (str)
@@ -90,3 +91,8 @@ Returns T if LIST is proper and has MIN-LENGTH <= length <= MAX-LENGTH, NIL othe
 This combines proper-list-p and length checking in a single traversal for efficiency."
   (let ((len (proper-list-length list)))
     (and len (>= len min-length) (<= len max-length))))
+
+(defun debug-mode-p ()
+  "Check if debug mode is enabled."
+  (and (find-symbol "*DEBUG-MODE*" "MALLET")
+       (symbol-value (find-symbol "*DEBUG-MODE*" "MALLET"))))

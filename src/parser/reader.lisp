@@ -381,10 +381,12 @@ enabling accurate violation reporting."
                  (marker-pos (- pos snippet-start)))
             (multiple-value-bind (line column)
                 (char-pos-to-line-column pos line-starts)
-              (format *error-output* "~%Warning: Skipping form at ~A:~D:~D (unknown reader macro)~%"
-                      file line column)
-              (format *error-output* "  Near: ~S~%" snippet)
-              (format *error-output* "        ~v@T^--- here~%"  marker-pos)))
+              ;; Only show warning in debug mode
+              (when (utils:debug-mode-p)
+                (format *error-output* "~%Warning: Skipping form at ~A:~D:~D (unknown reader macro)~%"
+                        file line column)
+                (format *error-output* "  Near: ~S~%" snippet)
+                (format *error-output* "        ~v@T^--- here~%"  marker-pos))))
           ;; Try to skip the entire top-level form using standard reader
           ;; This preserves context (like backquote) better than skipping to whitespace
           (handler-case
@@ -403,8 +405,7 @@ enabling accurate violation reporting."
           (let ((pos (file-position stream)))
             (multiple-value-bind (line column)
                 (char-pos-to-line-column pos line-starts)
-              (let ((message (if (and (find-symbol "*DEBUG-MODE*" "MALLET")
-                                      (symbol-value (find-symbol "*DEBUG-MODE*" "MALLET")))
+              (let ((message (if (utils:debug-mode-p)
                                  (format nil "Parse error: ~A" e)
                                  "Parse error (use --debug for details)")))
                 (push (make-instance 'parse-error-info

@@ -1,7 +1,8 @@
 (defpackage #:mallet/parser
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria))
+   (#:a #:alexandria)
+   (#:utils #:mallet/utils))
   (:export #:analyze-text
            ;; Token
            #:token

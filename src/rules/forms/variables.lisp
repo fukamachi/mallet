@@ -463,11 +463,6 @@ Examples:
     ;; TODO: Add unified registration once we refactor MULTIPLE-VALUE-BIND
     ))
 
-(defun debug-mode-p ()
-  "Check if debug mode is enabled."
-  (and (find-symbol "*DEBUG-MODE*" "MALLET")
-       (symbol-value (find-symbol "*DEBUG-MODE*" "MALLET"))))
-
 (defun special-variable-p (name)
   "Check if NAME follows special variable convention (*name*)."
   (and (> (length name) 2)
@@ -1459,8 +1454,9 @@ Pushes violations to *violations* special variable."
             (scope:with-new-scope
               (check-binding-form :let bindings body line column position-map rule)))
         (type-error (e)
-          (format *error-output* "~%Warning: Skipping LET form at ~A:~A due to unexpected structure:~%  ~A~%"
-                  *file* line e)
+          (when (utils:debug-mode-p)
+            (format *error-output* "~%Warning: Skipping LET form at ~A:~A due to unexpected structure:~%  ~A~%"
+                    *file* line e))
           nil)))))
 
 (defun check-let*-bindings (expr line column position-map rule)
@@ -1890,7 +1886,7 @@ Skips LOOP forms - use unused-loop-variables-rule for those."
   (handler-case
       (handler-bind ((type-error
                        (lambda (e)
-                         (when (debug-mode-p)
+                         (when (utils:debug-mode-p)
                            (let ((form-head (when (consp expr)
                                               (let ((head (first expr)))
                                                 (when (stringp head)
@@ -2030,7 +2026,7 @@ Recursively descends into all forms to find nested LOOPs."
   (handler-case
       (handler-bind ((type-error
                        (lambda (e)
-                         (when (debug-mode-p)
+                         (when (utils:debug-mode-p)
                            (format *error-output* "~%Warning: Skipping unused-loop-variables check at ~A:~A~%  Error: ~A~%"
                                    file line e)
                            (uiop:print-condition-backtrace e)))))

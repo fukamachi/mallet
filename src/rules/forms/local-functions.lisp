@@ -4,6 +4,7 @@
    (#:a #:alexandria)
    (#:base #:mallet/rules/base)
    (#:parser #:mallet/parser)
+   (#:utils #:mallet/utils)
    (#:violation #:mallet/violation))
   (:export #:unused-local-functions-rule))
 (in-package #:mallet/rules/forms/local-functions)
@@ -432,7 +433,9 @@ Unlike variable references, this ONLY matches when the name appears in function 
         (check-expr expr line column position-map rule)
         (nreverse *violations*))
     (error (e)
-      (format *error-output* "~%Warning: Error checking unused-local-functions at ~A:~A~%  ~A~%"
-              file line e)
+      ;; Only show warning in debug mode
+      (when (utils:debug-mode-p)
+        (format *error-output* "~%Warning: Error checking unused-local-functions at ~A:~A~%  ~A~%"
+                file line e))
       ;; Return empty list on error
       '())))
