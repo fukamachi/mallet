@@ -26,6 +26,443 @@ Bound in base:check-form and accessible to all helper functions.")
   "Dynamic variable holding the list of shadow-info structs during shadow finding.
 Bound in find-shadows and accessible to all helper functions.")
 
+(defvar *parsing-context* nil
+  "Dynamic variable tracking parsing context: :known-body or :unknown.
+Used in find-references-with-shadows to determine if we should apply Lisp-2 semantics.")
+
+(defvar *known-macro-signatures* (make-hash-table :test 'equal)
+  "Hash table mapping macro names to their indentation signatures (Lem-style).
+Key: macro name (uppercase string), Value: indentation spec.
+Format follows Lem convention:
+  - Integer N: skip N args, then &body starts
+  - (&body) or (&rest &body): all args are body
+  - (N &body): skip N args, then &body
+  - (N &lambda &body): skip N args, lambda list, then &body")
+
+(defun register-macro-signature (name signature)
+  "Register a macro signature following Lem's convention.
+Examples:
+  (register-macro-signature \"with-open-file\" 1) - skip 1 arg, then body
+  (register-macro-signature \"when\" 1) - skip 1 arg (test), then body
+  (register-macro-signature \"progn\" '(&rest &body)) - all args are body"
+  (setf (gethash (string-upcase name) *known-macro-signatures*) signature))
+
+(defun parse-macro-signature (signature)
+  "Parse Lem-style macro signature to extract body start position.
+Returns position where &body begins (0-indexed after macro name), or NIL if no body."
+  (etypecase signature
+    (integer signature)  ; Simple case: integer means body starts at that position
+    (list
+     ;; Complex signature - look for &body or &rest &body
+     (let ((pos 0))
+       (dolist (elem signature)
+         (cond
+           ((or (eq elem '&body)
+                (and (eq elem '&rest)
+                     (member '&body signature)))
+            ;; Found &body - return current position
+            (return-from parse-macro-signature pos))
+           ((eq elem '&lambda)
+            ;; Lambda list - skip it and continue
+            (incf pos))
+           ((integerp elem)
+            ;; Skip N arguments
+            (incf pos elem))
+           (t
+            ;; Unknown element, skip
+            (incf pos))))
+       ;; No &body found
+       nil))))
+
+(defun known-macro-body-position (head)
+  "Get the body start position for a known macro, or NIL if unknown.
+HEAD is a string (potentially package-prefixed)."
+  (when (stringp head)
+    ;; Strip package prefix if present
+    (let* ((colon-pos (or (search "::" head) (position #\: head)))
+           (package-name (when colon-pos (subseq head 0 colon-pos)))
+           (symbol-name (if colon-pos
+                            (subseq head (+ colon-pos (if (search "::" head) 2 1)))
+                            head)))
+      ;; Only check CL macros (same logic as known-function-p)
+      (when (or (null package-name)
+                (member package-name '("CL" "COMMON-LISP" "CURRENT") :test #'string-equal))
+        (let ((signature (gethash (string-upcase symbol-name) *known-macro-signatures*)))
+          (when signature
+            (parse-macro-signature signature)))))))
+
+;; Common CL macros are registered via register-macros-from-lambda-lists below
+;; This provides unified registration that serves both:
+;; 1. Context-aware parsing (all macros get signatures registered)
+;; 2. Unused variable checking (binding forms get extractors registered)
+
+;;; Unified Binding Form Checker
+;;
+;; This system allows easy registration of custom binding forms by specifying:
+;; 1. Lem-style signature - where body starts
+;; 2. Binding extractor - how to extract variables from the binding position
+;; 3. Scope type - :let or :let* for binding semantics
+
+(defstruct binding-form-descriptor
+  "Descriptor for a binding form that can be checked with generic checker.
+SIGNATURE: Lem-style signature indicating where body starts (integer or list)
+BINDING-POSITION: Index in rest-args where binding spec is located (0-indexed, default 0)
+BINDING-EXTRACTOR: Function (binding-spec) -> list of bindings for check-binding-form
+                   Returns list of binding forms suitable for check-binding-form
+SCOPE-TYPE: :let or :let* indicating binding semantics
+REPORT-VIOLATIONS: Whether to report violations for this form (default t)
+                   Set to NIL for forms where unused variables are conventionally acceptable"
+  signature
+  (binding-position 0)
+  binding-extractor
+  scope-type
+  (report-violations t))
+
+(defvar *binding-form-registry* (make-hash-table :test 'equal)
+  "Registry of binding forms for generic checking.
+Key: uppercase macro name string
+Value: binding-form-descriptor")
+
+(defun register-binding-form (name signature binding-extractor scope-type &key (binding-position 0) (report-violations t))
+  "Register a binding form for generic checking.
+NAME: macro name (string, will be uppercased)
+SIGNATURE: Lem-style signature (integer or list) indicating where body starts
+BINDING-EXTRACTOR: function (binding-spec) -> list of bindings
+SCOPE-TYPE: :let or :let*
+BINDING-POSITION: where to find binding spec in rest-args (default 0)
+REPORT-VIOLATIONS: whether to report violations for this form (default t)"
+  (setf (gethash (string-upcase name) *binding-form-registry*)
+        (make-binding-form-descriptor
+         :signature signature
+         :binding-position binding-position
+         :binding-extractor binding-extractor
+         :scope-type scope-type
+         :report-violations report-violations)))
+
+(defun check-binding-form-generic (expr line column position-map rule)
+  "Generic checker for registered binding forms using Lem-style signatures.
+Returns T if this form was handled, NIL otherwise."
+  (when (consp expr)
+    (let* ((head (first expr))
+           (head-name (when (stringp head)
+                       (string-upcase (base:symbol-name-from-string head))))
+           (descriptor (when head-name
+                        (gethash head-name *binding-form-registry*))))
+      (when descriptor
+        (let* ((signature (binding-form-descriptor-signature descriptor))
+               (body-pos (parse-macro-signature signature))
+               (rest-args (rest expr)))
+          (when (and body-pos
+                     (> (length rest-args) body-pos))
+            ;; Extract binding spec and body based on signature
+            (let* ((binding-pos (binding-form-descriptor-binding-position descriptor))
+                   (binding-spec (when (< binding-pos (length rest-args))
+                                  (nth binding-pos rest-args)))
+                   (body (subseq rest-args body-pos))
+                   (scope-type (binding-form-descriptor-scope-type descriptor))
+                   (report-violations (binding-form-descriptor-report-violations descriptor)))
+              (when (and binding-spec report-violations)
+                ;; Apply the extractor function to get bindings
+                ;; Only check if report-violations is true
+                (let ((bindings (funcall (binding-form-descriptor-binding-extractor descriptor)
+                                        binding-spec)))
+                  (when bindings
+                    (scope:with-new-scope
+                      (check-binding-form scope-type bindings body line column position-map rule)))))
+              ;; Return T to indicate we handled this form
+              t)))))))
+
+(defun param-name (param)
+  "Extract parameter name as string, handling both symbols and strings.
+For strings, extracts just the symbol name (strips package prefix if present)."
+  (etypecase param
+    (string (base:symbol-name-from-string param))
+    (symbol (symbol-name param))))
+
+(defun param-p (param)
+  "Check if PARAM is a parameter (string or symbol, not a list)."
+  (or (stringp param) (symbolp param)))
+
+(defun infer-binding-info (lambda-list)
+  "Infer binding information from lambda list structure.
+Returns (values binding-position extraction-type) or (values nil nil) if no bindings.
+
+Extraction types:
+  :first - First element is the binding (e.g., ((var value) &body))
+  :each - Each element is a binding (e.g., (vars values &body))
+  nil - No bindings
+
+Heuristics:
+  - ((var ...rest) &body) → position 0, extract :first
+  - (vars ... &body) where first param is symbol → position 0, extract :each
+  - (value &body) where value is symbol, no list params → no bindings"
+  (let ((first-param (first lambda-list)))
+    (cond
+      ;; First param is a list: ((var value) &body) pattern
+      ((consp first-param)
+       (values 0 :first))
+      ;; First param is a symbol/string, check if it's likely a binding spec
+      ;; Heuristic: If followed by another param before &body, it's probably a binding spec
+      ;; (e.g., (slots instance &body) vs (lock &body))
+      ((and (param-p first-param)
+            (>= (length lambda-list) 2)
+            (param-p (second lambda-list))
+            (not (or (string-equal (param-name (second lambda-list)) "&BODY")
+                     (string-equal (param-name (second lambda-list)) "&REST"))))
+       ;; Two parameters before &body, first is likely a binding spec list
+       (values 0 :each))
+      ;; Single value before &body - no bindings
+      (t
+       (values nil nil)))))
+
+(defun make-binding-extractor (extraction-type)
+  "Create a binding extractor based on extraction type.
+
+Extraction types:
+  :first - Extract first element as the binding (e.g., (var value) -> var)
+  :each - Extract each element as a binding (e.g., (var1 var2 var3) -> var1, var2, var3)
+  nil - No extraction (returns nil)"
+  (ecase extraction-type
+    (:first
+     (lambda (spec)
+       (cond
+         ;; Destructuring in first position: ((var1 var2) ...) - extract all vars
+         ((and (utils:proper-list-of-min-length-p spec 1)
+               (consp (first spec)))
+          (let ((vars (extract-bindings (first spec) :destructuring)))
+            (mapcar #'list vars)))
+         ;; List with string as first element: (var) or (var value ...) - extract var
+         ((and (utils:proper-list-of-min-length-p spec 1)
+               (stringp (first spec)))
+          (list (list (first spec))))
+         ;; Just a variable string - wrap in list
+         ((stringp spec)
+          (list (list spec)))
+         ;; Can't parse
+         (t nil))))
+    (:each
+     (lambda (spec)
+       (cond
+         ;; List of binding specs - each element is a binding
+         ((a:proper-list-p spec)
+          (mapcar (lambda (elem)
+                   (list (if (consp elem)
+                             (first elem)  ; (var slot-name) -> var
+                             elem)))       ; var -> var
+                 spec))
+         ;; Single spec
+         ((stringp spec)
+          (list (list spec)))
+         (t nil))))
+    ((nil)
+     (lambda (spec)
+       (declare (ignore spec))
+       nil))))
+
+(defun register-macro-from-lambda-list (name lambda-list &key (scope-type :let) (report-violations t) (bindings :auto))
+  "Register a macro for unused variable checking from its lambda list.
+Hybrid approach: auto-infers bindings from structure, with explicit override support.
+
+Examples:
+  ;; Auto-inferred (binding position and extraction type):
+  (register-macro-from-lambda-list 'with-open-file '((var pathname &rest options) &body body))
+  (register-macro-from-lambda-list 'with-slots '(slots instance &body body))
+
+  ;; Explicit override - no bindings:
+  (register-macro-from-lambda-list 'with-lock-held '(lock &body body) :bindings nil)
+
+  ;; Explicit override - custom extraction:
+  (register-macro-from-lambda-list 'weird-macro '(a b c &body body)
+                                   :bindings (:param 1 :extract :first))
+
+The function will:
+1. Find where &body starts (for signature)
+2. Infer binding position and extraction type from structure (or use explicit :bindings)
+3. Create appropriate extractor based on extraction type
+
+For complete custom control, use register-binding-form directly."
+  (let ((signature (parse-macro-lambda-list-signature lambda-list))
+        (name-string (etypecase name
+                      (string name)
+                      (symbol (symbol-name name)))))
+    (when signature
+      ;; Always register signature for context-aware parsing
+      (register-macro-signature name-string signature)
+
+      ;; Register binding form if it has bindings
+      (multiple-value-bind (binding-pos extraction-type)
+          (cond
+            ;; Explicit :bindings nil means no bindings
+            ((null bindings)
+             (values nil nil))
+            ;; Explicit :bindings with plist specification
+            ((and (listp bindings) (not (eq bindings :auto)))
+             (values (getf bindings :param)
+                     (getf bindings :extract)))
+            ;; Default :auto or any other value - auto-infer from lambda list
+            (t
+             (infer-binding-info lambda-list)))
+        (when binding-pos
+          ;; Has bindings - register with extractor
+          (let ((extractor (make-binding-extractor extraction-type)))
+            (register-binding-form name-string signature extractor scope-type
+                                  :binding-position binding-pos
+                                  :report-violations report-violations)))))))
+
+(defun parse-macro-lambda-list-signature (lambda-list)
+  "Parse macro lambda list to create Lem-style signature.
+Returns signature (integer or list) indicating where &body starts.
+
+Handles nested structures:
+  (test &body body) -> 1
+  (&body body) -> 0
+  (&rest (clause &body body)) -> (&rest &body) for nested clause bodies"
+  (loop for elem in lambda-list
+        for pos from 0
+        for next-elem = (when (< (1+ pos) (length lambda-list))
+                         (nth (1+ pos) lambda-list))
+        do (cond
+             ;; Check for &body first
+             ((and (param-p elem)
+                   (string-equal (param-name elem) "&BODY"))
+              (return pos))
+             ;; Check for &rest followed by list containing &body
+             ;; This handles nested structures like (case test &rest (clause &body body))
+             ((and (param-p elem)
+                   (string-equal (param-name elem) "&REST")
+                   (consp next-elem)
+                   ;; Check if the nested list contains &body
+                   (some (lambda (nested-elem)
+                          (and (param-p nested-elem)
+                               (string-equal (param-name nested-elem) "&BODY")))
+                        next-elem))
+              ;; Return (&rest &body) to indicate nested clause bodies
+              (return '(&rest &body))))
+        finally (return nil)))
+
+(defun register-macros-from-lambda-lists (macro-specs)
+  "Batch register multiple macros from lambda list specifications.
+Each spec is (name lambda-list &key options...).
+
+Hybrid approach: Automatically infers bindings from lambda list structure,
+with explicit overrides via :bindings keyword.
+
+Examples:
+  (register-macros-from-lambda-lists
+    '(;; Auto-inferred - ((var value) &body) pattern:
+      (with-open-file ((var pathname &rest options) &body body))
+      (dolist ((var list) &body body))
+
+      ;; Auto-inferred - (specs instance &body) pattern:
+      (with-slots (slots instance &body body))
+
+      ;; Explicit override - no bindings:
+      (with-lock-held (lock &body body) :bindings nil)
+
+      ;; Explicit override - don't report violations:
+      (dotimes ((i count) &body body) :report-violations nil)
+
+      ;; Explicit override - custom extraction:
+      (weird-macro (a b c &body body) :bindings (:param 1 :extract :first))))"
+  (dolist (spec macro-specs)
+    (destructuring-bind (name lambda-list &rest options) spec
+      (apply #'register-macro-from-lambda-list name lambda-list options))))
+
+;; Register all Common Lisp macros with unified system
+;; This handles both context-aware parsing AND unused variable checking
+
+(register-macros-from-lambda-lists
+  '(;; === Control Flow Macros ===
+    ;; Simple body forms - test/forms are evaluated
+    (when (test &body body) :bindings nil)
+    (unless (test &body body) :bindings nil)
+    (prog1 (first-form &body body) :bindings nil)
+    (prog2 (first-form second-form &body body) :bindings nil)
+    (multiple-value-prog1 (first-form &body body) :bindings nil)
+    (return-from (name &optional value) :bindings nil)
+
+    ;; Nested clause bodies - CASE, COND, TYPECASE families
+    ;; Each clause has its own body
+    (cond (&rest (test &body body)) :bindings nil)
+    (case (keyform &rest (keys &body body)) :bindings nil)
+    (ecase (keyform &rest (keys &body body)) :bindings nil)
+    (typecase (keyform &rest (type &body body)) :bindings nil)
+    (etypecase (keyform &rest (type &body body)) :bindings nil)
+
+    ;; Logical operators - all forms are evaluated
+    (and (&body forms) :bindings nil)
+    (or (&body forms) :bindings nil)
+
+    ;; === Exception Handling ===
+    (unwind-protect (protected-form &body cleanup-forms) :bindings nil)
+    (catch (tag &body body) :bindings nil)
+    ;; HANDLER-BIND: bindings is ((condition-type handler-fn) ...)
+    (handler-bind (bindings &body body) :bindings nil)
+    ;; HANDLER-CASE: clauses are (condition-type lambda-list &body body)
+    (handler-case (form &rest (condition-type lambda-list &body body)) :bindings nil)
+    (restart-bind (bindings &body body) :bindings nil)
+    (restart-case (form &rest (restart-name lambda-list &body body)) :bindings nil)
+
+    ;; === WITH-* Macros (with bindings) ===
+    ;; First arg is a spec list that introduces bindings
+    (with-open-file ((var pathname &rest options) &body body))
+    (with-open-stream ((var stream) &body body))
+    (with-input-from-string ((var string &rest options) &body body))
+    (with-output-to-string ((var &rest options) &body body))
+    ;; WITH-SLOTS/WITH-ACCESSORS: slots/accessors evaluated, then instance evaluated
+    (with-slots (slots instance &body body))
+    (with-accessors (accessors instance &body body))
+    ;; These also introduce bindings
+    (with-hash-table-iterator ((name hash-table) &body body))
+    (with-package-iterator ((name package-list &rest symbol-types) &body body))
+
+    ;; === WITH-* Macros (without bindings) ===
+    ;; These evaluate arguments but don't introduce new variables
+    (with-standard-io-syntax (&body body) :bindings nil)
+    (with-compilation-unit ((options) &body body) :bindings nil)
+    (with-condition-restarts (condition-form restarts-form &body body) :bindings nil)
+    (with-simple-restart ((name format-control &rest format-args) &body body) :bindings nil)
+
+    ;; === Iteration Macros ===
+    ;; Spec is (var init-form &optional result-form)
+    ;; var is a binding, init-form is evaluated in outer scope
+    (dolist ((var list-form &optional result-form) &body body))
+    (dotimes ((var count-form &optional result-form) &body body) :report-violations nil)
+    (do-symbols ((var &optional package-form result-form) &body body))
+    (do-external-symbols ((var &optional package-form result-form) &body body))
+    (do-all-symbols ((var &optional result-form) &body body))
+    ;; TODO: DO and DO* need special handling for their complex binding structure
+    ;; (do ((var init step)*) (end-test result*) body*)
+    ;; For now, register with basic structure
+    (do (var-clauses end-test-form &body body) :bindings nil)
+    (do* (var-clauses end-test-form &body body) :bindings nil)
+    (loop (&body forms) :bindings nil)
+
+    ;; === Local Definition Macros ===
+    ;; These need special handling - :bindings nil for now
+    ;; definitions is ((name lambda-list &body body) ...)
+    (flet (definitions &body body) :bindings nil)
+    (labels (definitions &body body) :bindings nil)
+    (macrolet (definitions &body body) :bindings nil)
+    (symbol-macrolet (definitions &body body) :bindings nil)
+
+    ;; === Block and Scope Macros ===
+    (block (name &body body) :bindings nil)
+    (tagbody (&body statements) :bindings nil)
+    ;; PROG/PROG* have bindings: (prog ((var init)*) body*)
+    (prog (bindings &body body) :bindings nil)
+    (prog* (bindings &body body) :bindings nil)
+    (locally (&body body) :bindings nil)
+    (progn (&body body) :bindings nil)
+
+    ;; === Other Standard Macros ===
+    ;; EVAL-WHEN: situations is (:compile-toplevel :load-toplevel :execute)
+    (eval-when ((situations) &body body) :bindings nil)
+    (multiple-value-call (function-form &body forms) :bindings nil)
+    ;; MULTIPLE-VALUE-BIND has bindings - handled specially in check-multiple-value-bind-bindings
+    ;; TODO: Add unified registration once we refactor MULTIPLE-VALUE-BIND
+    ))
+
 (defun debug-mode-p ()
   "Check if debug mode is enabled."
   (and (find-symbol "*DEBUG-MODE*" "MALLET")
@@ -666,10 +1103,52 @@ references without worrying about shadow detection during traversal."
   "Find if VAR-NAME is referenced in BODY, respecting pre-computed SHADOWS.
 This is Phase 2 of the two-phase reference finding approach. It searches for
 references while respecting the shadow boundaries computed by find-shadows."
-  (let ((target-name (base:symbol-name-from-string var-name)))
+  (let ((target-name (base:symbol-name-from-string var-name))
+        (*parsing-context* :known-body))  ; Track parsing context: :known-body or :unknown
     (labels ((matches-shadow-p (expr)
                "Check if EXPR matches any shadow in the list, return shadow-info if found."
                (find expr shadows :key #'shadow-info-form :test #'eq))
+
+             (known-function-p (head)
+               "Check if HEAD is a known function (not a macro) in the CL package.
+Returns T if it's a function we can apply Lisp-2 semantics to safely.
+Assumes CURRENT package imports CL symbols (standard convention)."
+               (when (stringp head)
+                 ;; Check if symbol has a package prefix
+                 (let* ((colon-pos (or (search "::" head) (position #\: head)))
+                        (package-name (when colon-pos (subseq head 0 colon-pos)))
+                        (symbol-name (if colon-pos
+                                         (subseq head (+ colon-pos (if (search "::" head) 2 1)))
+                                         head)))
+                   ;; Only check CL functions if:
+                   ;; 1. No package prefix (unqualified), OR
+                   ;; 2. Package is explicitly CL or COMMON-LISP, OR
+                   ;; 3. Package is CURRENT (assumes it imports CL)
+                   (when (or (null package-name)
+                             (member package-name '("CL" "COMMON-LISP" "CURRENT") :test #'string-equal))
+                     ;; Check if symbol exists in CL package and is a function (not a macro)
+                     (let ((symbol (find-symbol (string-upcase symbol-name) (find-package "COMMON-LISP"))))
+                       (and symbol
+                            (fboundp symbol)
+                            (not (macro-function symbol))))))))
+
+             (known-special-operator-p (head)
+               "Check if HEAD is a known CL special operator or standard macro.
+These forms restore :known-body context even when inside unknown macros."
+               (when (stringp head)
+                 ;; Check if symbol has a package prefix
+                 (let* ((colon-pos (or (search "::" head) (position #\: head)))
+                        (package-name (when colon-pos (subseq head 0 colon-pos)))
+                        (symbol-name (if colon-pos
+                                         (subseq head (+ colon-pos (if (search "::" head) 2 1)))
+                                         head)))
+                   ;; Only check CL forms
+                   (when (or (null package-name)
+                             (member package-name '("CL" "COMMON-LISP" "CURRENT") :test #'string-equal))
+                     (let ((symbol (find-symbol (string-upcase symbol-name) (find-package "COMMON-LISP"))))
+                       (and symbol
+                            (or (special-operator-p symbol)
+                                (macro-function symbol))))))))
 
              (search-expr (expr &optional in-function-position)
                "Recursively search for references to var-name in expr.
@@ -678,9 +1157,11 @@ IN-FUNCTION-POSITION is true if we're looking at the first element of a form (fu
                  ((null expr) nil)
 
                  ;; String matching our variable is a reference
-                 ;; BUT: Skip if we're in function position (Lisp-2: function calls don't use variable namespace)
+                 ;; In known context: Skip if in function position (Lisp-2)
+                 ;; In unknown context: Check even in function position (conservative)
                  ((stringp expr)
-                  (and (not in-function-position)
+                  (and (or (not in-function-position)
+                           (eq *parsing-context* :unknown))  ; In unknown context, check CAR too
                        (string-equal (base:symbol-name-from-string expr) target-name)))
 
                  ;; Check if this form is a shadow FIRST (before checking strings)
@@ -737,13 +1218,39 @@ IN-FUNCTION-POSITION is true if we're looking at the first element of a form (fu
                                                     (search-quasi (cdr expr))))))))
                                         (t nil))))
                              (some #'search-quasi (rest expr))))
-                          ;; Default: search recursively (OR-based search)
-                          ;; IMPORTANT: CAR is in function position (Lisp-2), CDR contains arguments
-                          (t
-                           (or (search-expr (car expr) t)  ; T = in function position
-                               ;; Search through CDR elements (arguments) - all are in value position
+                          ;; Known function in known context - apply Lisp-2
+                          ((and (eq *parsing-context* :known-body)
+                                (known-function-p (first expr)))
+                           (or (search-expr (car expr) t)  ; Skip CAR (function position)
                                (some (lambda (arg) (search-expr arg nil))
-                                     (cdr expr))))))))  ; NIL = in value position for all args
+                                     (cdr expr))))
+
+                          ;; Known special operator/macro - restore :known-body context
+                          ((known-special-operator-p (first expr))
+                           ;; Check if it has a specific body position signature
+                           (let ((body-pos (known-macro-body-position (first expr))))
+                             (if body-pos
+                                 ;; Has signature - use it to determine context for each position
+                                 (let* ((all-args (rest expr))
+                                        (args (subseq all-args 0 (min body-pos (length all-args))))
+                                        (body-forms (when (> (length all-args) body-pos)
+                                                     (subseq all-args body-pos))))
+                                   ;; Search macro arguments with :unknown context
+                                   ;; Search body forms with :known-body context
+                                   (or (let ((*parsing-context* :unknown))
+                                         (some (lambda (arg) (search-expr arg nil)) args))
+                                       (let ((*parsing-context* :known-body))
+                                         (some (lambda (form) (search-expr form nil)) body-forms))))
+                                 ;; No signature - just restore :known-body context for all args
+                                 (let ((*parsing-context* :known-body))
+                                   (some (lambda (arg) (search-expr arg nil)) (cdr expr))))))
+
+                          ;; Unknown form OR in unknown context - be conservative
+                          (t
+                           (let ((*parsing-context* :unknown))  ; Enter/stay in unknown
+                             (or (search-expr (car expr) nil)   ; Check CAR too
+                                 (some (lambda (arg) (search-expr arg nil))
+                                       (cdr expr)))))))))
 
                  (t nil))))
 
@@ -1183,47 +1690,33 @@ Returns the original string object that should be in the position-map."
   (when (consp expr)
     (let ((head (first expr))
           (rest-args (rest expr)))
-      ;; 1. Dispatch to specific checkers for binding forms
-      (cond
-        ((base:symbol-matches-p head "DEFUN")
-         (check-defun-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "LAMBDA")
-         (check-lambda-bindings expr line column position-map rule))
-        ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET"))
-         (check-let-bindings expr line column position-map rule))
-        ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET*"))
-         (check-let*-bindings expr line column position-map rule))
-        ;; LOOP forms are checked by unused-loop-variables-rule, not unused-variables-rule
-        ;; ((base:symbol-matches-p head "LOOP")
-        ;;  (check-loop-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "DO")
-         (check-do-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "DO*")
-         (check-do*-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "DESTRUCTURING-BIND")
-         (check-destructuring-bind-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "MULTIPLE-VALUE-BIND")
-         (check-multiple-value-bind-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "DOLIST")
-         (check-dolist-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "DEFMACRO")
-         (check-defmacro-bindings expr line column position-map rule))
-        ;; DO-SYMBOLS family
-        ((or (base:symbol-matches-p head "DO-SYMBOLS")
-             (base:symbol-matches-p head "DO-EXTERNAL-SYMBOLS")
-             (base:symbol-matches-p head "DO-ALL-SYMBOLS"))
-         (check-do-symbols-bindings expr line column position-map rule))
-        ;; WITH-* macros
-        ((base:symbol-matches-p head "WITH-SLOTS")
-         (check-with-slots-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "WITH-ACCESSORS")
-         (check-with-accessors-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "WITH-INPUT-FROM-STRING")
-         (check-with-input-from-string-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "WITH-OUTPUT-TO-STRING")
-         (check-with-output-to-string-bindings expr line column position-map rule))
-        ((base:symbol-matches-p head "WITH-OPEN-FILE")
-         (check-with-open-file-bindings expr line column position-map rule)))
+      ;; 1. Try generic checker first for simple binding forms
+      ;; The generic checker handles: WITH-*, DOLIST, DOTIMES, DO-SYMBOLS family
+      ;; Returns T if it handled the form, NIL otherwise
+      (unless (check-binding-form-generic expr line column position-map rule)
+        ;; 2. Dispatch to specific checkers for complex binding forms
+        (cond
+          ((base:symbol-matches-p head "DEFUN")
+           (check-defun-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "LAMBDA")
+           (check-lambda-bindings expr line column position-map rule))
+          ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET"))
+           (check-let-bindings expr line column position-map rule))
+          ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET*"))
+           (check-let*-bindings expr line column position-map rule))
+          ;; LOOP forms are checked by unused-loop-variables-rule, not unused-variables-rule
+          ;; ((base:symbol-matches-p head "LOOP")
+          ;;  (check-loop-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "DO")
+           (check-do-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "DO*")
+           (check-do*-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "DESTRUCTURING-BIND")
+           (check-destructuring-bind-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "MULTIPLE-VALUE-BIND")
+           (check-multiple-value-bind-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "DEFMACRO")
+           (check-defmacro-bindings expr line column position-map rule))))
 
       ;; 2. Handle special forms for recursion
       (cond
