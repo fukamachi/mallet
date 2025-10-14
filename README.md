@@ -83,19 +83,38 @@ Mallet auto-discovers `.mallet.lisp` by walking up from the current directory.
 
 ## Suppressing Violations
 
-Mallet supports suppressing specific violations using Common Lisp's native `declaim` syntax with `#+mallet` feature flags.
+Use `#+mallet` with `declaim` or `declare` to suppress specific rules. The `#+mallet` flag makes suppressions invisible during normal code loading.
 
-### Suppress Next Form
-
-Suppress violations for the immediately following form:
-
+**Suppress next form:**
 ```lisp
-;; This function violates if-without-else, but it's suppressed
 #+mallet
 (declaim (mallet:suppress-next :if-without-else))
-(defun conditional-print (x)
-  (if x
-      (print "yes")))  ; No else clause - but suppressed!
+(defun foo () (if x (print "yes")))  ; Suppressed
+```
+
+**Suppress region:**
+```lisp
+#+mallet
+(declaim (mallet:disable :line-length))
+(defun foo () ...)  ; Rules disabled
+(defun bar () ...)  ; Rules disabled
+#+mallet
+(declaim (mallet:enable :line-length))
+```
+
+**Suppress in scope:**
+```lisp
+(defun foo ()
+  #+mallet
+  (declare (mallet:suppress :unused-variables))
+  (let ((unused 1)) ...))
+```
+
+**Suppress all rules:**
+```lisp
+#+mallet
+(declaim (mallet:suppress-next :all))
+(defun generated-code () ...)
 ```
 
 ## Rules
