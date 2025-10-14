@@ -39,7 +39,7 @@ mallet src/*.lisp
 mallet src  # recursively lints .lisp and .asd files
 
 # Enable all rules
-mallet --all src
+mallet -a src
 ```
 
 ## Configuration

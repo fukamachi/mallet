@@ -103,7 +103,7 @@ Signals specific error conditions for invalid input."
                                       :option "--preset"
                                       :value preset-name
                                       :expected "default or all"))))))
-          ((string= arg "--all")
+          ((or (string= arg "--all") (string= arg "-a"))
            (setf preset :all))
           ((string= arg "--debug")
            (setf debug t))
@@ -130,7 +130,7 @@ Options:
   --format <format>   Output format (text or json, default: text)
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
   --preset <name>     Use built-in preset (default or all)
-  --all               Alias for --preset all
+  --all, -a           Alias for --preset all
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
@@ -140,11 +140,11 @@ Presets:
   all                 All rules enabled (useful for exploration)
 
 Examples:
+  mallet src
   mallet src/main.lisp
-  mallet --all src/*.lisp
+  mallet -a src/*.lisp
   mallet --format json src/*.lisp
   mallet --config .mallet.lisp src/
-  mallet --debug src/
 "))
 
 (defun expand-file-args (file-args)
