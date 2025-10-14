@@ -371,7 +371,7 @@ enabling accurate violation reporting."
           ;; Continue parsing to find more errors
           nil)
         ;; Other reader errors we can't handle - re-signal
-        (eclector.base:stream-position-reader-error (e)
+        (eclector.base:stream-position-reader-error ()
           (let* ((pos (file-position stream))
                  ;; Extract a snippet of text around the error position
                  (snippet-start (max 0 (- pos 10)))
