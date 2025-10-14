@@ -148,7 +148,7 @@ Special variables should be named `*foo*`.
 (defvar *config* nil)
 ```
 
-**Default**: enabled
+**Default**: disabled
 
 ### `:asdf-component-strings`
 

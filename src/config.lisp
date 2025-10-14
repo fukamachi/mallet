@@ -300,8 +300,7 @@ Style preferences are disabled to keep output clean."
            :unused-imported-symbols
            :asdf-component-strings
            :mixed-optional-and-key
-           :if-without-else
-           :special-variable-naming))
+           :if-without-else))
         (disabled-rules
          '(;; Style preferences - disabled (too noisy, no consensus)
            :line-length
@@ -309,6 +308,7 @@ Style preferences are disabled to keep output clean."
            :bare-progn-in-if
            :missing-otherwise
            :constant-naming
+           :special-variable-naming
            ;; LOOP variables - disabled
            :unused-loop-variables)))
     (make-config

@@ -82,12 +82,12 @@
         (ok (member :trailing-whitespace rule-names))
         (ok (member :no-tabs rule-names))
         (ok (member :unused-variables rule-names))
-        (ok (member :if-without-else rule-names))
-        (ok (member :special-variable-naming rule-names)))
+        (ok (member :if-without-else rule-names)))
       ;; Check that some rules are disabled
       (let ((disabled (config:config-disabled-rules cfg)))
         (ok (member :line-length disabled))
-        (ok (member :constant-naming disabled)))))
+        (ok (member :constant-naming disabled))
+        (ok (member :special-variable-naming disabled)))))
 
   (testing "Load all config"
     (let ((cfg (config:get-built-in-config :all)))
