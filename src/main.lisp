@@ -177,25 +177,6 @@ Handles wildcards and directories, excluding common non-source directories."
              (error 'errors:file-not-found :path arg))))))
     (nreverse files)))
 
-(defun has-errors-p (results)
-  "Check if RESULTS contain any :error severity violations."
-  (loop for (file . violations) in results
-        thereis (some (lambda (v)
-                        (eq (violation-severity v) :error))
-                      violations)))
-
-(defun has-warnings-p (results)
-  "Check if RESULTS contain any :warning severity violations."
-  (loop for (file . violations) in results
-        thereis (some (lambda (v)
-                        (eq (violation-severity v) :warning))
-                      violations)))
-
-(defun has-violations-p (results)
-  "Check if RESULTS contain any violations at all."
-  (loop for (file . violations) in results
-        thereis (not (null violations))))
-
 (defun main ()
   "Main entry point for the Mallet CLI.
 Lints files specified in ARGS and exits with appropriate status code."
@@ -231,14 +212,52 @@ Lints files specified in ARGS and exits with appropriate status code."
 
             (let* ((files (expand-file-args file-args))
                    (config:*default-preset* (or preset :default))
-                   (results (engine:lint-files files
-                                               :config (and config-path
-                                                            (config:load-config config-path)))))
+                   (config (and config-path (config:load-config config-path)))
+                   (severity-counts '())  ; Accumulated counts as plist
+                   (has-errors nil)
+                   (has-violations nil)
+                   (first-file-with-violations t))  ; For JSON comma handling
 
-              ;; Format output
+              ;; For JSON, print opening bracket
+              (when (eq format :json)
+                (formatter:format-json-start))
+
+              ;; Process files one at a time, outputting immediately
+              (dolist (file files)
+                (multiple-value-bind (violations ignored-p)
+                    (engine:lint-file file :config config)
+                  (unless ignored-p
+                    ;; Format and output violations for this file immediately
+                    (ecase format
+                      (:text
+                       ;; Output violations and accumulate counts
+                       (let ((file-counts (formatter:format-text-file file violations)))
+                         ;; Merge counts into accumulated counts
+                         (loop for (severity count) on file-counts by #'cddr
+                               do (setf (getf severity-counts severity 0)
+                                        (+ (getf severity-counts severity 0) count)))))
+                      (:json
+                       ;; Output JSON for this file
+                       (when (formatter:format-json-file file violations
+                                                         first-file-with-violations)
+                         (setf first-file-with-violations nil))))
+
+                    ;; Track violations for exit code
+                    (when violations
+                      (setf has-violations t)
+                      (when (some (lambda (v)
+                                    (eq (violation-severity v) :error))
+                                  violations)
+                        (setf has-errors t))))))
+
+              ;; Print summary/closing
               (ecase format
-                (:text (formatter:format-text results))
-                (:json (formatter:format-json results)))
+                (:text
+                 ;; Print summary with accumulated counts
+                 (formatter:format-text-summary severity-counts))
+                (:json
+                 ;; Print closing bracket
+                 (formatter:format-json-end)))
 
               ;; Exit with appropriate status
               ;; Exit 2: ERROR severity (objectively wrong)
@@ -246,8 +265,8 @@ Lints files specified in ARGS and exits with appropriate status code."
               ;; Exit 0: No violations
               ;; Teams control strictness via config (enable/disable rules)
               (cond
-                ((has-errors-p results) (uiop:quit 2))
-                ((has-violations-p results) (uiop:quit 1))
+                (has-errors (uiop:quit 2))
+                (has-violations (uiop:quit 1))
                 (t (uiop:quit 0))))))
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt
