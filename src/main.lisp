@@ -122,7 +122,7 @@ Signals specific error conditions for invalid input."
 (defun print-help ()
   "Print CLI usage information."
   (format t "~
-Mallet - A relentless guardian of code integrity for Common Lisp
+Mallet - A sensible Common Lisp linter that catches mistakes, not style
 
 Usage: mallet [options] <file>...
 
