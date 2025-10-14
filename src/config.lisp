@@ -295,6 +295,7 @@ Style preferences are disabled to keep output clean."
            :final-newline
            :wrong-otherwise
            :unused-variables
+           :unused-local-functions
            :unused-local-nicknames
            :unused-imported-symbols
            :asdf-component-strings
@@ -322,6 +323,7 @@ Useful for exploration and discovering what rules exist."
            :wrong-otherwise
            ;; WARNING: Likely bugs or dangerous patterns
            :unused-variables
+           :unused-local-functions
            :missing-otherwise
            :mixed-optional-and-key
            ;; INFO: Code quality suggestions

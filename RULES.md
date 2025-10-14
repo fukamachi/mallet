@@ -46,6 +46,23 @@ Variables should be used or explicitly ignored with `(declare (ignore ...))` or 
 
 **Default**: enabled
 
+### `:unused-local-functions`
+
+Local functions defined in `flet` or `labels` should be used.
+
+```lisp
+;; Bad
+(flet ((helper (x) (* x 2))
+       (unused (x) (+ x 1)))
+  (helper 10))  ; unused is never called
+
+;; Good
+(flet ((helper (x) (* x 2)))
+  (helper 10))
+```
+
+**Default**: enabled
+
 ### `:missing-otherwise`
 
 `case` and `typecase` should have an `otherwise` clause (not `t`).

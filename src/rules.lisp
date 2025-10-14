@@ -4,6 +4,7 @@
                  #:mallet/rules/text
                  #:mallet/rules/forms/control-flow
                  #:mallet/rules/forms/variables
+                 #:mallet/rules/forms/local-functions
                  #:mallet/rules/forms/package
                  #:mallet/rules/forms/naming
                  #:mallet/rules/forms/lambda-list
@@ -54,6 +55,9 @@ Always returns a rule object - enabled/disabled state is handled by config."
     (:unused-loop-variables
      (make-instance 'unused-loop-variables-rule
                     :severity (or severity :info)))
+    (:unused-local-functions
+     (make-instance 'unused-local-functions-rule
+                    :severity (or severity :warning)))
     (:unused-local-nicknames
      (make-instance 'unused-local-nicknames-rule
                     :severity (or severity :info)))

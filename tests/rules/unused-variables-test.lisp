@@ -1580,3 +1580,193 @@
 " :unused-loop-variables)
       (ok (= (length violations) 1) "Unused loop variable should trigger")
       (ok (search "Variable 'i'" (violation:violation-message (first violations)))))))
+
+(deftest function-vs-variable-namespace
+  (testing "Bug: Parameter shadows function name but calls function (Lisp-2)"
+    ;; In Common Lisp, functions and variables have separate namespaces.
+    ;; (bar 10) is a function call, not a variable reference.
+    ;; The parameter 'bar' in (defun foo (bar) ...) is a variable that's unused.
+    (let* ((code "(defun bar (x)
+                     (1+ x))
+
+                   (defun foo (bar)
+                     (bar 10))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule)))
+      ;; Check the first defun - should have no violations
+      (let ((violations1 (rules:check-form rule (first forms) #p"test.lisp")))
+        (ok (null violations1)
+            "Function 'bar' parameter 'x' is used"))
+      ;; Check the second defun - should report 'bar' parameter as unused
+      (let ((violations2 (rules:check-form rule (second forms) #p"test.lisp")))
+        (ok (= (length violations2) 1)
+            "Parameter 'bar' should be flagged as unused")
+        (ok (search "Variable 'bar' is unused"
+                    (violation:violation-message (first violations2)))
+            "Should report parameter 'bar' as unused in function 'foo'"))))
+
+  (testing "Valid: Variable used in value position (not function call)"
+    (let* ((code "(defun process (handler)
+                     (funcall handler 42))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Parameter 'handler' is used as a value in funcall")))
+
+  (testing "Valid: Variable used in function position via funcall/apply"
+    (let* ((code "(defun call-it (fn arg)
+                     (funcall fn arg))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Both parameters are used")))
+
+  (testing "Invalid: Variable shadowing function name in LET"
+    (let* ((code "(defun helper (x) (1+ x))
+
+                   (defun process (data)
+                     (let ((helper data))
+                       (helper 10)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule)))
+      ;; First defun should be fine
+      (let ((violations1 (rules:check-form rule (first forms) #p"test.lisp")))
+        (ok (null violations1)))
+      ;; Second defun: LET variable 'helper' is unused (shadows function)
+      (let ((violations2 (rules:check-form rule (second forms) #p"test.lisp")))
+        (ok (= (length violations2) 1)
+            "LET variable 'helper' should be flagged as unused")
+        (ok (search "Variable 'helper' is unused"
+                    (violation:violation-message (first violations2)))))))
+
+  (testing "Valid: FLET/LABELS creates function binding, not variable"
+    (let* ((code "(defun outer (x)
+                     (flet ((helper (y) (+ x y)))
+                       (helper 10)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      ;; 'x' is used in helper's body, so no violations
+      (ok (null violations)
+          "Parameter 'x' is properly used in FLET"))))
+
+(deftest unused-local-functions-flet
+  (testing "Invalid: FLET local function is unused"
+    (let* ((code "(defun baz ()
+                     (flet ((double (x)
+                              (* x x)))
+                       (print 'ok)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1)
+          "Unused local function 'double' should be flagged")
+      (ok (search "Local function 'double' is unused"
+                  (violation:violation-message (first violations)))
+          "Should report local function as unused")))
+
+  (testing "Valid: FLET local function is used"
+    (let* ((code "(defun process (n)
+                     (flet ((square (x) (* x x)))
+                       (square n)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Local function 'square' is used")))
+
+  (testing "Valid: FLET local function used via #'"
+    (let* ((code "(defun mapper (list)
+                     (flet ((doubler (x) (* x 2)))
+                       (mapcar #'doubler list)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Local function used via #' should be detected")))
+
+  (testing "Valid: FLET local function used via FUNCALL"
+    (let* ((code "(defun caller (n)
+                     (flet ((add-one (x) (1+ x)))
+                       (funcall 'add-one n)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Local function used via funcall should be detected")))
+
+  (testing "Invalid: Multiple FLET functions, one unused"
+    (let* ((code "(defun compute (n)
+                     (flet ((double (x) (* x 2))
+                            (triple (x) (* x 3)))
+                       (double n)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1)
+          "One of two local functions should be flagged")
+      (ok (search "Local function 'triple' is unused"
+                  (violation:violation-message (first violations)))
+          "Should report 'triple' as unused"))))
+
+(deftest unused-local-functions-labels
+  (testing "Invalid: LABELS local function is unused"
+    (let* ((code "(defun factorial-bad (n)
+                     (labels ((helper (acc x)
+                                (if (zerop x)
+                                    acc
+                                    (helper (* acc x) (1- x)))))
+                       n))")  ; Helper is defined but not used
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1)
+          "Unused local function 'helper' should be flagged")
+      (ok (search "Local function 'helper' is unused"
+                  (violation:violation-message (first violations)))
+          "Should report local function as unused")))
+
+  (testing "Valid: LABELS local function is used"
+    (let* ((code "(defun factorial (n)
+                     (labels ((helper (acc x)
+                                (if (zerop x)
+                                    acc
+                                    (helper (* acc x) (1- x)))))
+                       (helper 1 n)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Recursive local function should be detected as used")))
+
+  (testing "Valid: LABELS functions can reference each other"
+    (let* ((code "(defun even-odd (n)
+                     (labels ((is-even (x)
+                                (if (zerop x) t (is-odd (1- x))))
+                              (is-odd (x)
+                                (if (zerop x) nil (is-even (1- x)))))
+                       (is-even n)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Mutually recursive functions should both be detected as used")))
+
+  (testing "Invalid: LABELS with one unused in mutual recursion"
+    (let* ((code "(defun test (n)
+                     (labels ((is-even (x)
+                                (if (zerop x) t (is-odd (1- x))))
+                              (is-odd (x)
+                                (if (zerop x) nil (is-even (1- x))))
+                              (never-used (x) x))
+                       (is-even n)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-local-functions-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1)
+          "One unused function in LABELS should be flagged")
+      (ok (search "Local function 'never-used' is unused"
+                  (violation:violation-message (first violations)))
+          "Should report 'never-used' as unused"))))

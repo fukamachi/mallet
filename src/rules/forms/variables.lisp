@@ -671,14 +671,17 @@ references while respecting the shadow boundaries computed by find-shadows."
                "Check if EXPR matches any shadow in the list, return shadow-info if found."
                (find expr shadows :key #'shadow-info-form :test #'eq))
 
-             (search-expr (expr)
-               "Recursively search for references to var-name in expr."
+             (search-expr (expr &optional in-function-position)
+               "Recursively search for references to var-name in expr.
+IN-FUNCTION-POSITION is true if we're looking at the first element of a form (function call position)."
                (cond
                  ((null expr) nil)
 
                  ;; String matching our variable is a reference
+                 ;; BUT: Skip if we're in function position (Lisp-2: function calls don't use variable namespace)
                  ((stringp expr)
-                  (string-equal (base:symbol-name-from-string expr) target-name))
+                  (and (not in-function-position)
+                       (string-equal (base:symbol-name-from-string expr) target-name)))
 
                  ;; Check if this form is a shadow FIRST (before checking strings)
                  ;; This prevents finding variable names in binding positions
@@ -735,10 +738,12 @@ references while respecting the shadow boundaries computed by find-shadows."
                                         (t nil))))
                              (some #'search-quasi (rest expr))))
                           ;; Default: search recursively (OR-based search)
+                          ;; IMPORTANT: CAR is in function position (Lisp-2), CDR contains arguments
                           (t
-                           (or (search-expr (car expr))
-                               (when (consp (cdr expr))
-                                 (search-expr (cdr expr)))))))))
+                           (or (search-expr (car expr) t)  ; T = in function position
+                               ;; Search through CDR elements (arguments) - all are in value position
+                               (some (lambda (arg) (search-expr arg nil))
+                                     (cdr expr))))))))  ; NIL = in value position for all args
 
                  (t nil))))
 
@@ -752,6 +757,7 @@ Uses two-phase architecture: Phase 1 finds all shadows, Phase 2 searches for ref
   (let ((shadows (find-shadows var-name body)))
     ;; Phase 2: Search for references respecting shadows
     (find-references-with-shadows var-name body shadows)))
+
 
 ;;; Binding position calculation
 

@@ -45,6 +45,7 @@
       :components
       ((:file "control-flow")
        (:file "variables")
+       (:file "local-functions")
        (:file "package")
        (:file "naming")
        (:file "lambda-list")
