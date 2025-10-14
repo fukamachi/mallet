@@ -37,13 +37,14 @@
 The parser converts symbols to strings, so we check for patterns like:
   - ':ALEXANDRIA' (keyword)
   - 'CURRENT:FOO' (package-qualified symbol)
-For plain strings like 'main', check SOURCE for '#:' pattern if provided."
+For plain strings like 'main', check SOURCE for '#:' pattern if provided.
+Returns NIL for non-string inputs (like Eclector objects)."
   (and (stringp str)
        (or
         ;; Keyword: starts with ":"
         (utils:keyword-string-p str)
         ;; Package-qualified: has ":" but not at start (e.g., "CURRENT:FOO")
-        (and (find #\: str)
+        (and (find #\: str :test #'char=)  ; Be explicit about test function
              (not (utils:keyword-string-p str)))
         ;; Plain string - check source for #: pattern if available
         (and source
@@ -54,19 +55,26 @@ For plain strings like 'main', check SOURCE for '#:' pattern if provided."
 
 (defun extract-symbol-name (str)
   "Extract the base name from a symbol string for display.
-Examples: ':ALEXANDRIA' -> 'alexandria', 'CURRENT:FOO' -> 'foo'"
-  (cond
-    ;; Keyword: ":ALEXANDRIA" -> "alexandria"
-    ((utils:keyword-string-p str)
-     (string-downcase (subseq str 1)))
-    ;; Uninterned: "#:FOO" -> "foo"
-    ((and (> (length str) 1) (char= (char str 0) #\#) (char= (char str 1) #\:))
-     (string-downcase (subseq str 2)))
-    ;; Package-qualified: "CURRENT:FOO" -> "foo"
-    ((find #\: str)
-     (string-downcase (subseq str (1+ (position #\: str :from-end t)))))
-    ;; Plain: "FOO" -> "foo"
-    (t (string-downcase str))))
+Examples: ':ALEXANDRIA' -> 'alexandria', 'CURRENT:FOO' -> 'foo'
+Handles non-string inputs (like Eclector objects) gracefully by returning a default value."
+  (if (not (stringp str))
+      ;; Not a string - try to get a reasonable representation
+      (if (and (consp str) (symbolp (first str)))
+          (format nil "~A" (first str))  ; Best effort for Eclector objects
+          (format nil "~A" str))          ; Last resort - princ it
+      ;; Normal string processing
+      (cond
+        ;; Keyword: ":ALEXANDRIA" -> "alexandria"
+        ((utils:keyword-string-p str)
+         (string-downcase (subseq str 1)))
+        ;; Uninterned: "#:FOO" -> "foo"
+        ((and (> (length str) 1) (char= (char str 0) #\#) (char= (char str 1) #\:))
+         (string-downcase (subseq str 2)))
+        ;; Package-qualified: "CURRENT:FOO" -> "foo"
+        ((find #\: str :test #'char=)
+         (string-downcase (subseq str (1+ (position #\: str :from-end t :test #'char=)))))
+        ;; Plain: "FOO" -> "foo"
+        (t (string-downcase str)))))
 
 (defun format-symbol-for-message (str source)
   "Format STR as it appeared in SOURCE for error messages.

@@ -38,7 +38,10 @@
            #:if-without-else-p
            #:case-form-p
            #:defpackage-form-p
-           #:defun-form-p))
+           #:defun-form-p
+           ;; Eclector utilities
+           #:eclector-unquote-p
+           #:extract-from-eclector-unquote))
 (in-package #:mallet/parser)
 
 ;;; Token data structure
@@ -146,3 +149,27 @@
     :documentation "Column number where error occurred (0-based)"))
   (:documentation
    "Represents a parse error with position information."))
+
+;;; Eclector Utilities
+
+(defun eclector-unquote-p (obj)
+  "Check if OBJ is an ECLECTOR.READER:UNQUOTE object.
+Eclector creates these for nested backquote/unquote expressions.
+Returns T if OBJ is a cons whose car is ECLECTOR.READER:UNQUOTE."
+  (and (consp obj)
+       (symbolp (first obj))
+       (or (eq (first obj) 'eclector.reader:unquote)
+           (and (eq (symbol-package (first obj))
+                   (find-package "ECLECTOR.READER"))
+                (string-equal (symbol-name (first obj)) "UNQUOTE")))))
+
+(defun extract-from-eclector-unquote (unquote-obj)
+  "Extract the value from an ECLECTOR.READER:UNQUOTE object.
+Returns the unquoted value, or NIL if OBJ is not a valid UNQUOTE object.
+
+Example:
+  (ECLECTOR.READER:UNQUOTE \"foo\") → \"foo\"
+  (ECLECTOR.READER:UNQUOTE (ECLECTOR.READER:UNQUOTE \"bar\")) → (ECLECTOR.READER:UNQUOTE \"bar\")"
+  (when (and (eclector-unquote-p unquote-obj)
+             (rest unquote-obj))
+    (second unquote-obj)))

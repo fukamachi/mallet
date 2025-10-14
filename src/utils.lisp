@@ -14,13 +14,30 @@
 (defun symbol-name-from-string (str)
   "Extract the symbol name from a string representation.
 Handles qualified symbols like \"PACKAGE:NAME\" → \"NAME\"
-and unqualified symbols like \"NAME\" → \"NAME\"."
-  (if (stringp str)
-      (let ((colon-pos (position #\: str :from-end t)))
-        (if colon-pos
-            (subseq str (1+ colon-pos))
-            str))
-      str))
+and unqualified symbols like \"NAME\" → \"NAME\".
+Also handles Eclector reader objects gracefully."
+  (cond
+    ;; Normal string - extract symbol name
+    ((stringp str)
+     (let ((colon-pos (position #\: str :from-end t :test #'char=)))
+       (if colon-pos
+           (subseq str (1+ colon-pos))
+           str)))
+    ;; Eclector UNQUOTE object: (ECLECTOR.READER:UNQUOTE "string")
+    ((and (consp str)
+          (symbolp (first str))
+          (or (eq (first str) 'eclector.reader:unquote)
+              (and (eq (symbol-package (first str))
+                      (find-package "ECLECTOR.READER"))
+                   (string-equal (symbol-name (first str)) "UNQUOTE"))))
+     ;; Recursively process the unquoted value
+     (when (rest str)
+       (symbol-name-from-string (second str))))
+    ;; Other Eclector objects or unknown types - try to get a string representation
+    ((consp str)
+     (format nil "~A" (first str)))
+    ;; Last resort - return as-is
+    (t str)))
 
 (defun keyword-string-p (str)
   "Check if STR is a keyword string (starts with colon)."

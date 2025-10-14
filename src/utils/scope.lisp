@@ -41,32 +41,57 @@ Returns the new scope hash table."
 Returns the popped scope hash table."
   (pop *scope-stack*))
 
+(defun normalize-var-name (var-name)
+  "Normalize VAR-NAME to a string, handling Eclector reader objects.
+Returns a string, or NIL if the var-name cannot be normalized."
+  (cond
+    ;; Already a string
+    ((stringp var-name)
+     var-name)
+    ;; Eclector UNQUOTE object - extract the symbol inside
+    ((and (consp var-name)
+          (symbolp (first var-name))
+          (or (eq (first var-name) 'eclector.reader:unquote)
+              (and (string-equal (symbol-name (first var-name)) "UNQUOTE")
+                   (string-equal (package-name (symbol-package (first var-name))) "ECLECTOR.READER"))))
+     ;; Extract the second element (the unquoted expression)
+     (when (rest var-name)
+       (normalize-var-name (second var-name))))
+    ;; Symbol - get its name
+    ((symbolp var-name)
+     (symbol-name var-name))
+    ;; Cannot normalize
+    (t nil)))
+
 (defun record-variable (var-name line column)
   "Record a variable binding in the current (topmost) scope with its position.
-VAR-NAME should be a string (symbol name).
+VAR-NAME should be a string (symbol name), but Eclector objects are handled gracefully.
 LINE and COLUMN are the source position (1-based line, 0-based column).
-Returns the recorded position as (LINE . COLUMN)."
-  (check-type var-name string)
+Returns the recorded position as (LINE . COLUMN), or NIL if var-name cannot be normalized."
   (check-type line (integer 1))
   (check-type column (integer 0))
 
-  (if *scope-stack*
-      (let ((current-scope (first *scope-stack*))
-            (pos (cons line column)))
-        (setf (gethash var-name current-scope) pos)
-        pos)
-      (error "Cannot record variable: no scope active")))
+  (let ((normalized-name (normalize-var-name var-name)))
+    (if (and normalized-name *scope-stack*)
+        (let ((current-scope (first *scope-stack*))
+              (pos (cons line column)))
+          (setf (gethash normalized-name current-scope) pos)
+          pos)
+        (when (not *scope-stack*)
+          (error "Cannot record variable: no scope active")))))
 
 (defun lookup-variable-position (var-name)
   "Look up a variable's position, searching from innermost to outermost scope.
-Returns (values line column) if found, or (values nil nil) if not found."
-  (check-type var-name string)
-
-  (loop for scope in *scope-stack*
-        for pos = (gethash var-name scope)
-        when pos
-          return (values (car pos) (cdr pos))
-        finally (return (values nil nil))))
+Returns (values line column) if found, or (values nil nil) if not found.
+VAR-NAME is normalized to handle Eclector objects gracefully."
+  (let ((normalized-name (normalize-var-name var-name)))
+    (if normalized-name
+        (loop for scope in *scope-stack*
+              for pos = (gethash normalized-name scope)
+              when pos
+                return (values (car pos) (cdr pos))
+              finally (return (values nil nil)))
+        (values nil nil))))
 
 (defmacro with-new-scope (&body body)
   "Execute BODY with a new scope pushed onto the scope stack.

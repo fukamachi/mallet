@@ -1042,9 +1042,11 @@ Returns the original string object that should be in the position-map."
   "Check DESTRUCTURING-BIND for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 3)
-      (let* ((lambda-list (first rest-args))
+      (let* ((pattern (first rest-args))
              (body (cddr rest-args))
-             (var-names (extract-lambda-list-vars lambda-list t))
+             ;; Use extract-bindings which handles dotted pairs correctly
+             ;; e.g., (string . attributes) or (a b c) or ((a b) c)
+             (var-names (extract-bindings pattern :destructuring))
              (bindings (mapcar #'list var-names)))
         (when bindings
           (scope:with-new-scope

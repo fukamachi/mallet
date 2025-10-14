@@ -25,6 +25,7 @@
            #:check-form-recursive
            #:traverse-expr
            #:with-safe-cons-expr
+           #:with-safe-code-expr
            #:should-create-violation-p))
 (in-package #:mallet/rules/base)
 
@@ -397,3 +398,42 @@ Example usage:
                   (not (gethash ,expr-var ,visited)))
          (setf (gethash ,expr-var ,visited) t)
          ,@body))))
+
+(defmacro with-safe-code-expr ((expr visited) &body body)
+  "Execute BODY only if EXPR is safe to check (proper list, not visited, not quoted).
+Automatically:
+1. Checks EXPR is a cons and proper list (not dotted pair)
+2. Marks EXPR as visited (cycle detection)
+3. Skips QUOTE forms (data, not code)
+
+The body can then decide how to handle string-headed forms and other cases.
+
+Example usage:
+  (let ((visited (make-hash-table :test 'eq)))
+    (labels ((check-expr (expr)
+               (with-safe-code-expr (expr visited)
+                 ;; Your rule-specific logic here
+                 (when (some-pattern-p expr)
+                   (report-violation))
+                 ;; Recurse on subexpressions
+                 (dolist (subexpr (rest expr))
+                   (check-expr subexpr)))))
+      (check-expr my-form)))"
+  (let ((expr-var (gensym "EXPR"))
+        (head-var (gensym "HEAD"))
+        (block-name (gensym "BLOCK")))
+    `(let ((,expr-var ,expr))
+       (block ,block-name
+         (when (and (consp ,expr-var)
+                    (a:proper-list-p ,expr-var)
+                    (not (gethash ,expr-var ,visited)))
+           (setf (gethash ,expr-var ,visited) t)
+
+           (let ((,head-var (first ,expr-var)))
+             ;; Skip QUOTE forms - they contain data, not code
+             (when (or (eq ,head-var 'cl:quote)
+                       (eq ,head-var 'quote)
+                       (symbol-matches-p ,head-var "QUOTE"))
+               (return-from ,block-name nil)))
+
+           ,@body)))))

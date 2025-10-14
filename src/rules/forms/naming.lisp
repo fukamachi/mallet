@@ -35,10 +35,7 @@
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
     (labels ((check-expr (current-expr fallback-line fallback-column)
-               (when (and (consp current-expr)
-                          (not (gethash current-expr visited)))
-                 (setf (gethash current-expr visited) t)
-
+               (base:with-safe-code-expr (current-expr visited)
                  ;; Check if this form is a defvar/defparameter
                  (when (stringp (first current-expr))
                    (let ((operator (base:symbol-name-from-string (first current-expr))))
@@ -109,10 +106,7 @@
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
     (labels ((check-expr (current-expr fallback-line fallback-column)
-               (when (and (consp current-expr)
-                          (not (gethash current-expr visited)))
-                 (setf (gethash current-expr visited) t)
-
+               (base:with-safe-code-expr (current-expr visited)
                  ;; Check if this form is a defconstant/define-constant
                  (when (stringp (first current-expr))
                    (let ((operator (base:symbol-name-from-string (first current-expr))))

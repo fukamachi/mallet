@@ -183,10 +183,13 @@
                       ((symbolp type-elem) (symbol-name type-elem))
                       ((stringp type-elem)
                        ;; Handle "MALLET:suppress-next" -> "SUPPRESS-NEXT"
-                       (let ((colon-pos (position #\: type-elem :from-end t)))
+                       (let ((colon-pos (position #\: type-elem :from-end t :test #'char=)))
                          (if colon-pos
                              (subseq type-elem (1+ colon-pos))
                              type-elem)))
+                      ;; Handle Eclector objects or other non-string/non-symbol forms
+                      ((and (consp type-elem) (symbolp (first type-elem)))
+                       (format nil "~A" (first type-elem)))
                       (t (error "Invalid type element: ~A" type-elem))))
          (type (intern (string-upcase type-name) :keyword)))
     (ecase type

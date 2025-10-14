@@ -34,10 +34,7 @@
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
     (labels ((check-expr (current-expr fallback-line fallback-column)
-               (when (and (consp current-expr)
-                          (not (gethash current-expr visited)))
-                 (setf (gethash current-expr visited) t)
-
+               (base:with-safe-code-expr (current-expr visited)
                  ;; Check if this form has a lambda list
                  (when (stringp (first current-expr))
                    (let ((operator (base:symbol-name-from-string (first current-expr))))
