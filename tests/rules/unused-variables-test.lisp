@@ -1808,3 +1808,143 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Both variables in unknown macro should not be flagged"))))
+
+(deftest handler-case-variables-valid
+  (testing "Valid: handler-case with used condition variable"
+    (let* ((code "(handler-case
+                       (some-function)
+                     (error (e)
+                       (format t \"Error: ~A\" e)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: handler-case with multiple handlers, all used"
+    (let* ((code "(handler-case
+                       (some-function)
+                     (type-error (e)
+                       (log-error e))
+                     (parse-error (err)
+                       (handle-parse-error err)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: handler-case with underscore variable"
+    (let* ((code "(handler-case
+                       (some-function)
+                     (error (_e)
+                       (format t \"An error occurred\")))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: handler-case with no-error clause"
+    (let* ((code "(handler-case
+                       (some-function)
+                     (error (e)
+                       (format t \"Error: ~A\" e))
+                     (:no-error (result)
+                       (process result)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
+
+(deftest handler-case-variables-invalid
+  (testing "Invalid: handler-case with unused condition variable"
+    (let* ((code "(handler-case
+                       (some-function)
+                     (error (e)
+                       (format t \"An error occurred\")))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations))
+              :unused-variables))
+      (ok (search "Variable 'e' is unused"
+                  (violation:violation-message (first violations))))))
+
+  (testing "Invalid: handler-case with multiple unused variables"
+    (let* ((code "(handler-case
+                       (some-function)
+                     (type-error (e)
+                       (log-error \"Type error\"))
+                     (parse-error (err)
+                       (handle-parse-error)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 2))
+      (ok (every (lambda (v)
+                   (eq (violation:violation-rule v) :unused-variables))
+                 violations))))
+
+  (testing "Invalid: handler-case with unused no-error variable"
+    (let* ((code "(handler-case
+                       (some-function)
+                     (:no-error (result other)
+                       (process result)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'other' is unused"
+                  (violation:violation-message (first violations)))))))
+
+(deftest restart-case-variables-valid
+  (testing "Valid: restart-case with used restart parameters"
+    (let* ((code "(restart-case
+                       (some-function)
+                     (retry ()
+                       (retry-operation))
+                     (use-value (value)
+                       (process value)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: restart-case with underscore parameter"
+    (let* ((code "(restart-case
+                       (some-function)
+                     (use-value (_value)
+                       (use-default)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
+
+(deftest restart-case-variables-invalid
+  (testing "Invalid: restart-case with unused parameter"
+    (let* ((code "(restart-case
+                       (some-function)
+                     (use-value (value)
+                       (use-default)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations))
+              :unused-variables))
+      (ok (search "Variable 'value' is unused"
+                  (violation:violation-message (first violations))))))
+
+  (testing "Invalid: restart-case with multiple unused parameters"
+    (let* ((code "(restart-case
+                       (some-function)
+                     (use-value (value)
+                       (use-default))
+                     (use-other (other)
+                       (use-default-other)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 2))
+      (ok (every (lambda (v)
+                   (eq (violation:violation-rule v) :unused-variables))
+                 violations)))))

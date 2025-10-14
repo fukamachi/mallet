@@ -1551,6 +1551,41 @@ Returns the original string object that should be in the position-map."
           (scope:with-new-scope
             (check-binding-form :do* var-clauses body line column position-map rule do-context)))))))
 
+(defun check-handler-case-bindings (expr line column position-map rule)
+  "Check HANDLER-CASE for unused variable bindings in error handler clauses.
+Each clause has the structure: (condition-type lambda-list &body body)
+Special case: :no-error clause also has lambda-list with potential bindings."
+  (let ((rest-args (rest expr)))
+    (when (utils:proper-list-of-min-length-p rest-args 1)
+      ;; Skip the first form (protected form), then process each error handler clause
+      (dolist (clause (rest rest-args))
+        (when (and (a:proper-list-p clause)
+                   (utils:proper-list-of-min-length-p clause 2))
+          (let* ((lambda-list (second clause))
+                 (body (cddr clause)))
+            ;; Lambda-list should be a list of parameters
+            (when (a:proper-list-p lambda-list)
+              (let ((bindings (mapcar #'list lambda-list)))
+                (scope:with-new-scope
+                  (check-binding-form :let bindings body line column position-map rule))))))))))
+
+(defun check-restart-case-bindings (expr line column position-map rule)
+  "Check RESTART-CASE for unused variable bindings in restart handler clauses.
+Each clause has the structure: (restart-name lambda-list &body body)"
+  (let ((rest-args (rest expr)))
+    (when (utils:proper-list-of-min-length-p rest-args 1)
+      ;; Skip the first form (restartable form), then process each restart clause
+      (dolist (clause (rest rest-args))
+        (when (and (a:proper-list-p clause)
+                   (utils:proper-list-of-min-length-p clause 2))
+          (let* ((lambda-list (second clause))
+                 (body (cddr clause)))
+            ;; Lambda-list should be a list of parameters
+            (when (a:proper-list-p lambda-list)
+              (let ((bindings (mapcar #'list lambda-list)))
+                (scope:with-new-scope
+                  (check-binding-form :let bindings body line column position-map rule))))))))))
+
 (defun check-destructuring-bind-bindings (expr line column position-map rule)
   "Check DESTRUCTURING-BIND for unused variable bindings."
   (let ((rest-args (rest expr)))
@@ -1715,6 +1750,10 @@ Returns the original string object that should be in the position-map."
            (check-destructuring-bind-bindings expr line column position-map rule))
           ((base:symbol-matches-p head "MULTIPLE-VALUE-BIND")
            (check-multiple-value-bind-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "HANDLER-CASE")
+           (check-handler-case-bindings expr line column position-map rule))
+          ((base:symbol-matches-p head "RESTART-CASE")
+           (check-restart-case-bindings expr line column position-map rule))
           ((base:symbol-matches-p head "DEFMACRO")
            (check-defmacro-bindings expr line column position-map rule))))
 
