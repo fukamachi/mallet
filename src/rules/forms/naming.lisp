@@ -53,10 +53,7 @@
                                                 (char= (char var-name (1- (length var-name))) #\+))))
                              (when (base:should-create-violation-p rule)
                                (multiple-value-bind (var-line var-column)
-                                   (if position-map
-                                       (parser:find-position var-name-expr position-map
-                                                            fallback-line fallback-column)
-                                       (values fallback-line fallback-column))
+                                   (base:find-actual-position var-name-expr position-map fallback-line fallback-column)
                                  (push (make-instance 'violation:violation
                                                     :rule :special-variable-naming
                                                     :file file
@@ -74,9 +71,8 @@
                             (a:proper-list-p current-expr))
                    (dolist (subexpr current-expr)
                      (when (consp subexpr)
-                       (let ((nested-violations (base:check-form-recursive rule subexpr file
-                                                                           fallback-line fallback-column)))
-                         (setf violations (nconc violations nested-violations)))))))))
+                       (a:nconcf violations (base:check-form-recursive rule subexpr file
+                                                                        fallback-line fallback-column))))))))
       (check-expr expr line column))
     violations))
 
@@ -122,10 +118,7 @@
                                                 (char= (char const-name (1- (length const-name))) #\+))))
                              (when (base:should-create-violation-p rule)
                                (multiple-value-bind (const-line const-column)
-                                   (if position-map
-                                       (parser:find-position const-name-expr position-map
-                                                            fallback-line fallback-column)
-                                       (values fallback-line fallback-column))
+                                   (base:find-actual-position const-name-expr position-map fallback-line fallback-column)
                                  (push (make-instance 'violation:violation
                                                     :rule :constant-naming
                                                     :file file
@@ -143,9 +136,8 @@
                             (a:proper-list-p current-expr))
                    (dolist (subexpr current-expr)
                      (when (consp subexpr)
-                       (let ((nested-violations (base:check-form-recursive rule subexpr file
-                                                                           fallback-line fallback-column)))
-                         (setf violations (nconc violations nested-violations)))))))))
+                       (a:nconcf violations (base:check-form-recursive rule subexpr file
+                                                                        fallback-line fallback-column))))))))
       (check-expr expr line column))
     violations))
 

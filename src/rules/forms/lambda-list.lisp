@@ -169,10 +169,7 @@ Returns (line column message) if violation found, NIL otherwise."
                (setf has-key t))))))
       (when (and has-optional has-key)
         (multiple-value-bind (line column)
-            (if position-map
-                (parser:find-position lambda-list position-map
-                                     fallback-line fallback-column)
-                (values fallback-line fallback-column))
+            (base:find-actual-position lambda-list position-map fallback-line fallback-column)
           (list line column
                 (format nil "Lambda list in ~A mixes &optional and &key (confusing and problematic)"
                         context)))))))

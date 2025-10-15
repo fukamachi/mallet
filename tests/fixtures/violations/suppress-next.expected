@@ -3,4 +3,4 @@
 # Only the second function (bar) should have a violation
 # The first function (foo) has suppress-next, so its violation is suppressed
 
-16:0 if-without-else convention
+16:2 if-without-else convention

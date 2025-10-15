@@ -28,16 +28,19 @@
   (check-type file pathname)
 
   ;; Start checking using the generic method for suppression support
+  ;; Pass the position-map so nested forms can look up their actual positions
   (base:check-form-recursive rule
                              (parser:form-expr form)
                              file
                              (parser:form-line form)
-                             (parser:form-column form)))
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
 
 (defmethod base:check-form-recursive ((rule if-without-else-rule) expr file line column &optional function-name position-map)
   "Recursively check for IF forms without else clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name position-map))
+  (declare (ignore function-name))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
@@ -45,37 +48,37 @@ Suppressions are handled automatically by the :around method."
     (labels ((check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for if-without-else violations."
                (base:with-safe-cons-expr (current-expr visited)
-                 (let ((head (first current-expr))
-                       (rest-args (rest current-expr)))
-                   ;; Check if this is an IF form
-                   (when (base:symbol-matches-p head "IF")
-                     ;; IF should have 3 args (condition then else)
-                     ;; If it has only 2 args, it's missing else clause
-                     (when (and (= (length rest-args) 2)
-                                (base:should-create-violation-p rule))
-                       (push (make-instance 'violation:violation
-                                            :rule :if-without-else
-                                            :file file
-                                            :line fallback-line
-                                            :column fallback-column
-                                            :severity (base:rule-severity rule)
-                                            :message
-                                            "Use 'when' or 'unless' instead of 'if' without else clause"
-                                            :fix nil)
-                             violations)))
+                 ;; Look up the actual position of this expression if position-map is available
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map fallback-line fallback-column)
+                   (let ((head (first current-expr))
+                         (rest-args (rest current-expr)))
+                     ;; Check if this is an IF form
+                     (when (base:symbol-matches-p head "IF")
+                       ;; IF should have 3 args (condition then else)
+                       ;; If it has only 2 args, it's missing else clause
+                       (when (and (= (length rest-args) 2)
+                                  (base:should-create-violation-p rule))
+                         (push (make-instance 'violation:violation
+                                              :rule :if-without-else
+                                              :file file
+                                              :line actual-line
+                                              :column actual-column
+                                              :severity (base:rule-severity rule)
+                                              :message
+                                              "Use 'when' or 'unless' instead of 'if' without else clause"
+                                              :fix nil)
+                               violations)))
 
-                   ;; Recursively check nested forms using the generic method
-                   (when (consp head)
-                     (let ((nested-violations (base:check-form-recursive rule head file
-                                                                          fallback-line fallback-column)))
-                       (setf violations (nconc violations nested-violations))))
-
-                   ;; Check rest-args
-                   (when (a:proper-list-p rest-args)
-                     (dolist (subexpr rest-args)
-                       (let ((nested-violations (base:check-form-recursive rule subexpr file
-                                                                            fallback-line fallback-column)))
-                         (setf violations (nconc violations nested-violations)))))))))
+                     ;; Recursively check nested forms
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule head file
+                                                                        actual-line actual-column
+                                                                        position-map))
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule rest-args file
+                                                                        actual-line actual-column
+                                                                        position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))
@@ -99,16 +102,19 @@ Suppressions are handled automatically by the :around method."
   (check-type file pathname)
 
   ;; Start checking using the generic method for suppression support
+  ;; Pass the position-map so nested forms can look up their actual positions
   (base:check-form-recursive rule
                              (parser:form-expr form)
                              file
                              (parser:form-line form)
-                             (parser:form-column form)))
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
 
 (defmethod base:check-form-recursive ((rule bare-progn-in-if-rule) expr file line column &optional function-name position-map)
   "Recursively check for bare PROGN in IF clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name position-map))
+  (declare (ignore function-name))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
@@ -121,55 +127,55 @@ Suppressions are handled automatically by the :around method."
              (check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for bare progn in if."
                (base:with-safe-cons-expr (current-expr visited)
-                 (let ((head (first current-expr))
-                       (rest-args (rest current-expr)))
-                   ;; Check if this is an IF form
-                   (when (base:symbol-matches-p head "IF")
-                     ;; IF should have 2 or 3 args (condition then [else])
-                     (when (>= (length rest-args) 2)
-                       (let ((then-clause (second rest-args))
-                             (else-clause (when (>= (length rest-args) 3)
-                                            (third rest-args))))
-                         ;; Check if then clause is a bare progn
-                         (when (and (is-progn-p then-clause)
-                                    (base:should-create-violation-p rule))
-                           (push (make-instance 'violation:violation
-                                                :rule :bare-progn-in-if
-                                                :file file
-                                                :line fallback-line
-                                                :column fallback-column
-                                                :severity (base:rule-severity rule)
-                                                :message
-                                                "Use 'cond' instead of 'if' with bare 'progn'"
-                                                :fix nil)
-                                 violations))
+                 ;; Look up the actual position of this expression if position-map is available
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map fallback-line fallback-column)
+                   (let ((head (first current-expr))
+                         (rest-args (rest current-expr)))
+                     ;; Check if this is an IF form
+                     (when (base:symbol-matches-p head "IF")
+                       ;; IF should have 2 or 3 args (condition then [else])
+                       (when (>= (length rest-args) 2)
+                         (let ((then-clause (second rest-args))
+                               (else-clause (when (>= (length rest-args) 3)
+                                              (third rest-args))))
+                           ;; Check if then clause is a bare progn
+                           (when (and (is-progn-p then-clause)
+                                      (base:should-create-violation-p rule))
+                             (push (make-instance 'violation:violation
+                                                  :rule :bare-progn-in-if
+                                                  :file file
+                                                  :line actual-line
+                                                  :column actual-column
+                                                  :severity (base:rule-severity rule)
+                                                  :message
+                                                  "Use 'cond' instead of 'if' with bare 'progn'"
+                                                  :fix nil)
+                                   violations))
 
-                         ;; Check if else clause is a bare progn
-                         (when (and (is-progn-p else-clause)
-                                    (base:should-create-violation-p rule))
-                           (push (make-instance 'violation:violation
-                                                :rule :bare-progn-in-if
-                                                :file file
-                                                :line fallback-line
-                                                :column fallback-column
-                                                :severity (base:rule-severity rule)
-                                                :message
-                                                "Use 'cond' instead of 'if' with bare 'progn'"
-                                                :fix nil)
-                                 violations)))))
+                           ;; Check if else clause is a bare progn
+                           (when (and (is-progn-p else-clause)
+                                      (base:should-create-violation-p rule))
+                             (push (make-instance 'violation:violation
+                                                  :rule :bare-progn-in-if
+                                                  :file file
+                                                  :line actual-line
+                                                  :column actual-column
+                                                  :severity (base:rule-severity rule)
+                                                  :message
+                                                  "Use 'cond' instead of 'if' with bare 'progn'"
+                                                  :fix nil)
+                                   violations)))))
 
-                   ;; Recursively check nested forms using the generic method
-                   (when (consp head)
-                     (let ((nested-violations (base:check-form-recursive rule head file
-                                                                          fallback-line fallback-column)))
-                       (setf violations (nconc violations nested-violations))))
-
-                   ;; Check rest-args
-                   (when (a:proper-list-p rest-args)
-                     (dolist (subexpr rest-args)
-                       (let ((nested-violations (base:check-form-recursive rule subexpr file
-                                                                            fallback-line fallback-column)))
-                         (setf violations (nconc violations nested-violations)))))))))
+                     ;; Recursively check nested forms
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule head file
+                                                                        actual-line actual-column
+                                                                        position-map))
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule rest-args file
+                                                                        actual-line actual-column
+                                                                        position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))
@@ -193,16 +199,19 @@ Suppressions are handled automatically by the :around method."
   (check-type file pathname)
 
   ;; Start checking using the generic method for suppression support
+  ;; Pass the position-map so nested forms can look up their actual positions
   (base:check-form-recursive rule
                              (parser:form-expr form)
                              file
                              (parser:form-line form)
-                             (parser:form-column form)))
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
 
 (defmethod base:check-form-recursive ((rule missing-otherwise-rule) expr file line column &optional function-name position-map)
   "Recursively check for CASE/TYPECASE without otherwise clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name position-map))
+  (declare (ignore function-name))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
@@ -226,63 +235,63 @@ Suppressions are handled automatically by the :around method."
              (check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for missing otherwise."
                (base:with-safe-cons-expr (current-expr visited)
-                 (let ((head (first current-expr))
-                       (rest-args (rest current-expr)))
-                   ;; Check if this is a CASE or TYPECASE form
-                   (when (and (stringp head)
-                              (member (base:symbol-name-from-string head)
-                                      '("CASE" "TYPECASE")
-                                      :test #'string-equal))
-                     (let* ((form-name (base:symbol-name-from-string head))
-                            (keyform (first rest-args))
-                            (clauses (rest rest-args))
-                            (t-clause (find-t-clause clauses)))
-                       (declare (ignore keyform))
+                 ;; Look up the actual position of this expression if position-map is available
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map fallback-line fallback-column)
+                   (let ((head (first current-expr))
+                         (rest-args (rest current-expr)))
+                     ;; Check if this is a CASE or TYPECASE form
+                     (when (and (stringp head)
+                                (member (base:symbol-name-from-string head)
+                                        '("CASE" "TYPECASE")
+                                        :test #'string-equal))
+                       (let* ((form-name (base:symbol-name-from-string head))
+                              (keyform (first rest-args))
+                              (clauses (rest rest-args))
+                              (t-clause (find-t-clause clauses)))
+                         (declare (ignore keyform))
 
-                       ;; Check if it has T instead of OTHERWISE
-                       (when (and t-clause
-                                  (base:should-create-violation-p rule))
-                         (push (make-instance 'violation:violation
-                                              :rule :missing-otherwise
-                                              :file file
-                                              :line fallback-line
-                                              :column fallback-column
-                                              :severity (base:rule-severity rule)
-                                              :message
-                                              (format nil
-                                                      "Use 'otherwise' instead of 't' in '~A'"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))
+                         ;; Check if it has T instead of OTHERWISE
+                         (when (and t-clause
+                                    (base:should-create-violation-p rule))
+                           (push (make-instance 'violation:violation
+                                                :rule :missing-otherwise
+                                                :file file
+                                                :line actual-line
+                                                :column actual-column
+                                                :severity (base:rule-severity rule)
+                                                :message
+                                                (format nil
+                                                        "Use 'otherwise' instead of 't' in '~A'"
+                                                        (string-downcase form-name))
+                                                :fix nil)
+                                 violations))
 
-                       ;; Check if it has OTHERWISE clause
-                       (unless (or (has-otherwise-clause-p clauses)
-                                   t-clause
-                                   (not (base:should-create-violation-p rule)))
-                         (push (make-instance 'violation:violation
-                                              :rule :missing-otherwise
-                                              :file file
-                                              :line fallback-line
-                                              :column fallback-column
-                                              :severity (base:rule-severity rule)
-                                              :message
-                                              (format nil "'~A' should have 'otherwise' clause"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))))
+                         ;; Check if it has OTHERWISE clause
+                         (unless (or (has-otherwise-clause-p clauses)
+                                     t-clause
+                                     (not (base:should-create-violation-p rule)))
+                           (push (make-instance 'violation:violation
+                                                :rule :missing-otherwise
+                                                :file file
+                                                :line actual-line
+                                                :column actual-column
+                                                :severity (base:rule-severity rule)
+                                                :message
+                                                (format nil "'~A' should have 'otherwise' clause"
+                                                        (string-downcase form-name))
+                                                :fix nil)
+                                 violations))))
 
-                   ;; Recursively check nested forms using the generic method
-                   (when (consp head)
-                     (let ((nested-violations (base:check-form-recursive rule head file
-                                                                          fallback-line fallback-column)))
-                       (setf violations (nconc violations nested-violations))))
-
-                   ;; Check rest-args
-                   (when (a:proper-list-p rest-args)
-                     (dolist (subexpr rest-args)
-                       (let ((nested-violations (base:check-form-recursive rule subexpr file
-                                                                            fallback-line fallback-column)))
-                         (setf violations (nconc violations nested-violations)))))))))
+                     ;; Recursively check nested forms
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule head file
+                                                                        actual-line actual-column
+                                                                        position-map))
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule rest-args file
+                                                                        actual-line actual-column
+                                                                        position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))
@@ -307,16 +316,19 @@ Suppressions are handled automatically by the :around method."
 
   ;; Start checking from the form's expression using the generic method
   ;; This will handle suppressions automatically through the :around method
+  ;; Pass the position-map so nested forms can look up their actual positions
   (base:check-form-recursive rule
                              (parser:form-expr form)
                              file
                              (parser:form-line form)
-                             (parser:form-column form)))
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
 
 (defmethod base:check-form-recursive ((rule wrong-otherwise-rule) expr file line column &optional function-name position-map)
   "Recursively check for ECASE/ETYPECASE with otherwise/t clauses.
 Suppressions are handled automatically by the :around method."
-  (declare (ignore function-name position-map))  ; Not tracking function context for this rule
+  (declare (ignore function-name))  ; Not tracking function context for this rule
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))  ; Track visited cons cells
@@ -333,50 +345,47 @@ Suppressions are handled automatically by the :around method."
              (check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for wrong otherwise."
                (base:with-safe-cons-expr (current-expr visited)
-                 (let ((head (first current-expr))
-                       (rest-args (rest current-expr)))
-                   ;; Check if this is an ECASE or ETYPECASE form
-                   (when (and (stringp head)
-                              (member (base:symbol-name-from-string head)
-                                      '("ECASE" "ETYPECASE")
-                                      :test #'string-equal))
-                     (let* ((form-name (base:symbol-name-from-string head))
-                            (keyform (first rest-args))
-                            (clauses (rest rest-args))
-                            (catch-all-clause (find-catch-all-clause clauses)))
-                       (declare (ignore keyform))
+                 ;; Look up the actual position of this expression if position-map is available
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map fallback-line fallback-column)
+                   (let ((head (first current-expr))
+                         (rest-args (rest current-expr)))
+                     ;; Check if this is an ECASE or ETYPECASE form
+                     (when (and (stringp head)
+                                (member (base:symbol-name-from-string head)
+                                        '("ECASE" "ETYPECASE")
+                                        :test #'string-equal))
+                       (let* ((form-name (base:symbol-name-from-string head))
+                              (keyform (first rest-args))
+                              (clauses (rest rest-args))
+                              (catch-all-clause (find-catch-all-clause clauses)))
+                         (declare (ignore keyform))
 
-                       ;; Check if it has OTHERWISE or T clause
-                       (when (and catch-all-clause
-                                  (base:should-create-violation-p rule))
-                         (push (make-instance 'violation:violation
-                                              :rule :wrong-otherwise
-                                              :file file
-                                              :line fallback-line
-                                              :column fallback-column
-                                              :severity (base:rule-severity rule)
-                                              :message
-                                              (format nil
-                                                      "'~A' should not have 'otherwise' or 't' clause"
-                                                      (string-downcase form-name))
-                                              :fix nil)
-                               violations))))
+                         ;; Check if it has OTHERWISE or T clause
+                         (when (and catch-all-clause
+                                    (base:should-create-violation-p rule))
+                           (push (make-instance 'violation:violation
+                                                :rule :wrong-otherwise
+                                                :file file
+                                                :line actual-line
+                                                :column actual-column
+                                                :severity (base:rule-severity rule)
+                                                :message
+                                                (format nil
+                                                        "'~A' should not have 'otherwise' or 't' clause"
+                                                        (string-downcase form-name))
+                                                :fix nil)
+                                 violations))))
 
-                   ;; Recursively check nested forms using the generic method
-                   ;; This ensures suppressions work in nested contexts
-                   (when (consp head)
-                     ;; Use the generic method for nested checking with suppression support
-                     (let ((nested-violations (base:check-form-recursive rule head file
-                                                                          fallback-line fallback-column)))
-                       (setf violations (nconc violations nested-violations))))
-
-                   ;; Check rest-args
-                   (when (a:proper-list-p rest-args)
-                     (dolist (subexpr rest-args)
-                       ;; Use the generic method for nested checking with suppression support
-                       (let ((nested-violations (base:check-form-recursive rule subexpr file
-                                                                            fallback-line fallback-column)))
-                         (setf violations (nconc violations nested-violations)))))))))
+                     ;; Recursively check nested forms
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule head file
+                                                                        actual-line actual-column
+                                                                        position-map))
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule rest-args file
+                                                                        actual-line actual-column
+                                                                        position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))

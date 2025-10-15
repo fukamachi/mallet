@@ -26,7 +26,9 @@
            #:traverse-expr
            #:with-safe-cons-expr
            #:with-safe-code-expr
-           #:should-create-violation-p))
+           #:should-create-violation-p
+           #:find-actual-position
+           #:collect-violations-from-subexprs))
 (in-package #:mallet/rules/base)
 
 ;;; Rule class
@@ -321,6 +323,65 @@ if the rule is suppressed at the current scope."
                       :form-type :lexical-scope))
         ;; No suppression state (e.g., in unit tests), allow violation
         t)))
+
+;;; Helper functions for recursive form checking
+
+(defun find-actual-position (expr position-map fallback-line fallback-column)
+  "Find actual position for EXPR using POSITION-MAP, with fallback.
+Returns two values: actual line and actual column.
+
+If POSITION-MAP is provided and contains a position for EXPR, returns the mapped position.
+Otherwise, returns the fallback position."
+  (if position-map
+      (mallet/parser:find-position expr position-map fallback-line fallback-column)
+      (values fallback-line fallback-column)))
+
+(defun collect-violations-from-subexprs (rule subexprs file line column position-map)
+  "Recursively check SUBEXPRS (a list or single expr) and return collected violations.
+
+SUBEXPRS can be:
+  - A list of expressions (each checked in sequence, including single cons)
+  - NIL (returns empty violations list)
+  - An atom (returns empty violations list)
+
+Uses single-pass traversal to avoid the performance issue of calling
+a:proper-list-p before iterating. Stops immediately if SUBEXPRS has
+an improper tail (not a cons).
+
+This function is designed to replace these common patterns:
+
+Pattern 1 - Checking head (single expression):
+  (when (consp head)
+    (let ((nested (check-form-recursive rule head ...)))
+      (setf violations (nconc violations nested))))
+Becomes:
+  (a:nconcf violations (collect-violations-from-subexprs rule head ...))
+
+Pattern 2 - Checking rest-args (list of expressions):
+  (when (a:proper-list-p rest-args)  ; O(n) traversal
+    (dolist (subexpr rest-args)       ; O(n) traversal again
+      (let ((nested (check-form-recursive rule subexpr ...)))
+        (setf violations (nconc violations nested)))))
+Becomes:
+  (a:nconcf violations (collect-violations-from-subexprs rule rest-args ...))"
+  (cond
+    ;; NIL - empty list, no violations
+    ((null subexprs)
+     nil)
+
+    ;; List (including single cons) - iterate and check each element
+    ((listp subexprs)
+     (let ((violations '()))
+       (loop for rest on subexprs
+             while (consp rest)
+             for subexpr = (car rest)
+             do (a:nconcf violations
+                          (check-form-recursive rule subexpr file line column nil position-map)))
+       violations))
+
+    ;; Atom - not a form to check, return empty
+    (t
+     nil)))
 
 ;;; Generic traversal with cycle detection
 
