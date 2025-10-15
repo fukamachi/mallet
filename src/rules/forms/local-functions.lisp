@@ -182,8 +182,22 @@ Unlike variable references, this ONLY matches when the name appears in function 
                           ((or (eq (first expr) 'cl:function)
                                (eq (first expr) 'function)
                                (base:symbol-matches-p (first expr) "FUNCTION"))
-                           (when (and (rest expr) (stringp (second expr)))
-                             (string-equal (base:symbol-name-from-string (second expr)) target-name)))
+                           (when (rest expr)
+                             (let ((func-arg (second expr)))
+                               (or
+                                ;; Check if direct argument is a matching symbol
+                                (and (stringp func-arg)
+                                     (string-equal (base:symbol-name-from-string func-arg) target-name))
+                                ;; If it's a lambda, recursively search its body
+                                (when (and (consp func-arg)
+                                           (or (base:symbol-matches-p (first func-arg) "LAMBDA")
+                                               (eq (first func-arg) 'cl:lambda)
+                                               (eq (first func-arg) 'lambda)))
+                                  ;; Lambda format: (lambda (args...) body...)
+                                  ;; Skip lambda keyword and lambda-list, search body
+                                  (when (cddr func-arg)
+                                    (some (lambda (body-form) (search-expr body-form nil))
+                                          (cddr func-arg))))))))
                           ;; FUNCALL/APPLY - first argument after operator is in function namespace
                           ((or (base:symbol-matches-p (first expr) "FUNCALL")
                                (base:symbol-matches-p (first expr) "APPLY"))
