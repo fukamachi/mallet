@@ -279,3 +279,86 @@
       (ok (not (some (lambda (p) (search "/core/" (namestring p))) results-with-star)))
       ;; Both should produce identical results
       (ok (= (length results-without-star) (length results-with-star))))))
+
+(deftest negation-patterns
+  (testing "Basic negation pattern re-includes excluded file"
+    (let ((results (glob:glob (merge-pathnames "*.txt" *test-dir*)
+                              :exclude '("*.txt" "!file1.txt"))))
+      ;; Should exclude all .txt files except file1.txt
+      (ok (some (lambda (p) (search "file1.txt" (namestring p))) results))
+      (ok (not (some (lambda (p) (search "file2.txt" (namestring p))) results)))
+      (ok (not (some (lambda (p) (search "file3.txt" (namestring p))) results)))))
+
+  (testing "Negation pattern with wildcard"
+    (let ((results (glob:glob (merge-pathnames "*.txt" *test-dir*)
+                              :exclude '("file[123].txt" "!file1.txt"))))
+      ;; Should exclude file2.txt and file3.txt but include file1.txt
+      (ok (some (lambda (p) (search "file1.txt" (namestring p))) results))
+      (ok (not (some (lambda (p) (search "file2.txt" (namestring p))) results)))
+      (ok (not (some (lambda (p) (search "file3.txt" (namestring p))) results)))))
+
+  (testing "Last match wins - negation overrides exclusion"
+    (let ((results (glob:glob (merge-pathnames "**/*.lisp" *test-dir*)
+                              :exclude '("**/core/*.lisp" "!**/core/parser.lisp"))))
+      ;; Should exclude most core/ files but include core/parser.lisp
+      (ok (some (lambda (p) (search "core/parser.lisp" (namestring p))) results))
+      (ok (not (some (lambda (p) (search "core/types.lisp" (namestring p))) results)))))
+
+  (testing "Last match wins - exclusion after negation"
+    (let ((results (glob:glob (merge-pathnames "**/*.lisp" *test-dir*)
+                              :exclude '("!**/core/*.lisp" "**/core/*.lisp"))))
+      ;; Negation comes first, then exclusion - exclusion should win
+      (ok (not (some (lambda (p) (search "/core/" (namestring p))) results)))))
+
+  (testing "Multiple negation patterns"
+    (let ((results (glob:glob (merge-pathnames "*.txt" *test-dir*)
+                              :exclude '("*.txt" "!file1.txt" "!file2.txt"))))
+      ;; Should include file1.txt and file2.txt but exclude others
+      (ok (some (lambda (p) (search "file1.txt" (namestring p))) results))
+      (ok (some (lambda (p) (search "file2.txt" (namestring p))) results))
+      (ok (not (some (lambda (p) (search "file3.txt" (namestring p))) results)))))
+
+  (testing "Negation with path pattern"
+    (let ((results (glob:glob (merge-pathnames "**/*.lisp" *test-dir*)
+                              :exclude '("**/core/*.lisp" "!**/core/parser.lisp"))))
+      ;; Should exclude core/*.lisp files except core/parser.lisp
+      ;; Note: This works because we're excluding specific files, not the parent directory
+      (ok (some (lambda (p) (search "core/parser.lisp" (namestring p))) results))
+      (ok (not (some (lambda (p) (search "core/types.lisp" (namestring p))) results)))
+      (ok (some (lambda (p) (search "src/main.lisp" (namestring p))) results))))
+
+  (testing "Negation pattern matches nothing"
+    (let ((results (glob:glob (merge-pathnames "*.txt" *test-dir*)
+                              :exclude '("*.txt" "!nonexistent.txt"))))
+      ;; Negation pattern doesn't match anything, all .txt files should be excluded
+      (ok (null results))))
+
+  (testing "Complex pattern with multiple exclusions and negations"
+    (let ((results (glob:glob (merge-pathnames "**/*" *test-dir*)
+                              :exclude '("*.txt" "*.log" "!file1.txt"))))
+      ;; Should exclude all .txt and .log files except file1.txt
+      (ok (some (lambda (p) (search "file1.txt" (namestring p))) results))
+      (ok (not (some (lambda (p) (and (search "file2.txt" (namestring p))
+                                       (string= (pathname-type p) "txt")))
+                     results)))
+      (ok (not (some (lambda (p) (string= (pathname-type p) "log")) results)))
+      ;; Should still include .lisp files
+      (ok (some (lambda (p) (string= (pathname-type p) "lisp")) results))))
+
+  (testing "Negation order matters - sequential processing"
+    (let* ((results1 (glob:glob (merge-pathnames "*.txt" *test-dir*)
+                                :exclude '("*.txt" "!file1.txt" "file1.txt")))
+           (results2 (glob:glob (merge-pathnames "*.txt" *test-dir*)
+                                :exclude '("*.txt" "file1.txt" "!file1.txt"))))
+      ;; results1: exclude all, include file1, exclude file1 -> file1 excluded
+      (ok (not (some (lambda (p) (search "file1.txt" (namestring p))) results1)))
+      ;; results2: exclude all, exclude file1, include file1 -> file1 included
+      (ok (some (lambda (p) (search "file1.txt" (namestring p))) results2))))
+
+  (testing "Parent directory limitation (gitignore semantics)"
+    ;; Per gitignore spec: cannot re-include files if parent directory is excluded
+    (let ((results (glob:glob (merge-pathnames "**/*.lisp" *test-dir*)
+                              :exclude '("src/" "!src/main.lisp"))))
+      ;; src/ excludes the directory, so !src/main.lisp cannot re-include it
+      (ok (not (some (lambda (p) (search "src/main.lisp" (namestring p))) results)))
+      (ok (not (some (lambda (p) (search "src/core/" (namestring p))) results))))))

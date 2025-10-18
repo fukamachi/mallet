@@ -7,6 +7,6 @@ software/closer-mop-20250622-git/closer-mop.asd
 software/eclector-20250622-git/eclector-concrete-syntax-tree.asd
 software/eclector-20250622-git/eclector.asd
 software/eclector-20250622-git/eclector.syntax-extensions.asd
-software/trivial-glob-e9e4fda63643f6d07c0b94715ab13ae718621369/trivial-glob.asd
+software/trivial-glob-5dc3289defb0debaa239679a7286b3c9b57212b5/trivial-glob.asd
 software/uiop-3.3.7/asdf-driver.asd
 software/uiop-3.3.7/uiop.asd

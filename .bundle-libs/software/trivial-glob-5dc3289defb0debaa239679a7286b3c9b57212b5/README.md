@@ -99,9 +99,12 @@ Use it when you need richer patterns than basic wildcards provided by UIOP.
 ;; Case-insensitive matching
 (glob-match "*.TXT" "file.txt" :casefold t)  ; => T
 
-;; Pathname mode (/ not matched by wildcards)
-(glob-match "*/*" "foo/bar" :pathname t)  ; => T
-(glob-match "*" "foo/bar" :pathname t)    ; => NIL
+;; By default, wildcards do not match / (shell-like behavior)
+(glob-match "*" "foo/bar")    ; => NIL (default shell-like)
+(glob-match "*/*" "foo/bar")  ; => T
+
+;; Allow wildcards to match / with :match-slash t
+(glob-match "*" "foo/bar" :match-slash t)    ; => T
 
 ;; Period flag (leading . must be matched explicitly)
 (glob-match "*" ".hidden" :period t)      ; => NIL
@@ -134,8 +137,8 @@ The `glob-path-match` function implements `.gitignore`-style pattern matching se
 
 ### Wildcards
 
-- `*` - Matches zero or more characters (excluding `/` in pathname mode)
-- `?` - Matches exactly one character (excluding `/` in pathname mode)
+- `*` - Matches zero or more characters (excluding `/` by default for shell-like behavior)
+- `?` - Matches exactly one character (excluding `/` by default for shell-like behavior)
 - `**` - Matches zero or more directory levels (recursive)
 
 ### Bracket Expressions
@@ -207,7 +210,7 @@ Return a list of pathnames matching the glob pattern.
 #### `glob-match`
 
 ```lisp
-(glob-match pattern string &key pathname period casefold) => boolean
+(glob-match pattern string &key match-slash period casefold) => boolean
 ```
 
 Test whether STRING matches the glob PATTERN.
@@ -215,7 +218,7 @@ Test whether STRING matches the glob PATTERN.
 **Arguments:**
 - `pattern` - A glob pattern string
 - `string` - The string to test
-- `pathname` - If true, `/` characters are not matched by wildcards (default: `nil`)
+- `match-slash` - If true, `/` characters can be matched by wildcards. Default is `nil` for shell-like behavior where wildcards do not match `/`
 - `period` - If true, leading `.` must be matched explicitly (default: `nil`)
 - `casefold` - If true, perform case-insensitive matching (default: `nil`)
 

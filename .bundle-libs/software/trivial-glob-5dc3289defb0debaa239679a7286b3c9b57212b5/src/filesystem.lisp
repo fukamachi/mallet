@@ -6,6 +6,15 @@
    #:glob-filesystem))
 (in-package #:trivial-glob/filesystem)
 
+(defstruct (exclude-pattern-spec
+            (:copier nil)
+            (:predicate nil))
+  "Specification for an exclude pattern with optional negation.
+NEGATION - T if this is a negation pattern (starts with !), NIL for regular exclusion.
+MATCHER - Compiled path matcher function (pathname) -> boolean."
+  (negation nil :type boolean :read-only t)
+  (matcher nil :type function :read-only t))
+
 (defun has-wildcards-p (string)
   "Check if STRING contains glob wildcard characters."
   (some (lambda (char) (find char "*?[")) string))
@@ -57,17 +66,30 @@ on all platforms. It resolves relative paths to absolute before checking."
         (not (equal namestr-abs namestr-true)))
     (error () nil)))
 
-(defun filter-excluded (pathnames exclude-matchers)
-  "Filter out pathnames that match any exclude pattern.
+(defun should-exclude-p (pathname exclude-specs)
+  "Check if PATHNAME should be excluded according to EXCLUDE-SPECS.
+Returns T if the pathname should be excluded, NIL if it should be included.
+Processes patterns sequentially; last match wins."
+  (when exclude-specs
+    ;; Start with included, process patterns sequentially
+    (let ((included t))
+      (dolist (spec exclude-specs)
+        (when (funcall (exclude-pattern-spec-matcher spec) pathname)
+          ;; This pattern matches - update inclusion state
+          (setf included (exclude-pattern-spec-negation spec))))
+      ;; Return T if excluded (included is NIL)
+      (not included))))
+
+(defun filter-excluded (pathnames exclude-specs)
+  "Filter pathnames according to exclude patterns with optional negation.
 PATHNAMES - List of pathnames to filter.
-EXCLUDE-MATCHERS - List of compiled path matcher functions, or NIL.
+EXCLUDE-SPECS - List of exclude-pattern-spec structures, or NIL.
+                Patterns are processed sequentially; last match wins.
 Returns filtered list of pathnames."
-  (if (null exclude-matchers)
+  (if (null exclude-specs)
       pathnames
       (remove-if (lambda (pathname)
-                   (some (lambda (matcher)
-                           (funcall matcher pathname))
-                         exclude-matchers))
+                   (should-exclude-p pathname exclude-specs))
                  pathnames)))
 
 (defun glob-filesystem (pathname-or-pattern &key follow-symlinks exclude)
@@ -79,10 +101,21 @@ EXCLUDE - A pattern string or list of pattern strings to exclude from results.
 
 Returns a list of pathnames matching the pattern."
   ;; Compile exclude patterns once
-  (let ((exclude-matchers
+  (let ((exclude-specs
           (when exclude
             (let ((patterns (if (listp exclude) exclude (list exclude))))
-              (mapcar #'compiler:compile-path-pattern patterns))))
+              (mapcar (lambda (pattern)
+                        (if (and (< 0 (length pattern))
+                                 (char= (char pattern 0) #\!))
+                            ;; Negation pattern - strip '!' and set negation flag
+                            (make-exclude-pattern-spec
+                             :negation t
+                             :matcher (compiler:compile-path-pattern (subseq pattern 1)))
+                            ;; Regular exclusion pattern
+                            (make-exclude-pattern-spec
+                             :negation nil
+                             :matcher (compiler:compile-path-pattern pattern))))
+                      patterns))))
         (pattern-string (etypecase pathname-or-pattern
                           (pathname (namestring pathname-or-pattern))
                           (string
@@ -127,7 +160,7 @@ Returns a list of pathnames matching the pattern."
             (let ((path (pathname pattern-string)))
               (return-from glob-filesystem
                 (when (uiop:file-exists-p path)
-                  (filter-excluded (list (truename path)) exclude-matchers)))))
+                  (filter-excluded (list (truename path)) exclude-specs)))))
 
           ;; Compile filename patterns once
           (let ((name-matcher (when has-name-wildcard-p
@@ -162,15 +195,16 @@ Returns a list of pathnames matching the pattern."
                    (match-files-in-directory dir-path
                                              name-pattern name-matcher
                                              type-pattern type-matcher)
-                   exclude-matchers))))
+                   exclude-specs))))
 
             ;; Has directory wildcards - perform custom pattern matching
             (filter-excluded
              (glob-match-filesystem dir-components
                                     name-pattern name-matcher
                                     type-pattern type-matcher
-                                    follow-symlinks)
-             exclude-matchers)))))))
+                                    follow-symlinks
+                                    exclude-specs)
+             exclude-specs)))))))
 
 (defun match-files-in-directory (directory name-pattern name-matcher type-pattern type-matcher)
   "Match files in DIRECTORY using compiled matchers.
@@ -193,7 +227,8 @@ NAME-MATCHER and TYPE-MATCHER are compiled functions (or NIL for no wildcard)."
     (nreverse results)))
 
 (defun glob-match-filesystem (dir-components name-pattern name-matcher
-                               type-pattern type-matcher follow-symlinks)
+                               type-pattern type-matcher follow-symlinks
+                               exclude-specs)
   "Match pattern against filesystem using compiled matchers."
   ;; Split directory components into base (no wildcards) and remaining (with wildcards)
   (let* ((split-pos (position-if (lambda (comp)
@@ -234,14 +269,15 @@ NAME-MATCHER and TYPE-MATCHER are compiled functions (or NIL for no wildcard)."
             (match-through-directories base-dir remaining-components
                                        name-pattern name-matcher
                                        type-pattern type-matcher
-                                       follow-symlinks visited))))))
+                                       follow-symlinks visited exclude-specs))))))
 
 (defun match-through-directories (base-dir remaining-dir-components
                                   name-pattern name-matcher
                                   type-pattern type-matcher
-                                  follow-symlinks visited)
+                                  follow-symlinks visited exclude-specs)
   "Walk through REMAINING-DIR-COMPONENTS using compiled matchers.
-Uses uiop:collect-sub*directories for memory-efficient iteration."
+Uses uiop:collect-sub*directories for memory-efficient iteration.
+Skips directories that match exclusion patterns for performance."
   (if (null remaining-dir-components)
       (match-files-in-directory base-dir name-pattern name-matcher
                                 type-pattern type-matcher)
@@ -259,18 +295,22 @@ Uses uiop:collect-sub*directories for memory-efficient iteration."
                                  base-dir rest-components
                                  name-pattern name-matcher
                                  type-pattern type-matcher
-                                 follow-symlinks visited)))
+                                 follow-symlinks visited exclude-specs)))
 
            ;; Then use collect-sub*directories for memory-efficient recursive search
            (uiop:collect-sub*directories
             base-dir
             ;; collectp - process all directories
             (constantly t)
-            ;; recursep - control recursion based on symlinks and visited
+            ;; recursep - control recursion based on symlinks, visited, and exclusions
             (lambda (dir)
               (and (or follow-symlinks (not (symlink-p dir)))
                    (let ((truename-str (namestring (truename dir))))
-                     (not (gethash truename-str visited)))))
+                     (not (gethash truename-str visited)))
+                   ;; Skip recursing into excluded directories for performance
+                   ;; Note: Per gitignore semantics, you cannot re-include files if their
+                   ;; parent directory is excluded, so this is safe
+                   (not (should-exclude-p dir exclude-specs))))
             ;; collector - process each directory found
             (lambda (subdir)
               ;; Skip the base directory itself
@@ -285,7 +325,8 @@ Uses uiop:collect-sub*directories for memory-efficient iteration."
                                         name-pattern name-matcher
                                         type-pattern type-matcher
                                         follow-symlinks
-                                        visited)))
+                                        visited
+                                        exclude-specs)))
                       (setf results (nconc results sub-results)))
                     (remhash truename-str visited)))))))
 
@@ -325,7 +366,8 @@ Uses uiop:collect-sub*directories for memory-efficient iteration."
                                             name-pattern name-matcher
                                             type-pattern type-matcher
                                             follow-symlinks
-                                            visited)))
+                                            visited
+                                            exclude-specs)))
                           (setf results (nconc results sub-results)))
                         (remhash truename-str visited))))))))))
 

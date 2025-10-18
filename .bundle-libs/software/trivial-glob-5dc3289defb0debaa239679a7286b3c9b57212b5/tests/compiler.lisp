@@ -197,12 +197,19 @@
       (ng (funcall matcher "test01.asd")))))
 
 (deftest compile-with-options
-  (testing "Compile with pathname option"
-    (let ((matcher (compiler:compile-pattern "*.txt" :pathname t)))
+  (testing "Default behavior (shell-like): * should not match /"
+    (let ((matcher (compiler:compile-pattern "*.txt")))
       (ok (functionp matcher))
       (ok (funcall matcher "file.txt"))
-      ;; In pathname mode, * should not match /
+      ;; By default, * should not match / (shell-like behavior)
       (ng (funcall matcher "dir/file.txt"))))
+
+  (testing "Compile with match-slash option"
+    (let ((matcher (compiler:compile-pattern "*.txt" :match-slash t)))
+      (ok (functionp matcher))
+      (ok (funcall matcher "file.txt"))
+      ;; With match-slash t, * can match /
+      (ok (funcall matcher "dir/file.txt"))))
 
   (testing "Compile with period option"
     (let ((matcher (compiler:compile-pattern "*.txt" :period t)))
@@ -221,7 +228,7 @@
 
 (deftest compile-doublestar-patterns
   (testing "** matches zero or more directory levels"
-    (let ((matcher (compiler:compile-pattern "**/file.txt" :pathname t)))
+    (let ((matcher (compiler:compile-pattern "**/file.txt")))
       (ok (functionp matcher))
       ;; Zero directories
       (ok (funcall matcher "file.txt"))
@@ -232,7 +239,7 @@
       (ok (funcall matcher "a/b/c/file.txt"))))
 
   (testing "**/*.txt matches .txt files at any depth"
-    (let ((matcher (compiler:compile-pattern "**/*.txt" :pathname t)))
+    (let ((matcher (compiler:compile-pattern "**/*.txt")))
       (ok (functionp matcher))
       (ok (funcall matcher "file.txt"))
       (ok (funcall matcher "dir/file.txt"))
@@ -240,7 +247,7 @@
       (ng (funcall matcher "file.log"))))
 
   (testing "dir/**/*.txt matches .txt files under dir at any depth"
-    (let ((matcher (compiler:compile-pattern "src/**/*.lisp" :pathname t)))
+    (let ((matcher (compiler:compile-pattern "src/**/*.lisp")))
       (ok (functionp matcher))
       ;; Direct child
       (ok (funcall matcher "src/main.lisp"))
@@ -254,7 +261,7 @@
       (ng (funcall matcher "src/main.txt"))))
 
   (testing "**/dir/**/* matches all files recursively in any dir subdirectory"
-    (let ((matcher (compiler:compile-pattern "**/core/**/*" :pathname t)))
+    (let ((matcher (compiler:compile-pattern "**/core/**/*")))
       (ok (functionp matcher))
       ;; Direct children of core
       (ok (funcall matcher "core/file.txt"))
@@ -268,7 +275,7 @@
       (ng (funcall matcher "src/utils/helpers.lisp"))))
 
   (testing "**/dir/** matches all files recursively in any dir subdirectory"
-    (let ((matcher (compiler:compile-pattern "**/core/**" :pathname t)))
+    (let ((matcher (compiler:compile-pattern "**/core/**")))
       (ok (functionp matcher))
       ;; Direct children of core
       (ok (funcall matcher "core/file.txt"))

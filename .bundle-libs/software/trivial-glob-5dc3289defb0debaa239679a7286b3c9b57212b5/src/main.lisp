@@ -79,12 +79,12 @@ Returns a list of pathnames matching the pattern."
             ;; Remove duplicates
             (remove-duplicates all-results :test #'equal))))))
 
-(defun glob-match (pattern string &key pathname period casefold)
+(defun glob-match (pattern string &key match-slash period casefold)
   "Test whether STRING matches the glob PATTERN.
 
 PATTERN - A glob pattern string.
 STRING - The string to test.
-PATHNAME - If true, '/' characters are not matched by wildcards.
+MATCH-SLASH - If true, '/' characters can be matched by wildcards. Default is NIL (shell-like behavior).
 PERIOD - If true, leading '.' must be matched explicitly.
 CASEFOLD - If true, perform case-insensitive matching.
 
@@ -96,7 +96,7 @@ Examples:
   (glob-match \"[a-z]*\" \"hello\") => T"
   ;; Use compiled pattern for optimized matching
   (let ((matcher (compiler:compile-pattern pattern
-                                           :pathname pathname
+                                           :match-slash match-slash
                                            :period period
                                            :casefold casefold)))
     (funcall matcher string)))

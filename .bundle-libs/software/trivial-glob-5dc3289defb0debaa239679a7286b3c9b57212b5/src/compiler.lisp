@@ -112,7 +112,7 @@ Returns a function (char) -> boolean."
 
 ;;; Code Generation - Convert AST to Matcher Functions
 
-(defun generate-matcher (node pathname period casefold)
+(defun generate-matcher (node match-slash period casefold)
   "Generate a matcher function from a pattern node.
 Returns a function (string start end) -> (or null position) that attempts to match
 from START position and returns the ending position if successful, or NIL."
@@ -131,28 +131,30 @@ from START position and returns the ending position if successful, or NIL."
                (+ start text-len))))))
 
     (wildcard-node
-     ;; ? matches exactly one character (not / in pathname mode)
-     (if pathname
+     ;; ? matches exactly one character (not / unless match-slash is true)
+     (if match-slash
+         (lambda (string start end)
+           (declare (ignore string))
+           (when (< start end)
+             (1+ start)))
          (lambda (string start end)
            (when (and (< start end)
                       (char/= (char string start) #\/))
-             (1+ start)))
-         (lambda (string start end)
-           (when (< start end)
              (1+ start)))))
 
     (star-node
-     ;; * matches zero or more characters (not / in pathname mode)
-     (if pathname
+     ;; * matches zero or more characters (not / unless match-slash is true)
+     (if match-slash
+         (lambda (string start end)
+           (declare (ignore string start))
+           ;; Match to end
+           end)
          (lambda (string start end)
            ;; Find the next / or end
            (let ((pos start))
              (loop while (and (< pos end) (char/= (char string pos) #\/))
                    do (incf pos))
-             pos))
-         (lambda (string start end)
-           ;; Match to end
-           end)))
+             pos))))
 
     (doublestar-node
      ;; ** matches zero or more directory levels
@@ -187,7 +189,7 @@ from START position and returns the ending position if successful, or NIL."
                           ((star-node-p (first remaining-elems))
                            ;; Star node - try matching 0 to (end - pos) characters
                            (let ((rest-pattern (rest remaining-elems))
-                                 (can-match-slash (not pathname)))
+                                 (can-match-slash match-slash))
                              ;; Try from longest match to shortest (greedy)
                              (some (lambda (star-end)
                                      (when (or can-match-slash
@@ -211,14 +213,14 @@ from START position and returns the ending position if successful, or NIL."
                                                (list pos))))))
                           (t
                            ;; Non-star/doublestar node
-                           (let* ((matcher (generate-matcher (first remaining-elems) pathname period casefold))
+                           (let* ((matcher (generate-matcher (first remaining-elems) match-slash period casefold))
                                   (result (funcall matcher string pos end)))
                              (when result
                                (try-match (rest remaining-elems) result)))))))
                (try-match elements start)))
            ;; No stars/doublestars - simple sequential matching
            (let ((element-matchers
-                  (mapcar (lambda (elem) (generate-matcher elem pathname period casefold))
+                  (mapcar (lambda (elem) (generate-matcher elem match-slash period casefold))
                           elements)))
              (lambda (string start end)
                (labels ((match-sequence (matchers pos)
@@ -232,17 +234,17 @@ from START position and returns the ending position if successful, or NIL."
     (alternatives-node
      ;; Try each alternative in order
      (let ((alt-matchers
-            (mapcar (lambda (alt) (generate-matcher alt pathname period casefold))
+            (mapcar (lambda (alt) (generate-matcher alt match-slash period casefold))
                     (alternatives-node-options node))))
        (lambda (string start end)
          (loop for matcher in alt-matchers
                for result = (funcall matcher string start end)
                when result return result))))))
 
-(defun generate-pattern-matcher (node pathname period casefold)
+(defun generate-pattern-matcher (node match-slash period casefold)
   "Generate a complete pattern matcher function.
 Returns a function (string) -> boolean."
-  (let ((node-matcher (generate-matcher node pathname period casefold)))
+  (let ((node-matcher (generate-matcher node match-slash period casefold)))
     (lambda (string)
       ;; Handle period flag: if true and string starts with '.',
       ;; pattern must also start with '.'
@@ -441,11 +443,11 @@ Example: 'file{1,2}.{txt,log}' => ('file1.txt' 'file1.log' 'file2.txt' 'file2.lo
         ;; No brace groups found
         (list pattern))))
 
-(defun compile-pattern (pattern &key pathname period casefold)
+(defun compile-pattern (pattern &key match-slash period casefold)
   "Compile a glob pattern string into a matcher function.
 
 PATTERN - A glob pattern string (may contain brace expansions).
-PATHNAME - If true, '/' characters are not matched by wildcards.
+MATCH-SLASH - If true, '/' characters can be matched by wildcards. Default is NIL (shell-like behavior).
 PERIOD - If true, leading '.' must be matched explicitly.
 CASEFOLD - If true, perform case-insensitive matching.
 
@@ -471,7 +473,7 @@ Returns a function (string) -> boolean that tests if a string matches the patter
                                             (make-sequence-node :elements nodes))))))
                   (make-alternatives-node :options alternative-nodes)))))
       ;; Generate and return matcher function
-      (generate-pattern-matcher root-node pathname period casefold))))
+      (generate-pattern-matcher root-node match-slash period casefold))))
 
 ;;; Path Pattern Helpers
 
