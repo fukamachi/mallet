@@ -1,0 +1,6 @@
+(defpackage #:test-final-newline
+  (:use #:cl))
+(in-package #:test-final-newline)
+
+(defun foo ()
+  (+ 1 2))

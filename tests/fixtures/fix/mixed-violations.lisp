@@ -1,0 +1,8 @@
+(defpackage #:test-mixed
+  (:use #:cl))
+(in-package #:test-mixed)
+
+
+
+(defun foo ()
+  (+ 1 2))

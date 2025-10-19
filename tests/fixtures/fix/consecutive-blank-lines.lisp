@@ -1,0 +1,12 @@
+(defpackage #:test-consecutive-blank-lines
+  (:use #:cl))
+(in-package #:test-consecutive-blank-lines)
+
+(defun foo ()
+  (+ 1 2))
+
+
+
+
+(defun bar ()
+  (+ 3 4))
