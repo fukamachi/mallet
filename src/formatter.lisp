@@ -31,13 +31,19 @@
 
 ;;; Streaming formatters (output per-file as processed)
 
-(defun format-text-file (file violations &key (stream *standard-output*))
+(defun format-text-file (file violations &key (stream *standard-output*) fixed-violations)
   "Format VIOLATIONS for a single FILE to STREAM immediately.
+FIXED-VIOLATIONS is an optional list of violations that were auto-fixed.
 Returns a plist of severity counts (:error N :warning M ...)."
   (check-type file pathname)
   (check-type violations list)
 
-  (let ((severity-counts (make-hash-table :test 'eq)))
+  (let ((severity-counts (make-hash-table :test 'eq))
+        (fixed-set (when fixed-violations
+                     (let ((ht (make-hash-table :test 'eq)))
+                       (dolist (v fixed-violations)
+                         (setf (gethash v ht) t))
+                       ht))))
     (when violations
       (format stream "~%~A~%" (namestring file))
       (dolist (v violations)
@@ -52,14 +58,18 @@ Returns a plist of severity counts (:error N :warning M ...)."
                (severity (violation:violation-severity v))
                (message (violation:violation-message v))
                (rule (violation:violation-rule v))
+               (fixed-p (and fixed-set (gethash v fixed-set)))
                ;; Format location (line:col)
                (location (format nil "~A:~A" line col))
-               ;; Format severity with color
-               (severity-str (string-downcase (symbol-name severity)))
-               (colored-severity (case severity
-                                   (:error (colorize severity-str *color-red* stream))
-                                   (:warning (colorize severity-str *color-yellow* stream))
-                                   (otherwise severity-str)))
+               ;; Format severity or [FIXED]
+               (severity-str (if fixed-p
+                                 "[FIXED]"
+                                 (string-downcase (symbol-name severity))))
+               (colored-severity (cond
+                                   (fixed-p (colorize severity-str *color-green* stream))
+                                   ((eq severity :error) (colorize severity-str *color-red* stream))
+                                   ((eq severity :warning) (colorize severity-str *color-yellow* stream))
+                                   (t severity-str)))
                ;; Format rule name with color
                (rule-str (string-downcase (symbol-name rule)))
                (colored-rule (colorize rule-str *color-gray* stream)))

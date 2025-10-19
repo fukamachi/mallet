@@ -108,6 +108,10 @@ Returns the line content as a string, or NIL if line doesn't exist."
                                         (lambda (ch) (member ch '(#\Space #\Tab)))
                                         line
                                         :from-end t)))
+                  (let ((fix (violation:make-violation-fix
+                               :type :replace-line
+                               :line-number line-number
+                               :replacement-content (string-right-trim '(#\Space #\Tab) line))))
                   (push (make-instance 'violation:violation
                                        :rule :trailing-whitespace
                                        :file file
@@ -117,8 +121,8 @@ Returns the line content as a string, or NIL if line doesn't exist."
                                        :column (if trailing-start (1+ trailing-start) 0)
                                        :severity (base:rule-severity rule)
                                        :message "Line has trailing whitespace"
-                                       :fix nil)
-                        violations)))))
+                                       :fix fix)
+                        violations))))))
 
     (nreverse violations)))
 
@@ -189,15 +193,18 @@ Returns the line content as a string, or NIL if line doesn't exist."
     ;; Empty files are OK
     (when (and (plusp (length text))
                (not (char= (char text (1- (length text))) #\Newline)))
-      (push (make-instance 'violation:violation
-                           :rule :final-newline
-                           :file file
-                           :line (count #\Newline text)
-                           :column 0
-                           :severity (base:rule-severity rule)
-                           :message "File must end with a newline"
-                           :fix nil)
-            violations))
+      (let ((fix (violation:make-violation-fix
+                  :type :append-to-file
+                  :appended-content (string #\Newline))))
+        (push (make-instance 'violation:violation
+                             :rule :final-newline
+                             :file file
+                             :line (count #\Newline text)
+                             :column 0
+                             :severity (base:rule-severity rule)
+                             :message "File must end with a newline"
+                             :fix fix)
+              violations)))
 
     violations))
 
@@ -250,16 +257,22 @@ Returns the line content as a string, or NIL if line doesn't exist."
                   (progn
                     ;; Non-blank line, check if we had a violation
                     (when violation-line
-                      (push (make-instance 'violation:violation
-                                           :rule :consecutive-blank-lines
-                                           :file file
-                                           :line violation-line
-                                           :column 0
-                                           :severity (base:rule-severity rule)
-                                           :message (format nil "More than ~A consecutive blank lines" max-consecutive)
-                                           :fix nil)
-                            violations)
-                      (setf violation-line nil))
+                      (let* ((excess-count (- blank-count max-consecutive))
+                             (fix (when (plusp excess-count)
+                                    (violation:make-violation-fix
+                                     :type :delete-lines
+                                     :start-line violation-line
+                                     :end-line (+ violation-line excess-count -1)))))
+                        (push (make-instance 'violation:violation
+                                             :rule :consecutive-blank-lines
+                                             :file file
+                                             :line violation-line
+                                             :column 0
+                                             :severity (base:rule-severity rule)
+                                             :message (format nil "More than ~A consecutive blank lines" max-consecutive)
+                                             :fix fix)
+                              violations)
+                        (setf violation-line nil)))
                     ;; Reset counter
                     (setf blank-count 0)))))
 
