@@ -23,6 +23,7 @@
            #:check-tokens
            #:check-form
            #:check-form-recursive
+           #:make-fix
            #:traverse-expr
            #:with-safe-cons-expr
            #:with-safe-code-expr
@@ -116,6 +117,34 @@ Returns a list of VIOLATION objects."))
 (defgeneric check-form (rule form file)
   (:documentation "Check FORM from FILE using RULE.
 Returns a list of VIOLATION objects."))
+
+;;; Generic function for fix generation
+
+(defgeneric make-fix (rule text file violation)
+  (:documentation "Generate fix metadata for VIOLATION from RULE.
+
+RULE - The rule instance that detected the violation
+TEXT - The full file text (for text-level fixes)
+FILE - The file being fixed
+VIOLATION - The violation to fix
+
+Returns a VIOLATION-FIX struct if the violation is auto-fixable, NIL otherwise.
+
+Rules can implement this method to provide auto-fix support. The default
+implementation returns NIL (not fixable).
+
+Example:
+  (defmethod make-fix ((rule trailing-whitespace-rule) text file violation)
+    (let* ((line-num (violation-line violation))
+           (line (get-line text line-num)))
+      (make-violation-fix
+        :type :replace-line
+        :line-number line-num
+        :replacement-content (string-right-trim '(#\\Space #\\Tab) line))))")
+  (:method ((rule rule) text file violation)
+    "Default implementation - not auto-fixable."
+    (declare (ignore text file violation))
+    nil))
 
 ;; Skip Coalton forms for all form-level rules
 ;; Coalton has different semantics (variable scoping, control flow, etc.)

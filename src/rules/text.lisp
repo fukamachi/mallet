@@ -12,6 +12,28 @@
            #:consecutive-blank-lines-rule-max))
 (in-package #:mallet/rules/text)
 
+;;; Helper functions
+
+(defun get-line-by-number (text line-number)
+  "Extract line LINE-NUMBER from TEXT (1-indexed).
+Returns the line content as a string, or NIL if line doesn't exist."
+  (check-type text string)
+  (check-type line-number (integer 1))
+
+  (let ((start 0))
+    ;; Skip (line-number - 1) lines to find start position
+    (loop repeat (1- line-number)
+          for newline-pos = (position #\Newline text :start start)
+          if newline-pos
+            do (setf start (1+ newline-pos))
+          else
+            do (return-from get-line-by-number nil))
+
+    ;; Find end of current line
+    (let ((end (position #\Newline text :start start)))
+      (when (< start (length text))
+        (subseq text start (or end (length text)))))))
+
 ;;; Line length rule
 
 (defclass line-length-rule (base:rule)
@@ -100,6 +122,17 @@
 
     (nreverse violations)))
 
+(defmethod base:make-fix ((rule trailing-whitespace-rule) text file violation)
+  "Generate fix for trailing whitespace - replace line with trimmed version."
+  (declare (ignore file))
+  (let* ((line-number (violation:violation-line violation))
+         (line (get-line-by-number text line-number)))
+    (when line
+      (violation:make-violation-fix
+       :type :replace-line
+       :line-number line-number
+       :replacement-content (string-right-trim '(#\Space #\Tab) line)))))
+
 ;;; No tabs rule
 
 (defclass no-tabs-rule (base:rule)
@@ -168,6 +201,13 @@
 
     violations))
 
+(defmethod base:make-fix ((rule final-newline-rule) text file violation)
+  "Generate fix for missing final newline - append newline to file."
+  (declare (ignore text file violation))
+  (violation:make-violation-fix
+   :type :append-to-file
+   :appended-content (string #\Newline)))
+
 ;;; Consecutive blank lines rule
 
 (defclass consecutive-blank-lines-rule (base:rule)
@@ -224,3 +264,29 @@
                     (setf blank-count 0)))))
 
     (nreverse violations)))
+
+(defmethod base:make-fix ((rule consecutive-blank-lines-rule) text file violation)
+  "Generate fix for excessive blank lines - delete the excess lines."
+  (declare (ignore file))
+  (let* ((start-line (violation:violation-line violation))
+         (max-consecutive (consecutive-blank-lines-rule-max rule)))
+    ;; Count consecutive blank lines starting from start-line
+    (with-input-from-string (stream text)
+      ;; Skip to start-line
+      (loop repeat (1- start-line) do (read-line stream nil nil))
+
+      ;; Count consecutive blank lines
+      (let ((blank-count 0))
+        (loop for line = (read-line stream nil nil)
+              while (and line
+                         (or (zerop (length line))
+                             (every (lambda (ch) (member ch '(#\Space #\Tab))) line)))
+              do (incf blank-count))
+
+        ;; Delete excess blank lines (keep max-consecutive, delete the rest)
+        (let ((excess-count (- blank-count max-consecutive)))
+          (when (plusp excess-count)
+            (violation:make-violation-fix
+             :type :delete-lines
+             :start-line start-line
+             :end-line (+ start-line excess-count -1))))))))

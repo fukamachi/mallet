@@ -58,6 +58,7 @@
    ;; Linting engine and formatters
    (:file "engine")
    (:file "formatter")
+   (:file "fixer")
 
    (:file "main")))
 
@@ -70,6 +71,7 @@
   ((:file "errors-test")
    (:file "config-test")
    (:file "config-ignore-test")
+   (:file "fixer-test")
    (:file "suppression")
    (:file "suppression-declarations")
    (:file "suppression-integration")
