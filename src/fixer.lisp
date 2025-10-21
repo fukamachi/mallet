@@ -90,17 +90,23 @@ Returns the modified text."
   (ecase (violation:violation-fix-type fix)
     (:replace-line
      (apply-replace-line text
-                        (violation:violation-fix-line-number fix)
-                        (violation:violation-fix-replacement-content fix)))
+                         (violation:violation-fix-line-number fix)
+                         (violation:violation-fix-replacement-content fix)))
 
     (:append-to-file
      (apply-append-to-file text
-                          (violation:violation-fix-appended-content fix)))
+                           (violation:violation-fix-appended-content fix)))
 
     (:delete-lines
      (apply-delete-lines text
-                        (violation:violation-fix-start-line fix)
-                        (violation:violation-fix-end-line fix)))))
+                         (violation:violation-fix-start-line fix)
+                         (violation:violation-fix-end-line fix)))
+
+    (:replace-form
+     (apply-replace-form text
+                         (violation:violation-fix-start-line fix)
+                         (violation:violation-fix-end-line fix)
+                         (violation:violation-fix-replacement-content fix)))))
 
 (defun apply-replace-line (text line-number new-content)
   "Replace line LINE-NUMBER in TEXT with NEW-CONTENT.
@@ -155,3 +161,38 @@ Returns modified text."
             do (unless (and (<= start-line current-line)
                            (<= current-line end-line))
                  (write-line line out))))))
+
+(defun apply-replace-form (text start-line end-line replacement-content)
+  "Replace lines START-LINE through END-LINE in TEXT with REPLACEMENT-CONTENT.
+
+START-LINE - 1-indexed starting line
+END-LINE - 1-indexed ending line
+REPLACEMENT-CONTENT - New content to insert (without trailing newline)
+
+Returns modified text."
+  (check-type text string)
+  (check-type start-line (integer 1))
+  (check-type end-line (integer 1))
+  (check-type replacement-content string)
+
+  (when (< end-line start-line)
+    (error "end-line (~A) must be >= start-line (~A)" end-line start-line))
+
+  (with-output-to-string (out)
+    (with-input-from-string (in text)
+      (loop for current-line from 1
+            for line = (read-line in nil nil)
+            while line
+            do (cond
+                 ;; Before the form: write line as-is
+                 ((< current-line start-line)
+                  (write-line line out))
+                 ;; At start of form: write replacement
+                 ((= current-line start-line)
+                  (write-string replacement-content out))
+                 ;; Inside or at end of form: skip
+                 ((<= current-line end-line)
+                  nil)
+                 ;; After the form: write line as-is
+                 (t
+                  (write-line line out)))))))

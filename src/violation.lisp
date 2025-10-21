@@ -5,6 +5,8 @@
            #:violation-file
            #:violation-line
            #:violation-column
+           #:violation-end-line
+           #:violation-end-column
            #:violation-severity
            #:violation-message
            #:violation-fix
@@ -33,8 +35,8 @@ Fix types:
     Required: appended-content
   :delete-lines - Delete a range of lines
     Required: start-line, end-line
-  :replace-form - Replace a form expression with new expression
-    Required: original-form, replacement-form"
+  :replace-form - Replace a form spanning multiple lines with new content
+    Required: start-line, end-line, replacement-content"
   (type
    nil
    :type (member :replace-line :append-to-file :delete-lines :replace-form nil)
@@ -99,6 +101,18 @@ Fix types:
     :reader violation-column
     :type (integer 0)
     :documentation "Column number (0-based)")
+   (end-line
+    :initarg :end-line
+    :initform nil
+    :reader violation-end-line
+    :type (or null (integer 1))
+    :documentation "End line number where form ends (optional, for form-level violations)")
+   (end-column
+    :initarg :end-column
+    :initform nil
+    :reader violation-end-column
+    :type (or null (integer 0))
+    :documentation "End column number where form ends (optional, for form-level violations)")
    (severity
     :initarg :severity
     :reader violation-severity
@@ -112,7 +126,7 @@ Fix types:
    (fix
     :initarg :fix
     :initform nil
-    :reader violation-fix
+    :accessor violation-fix
     :type (or null violation-fix)
     :documentation "Fix metadata (if auto-fixable)"))
   (:documentation

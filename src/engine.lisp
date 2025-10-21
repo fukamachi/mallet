@@ -133,6 +133,14 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                      (suppression:pop-scope-suppression *suppression-state*)
                      (setf pending-next-form-suppression nil)))))))))) ; close cond, let, dolist, let, multiple-value-bind, when
 
+    ;; Generate fix metadata for auto-fixable violations
+    (dolist (v violations)
+      (let ((rule (find (violation:violation-rule v) rules :key #'rules:rule-name)))
+        (when rule
+          (let ((fix (rules:make-fix rule text file v)))
+            (when fix
+              (setf (violation:violation-fix v) fix))))))
+
     violations))
 
 (defun lint-files (files &key config)

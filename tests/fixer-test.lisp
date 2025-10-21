@@ -155,30 +155,40 @@ line 3
 
 (deftest apply-fixes-with-unfixable-test
   (testing "Separates fixable and unfixable violations"
-    (let* ((fixable (make-instance 'violation:violation
-                                   :rule :trailing-whitespace
-                                   :file #P"/tmp/test.lisp"
-                                   :line 1
-                                   :column 0
-                                   :severity :format
-                                   :message "fixable"
-                                   :fix (violation:make-violation-fix
-                                         :type :replace-line
-                                         :line-number 1
-                                         :replacement-content "fixed")))
-           (unfixable (make-instance 'violation:violation
-                                     :rule :unused-variables
-                                     :file #P"/tmp/test.lisp"
-                                     :line 2
-                                     :column 0
-                                     :severity :warning
-                                     :message "not fixable"
-                                     :fix nil)))
+    ;; Create temp file for test
+    (let ((temp-file #P"/tmp/test.lisp"))
+      (with-open-file (out temp-file
+                           :direction :output
+                           :if-exists :supersede
+                           :if-does-not-exist :create)
+        (write-string "line 1
+line 2
+" out))
 
-      (multiple-value-bind (count fixed unfixed)
-          (fixer:apply-fixes (list fixable unfixable) :dry-run t)
-        (ok (= count 1))
-        (ok (= (length fixed) 1))
-        (ok (= (length unfixed) 1))
-        (ok (eq (first fixed) fixable))
-        (ok (eq (first unfixed) unfixable))))))
+      (let* ((fixable (make-instance 'violation:violation
+                                     :rule :trailing-whitespace
+                                     :file temp-file
+                                     :line 1
+                                     :column 0
+                                     :severity :format
+                                     :message "fixable"
+                                     :fix (violation:make-violation-fix
+                                           :type :replace-line
+                                           :line-number 1
+                                           :replacement-content "fixed")))
+             (unfixable (make-instance 'violation:violation
+                                       :rule :unused-variables
+                                       :file temp-file
+                                       :line 2
+                                       :column 0
+                                       :severity :warning
+                                       :message "not fixable"
+                                       :fix nil)))
+
+        (multiple-value-bind (count fixed unfixed)
+            (fixer:apply-fixes (list fixable unfixable) :dry-run t)
+          (ok (= count 1))
+          (ok (= (length fixed) 1))
+          (ok (= (length unfixed) 1))
+          (ok (eq (first fixed) fixable))
+          (ok (eq (first unfixed) unfixable)))))))
