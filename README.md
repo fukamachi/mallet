@@ -40,7 +40,23 @@ mallet src  # recursively lints .lisp and .asd files
 
 # Enable all rules
 mallet -a src
+
+# Auto-fix violations
+mallet --fix src/                 # Fix and write changes
+mallet --fix-dry-run src/         # Preview fixes without changing files
+mallet -a --fix src/              # Fix with all rules enabled
 ```
+
+### Auto-Fix
+
+Mallet can automatically fix many common violations:
+
+**Fixable rules:**
+- `:trailing-whitespace` - Remove trailing whitespace from lines
+- `:final-newline` - Ensure files end with a newline
+- `:consecutive-blank-lines` - Reduce excessive blank lines
+- `:unused-local-nicknames` - Remove unused package nicknames from `defpackage`
+- `:unused-imported-symbols` - Remove unused imports from `defpackage`
 
 ## Configuration
 
