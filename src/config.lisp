@@ -76,20 +76,6 @@ PATH-RULES, and IGNORE patterns."
                  :ignore (or ignore '())
                  :root-dir root-dir))
 
-(defun expand-path-pattern (pattern)
-  "Expand a path PATTERN, converting directory names to glob patterns.
-If pattern contains wildcards (* ? [ ]), return as-is.
-Otherwise, treat as directory and expand to 'dir/**/*.{lisp,asd}'."
-  (check-type pattern string)
-  (if (or (find #\* pattern)
-          (find #\? pattern)
-          (find #\[ pattern)
-          (find #\] pattern))
-      ;; Already a glob pattern
-      pattern
-      ;; Directory name - expand to match all Lisp files
-      (format nil "~A/**/*.{lisp,asd}" pattern)))
-
 ;;; Config parsing
 
 (defun create-rule-from-spec (rule-spec)
@@ -189,7 +175,6 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...),
                     ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
                     (let* ((patterns (second item))
                            (override-forms (cddr item))
-                           (expanded-patterns (mapcar #'expand-path-pattern patterns))
                            ;; Get base rules from extends or current specs
                            (base-rules (if extends
                                            (config-rules extends)
@@ -200,7 +185,7 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...),
                       (multiple-value-bind (override-rules override-disabled)
                           (parse-override-rules override-forms base-rules base-disabled)
                         (push (make-path-override
-                               :patterns expanded-patterns
+                               :patterns patterns
                                :rules override-rules
                                :disabled-rules override-disabled)
                               path-rules)))))))
@@ -249,15 +234,27 @@ Sets root-dir to the directory containing the config file."
   (check-type config config)
   (check-type file-path pathname)
 
-  (let ((file-namestring (namestring file-path))
-        (root-dir (config-root-dir config)))
+  (let* ((root-dir (or (config-root-dir config) #P"/"))
+         (file-namestring (namestring file-path))
+         ;; Convert file path to project-relative format (like in file-ignored-p)
+         (match-path (let* ((root-namestring (namestring root-dir)))
+                       (cond
+                         ((equal root-namestring "/")
+                          file-namestring)
+                         ((and (>= (length file-namestring) (length root-namestring))
+                               (string= file-namestring root-namestring
+                                        :end1 (length root-namestring)))
+                          ;; Remove root-dir prefix to get relative path with leading /
+                          (concatenate 'string
+                                       "/"
+                                       (subseq file-namestring (length root-namestring))))
+                         (t
+                          ;; File not under root-dir, use full path
+                          file-namestring)))))
     ;; Check path-specific rules first
     (loop for path-override in (config-path-rules config)
           when (some (lambda (pattern)
-                       (let ((pattern (if root-dir
-                                          (namestring (merge-pathnames pattern root-dir))
-                                          pattern)))
-                         (glob:glob-path-match pattern file-namestring)))
+                       (glob:glob-path-match pattern match-path))
                      (path-override-patterns path-override))
             ;; Found matching path-specific rules - filter out disabled ones
             return (remove-if (lambda (rule)

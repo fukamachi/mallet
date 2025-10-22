@@ -189,19 +189,17 @@
       ;; Check that path-rules are stored
       (ok (= 1 (length (config:config-path-rules cfg))))))
 
-  (testing "Parse config with directory name (shorthand)"
+  (testing "Parse config with directory name patterns"
     (let* ((sexp '(:mallet-config
-                   (:for-paths ("tests" "scripts")
+                   (:for-paths ("tests/**/*.lisp" "scripts/**/*.lisp")
                     (:disable :line-length))))
            (cfg (config:parse-config sexp)))
       ;; Check that path-rules are stored
       (ok (= 1 (length (config:config-path-rules cfg))))
-      ;; Patterns should be expanded
+      ;; Patterns should be stored as-is
       (let* ((path-rule (first (config:config-path-rules cfg)))
              (patterns (config:path-override-patterns path-rule)))
-        (ok (= 2 (length patterns)))
-        (ok (search "tests/**/*.{lisp,asd}" (first patterns)))
-        (ok (search "scripts/**/*.{lisp,asd}" (second patterns)))))))
+        (ok (= 2 (length patterns)))))))
 
 ;;; get-rules-for-file tests
 
@@ -234,7 +232,209 @@
         (ok (not (member :unused-variables rule-names)))  ; disabled for tests
         ;; Check that line-length has the overridden max-length
         (let ((line-length-rule (find :line-length rules :key #'rules:rule-name)))
-          (ok (= 120 (rules:line-length-rule-max-length line-length-rule))))))))
+          (ok (= 120 (rules:line-length-rule-max-length line-length-rule)))))))
+
+  (testing "Get rules for specific file path"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)
+                   (:enable :unused-local-nicknames)
+                   (:for-paths ("/src/parser.lisp")
+                    (:disable :unused-local-nicknames))))
+           (cfg (config:parse-config sexp)))
+      ;; For src/parser.lisp, unused-local-nicknames should be disabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/parser.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :unused-variables rule-names))
+        (ok (not (member :unused-local-nicknames rule-names))))  ; disabled for this file
+      ;; For other files, both rules should be enabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :unused-variables rule-names))
+        (ok (member :unused-local-nicknames rule-names))))))
+
+;;; Comprehensive :ignore pattern tests
+
+(deftest ignore-patterns
+  (testing "Ignore exact file path with leading /"
+    (let* ((sexp '(:mallet-config
+                   (:ignore "/tests/fixtures/example.lisp")))
+           (cfg (config:parse-config sexp)))
+      (ok (config:file-ignored-p cfg #P"/tests/fixtures/example.lisp"))
+      (ok (not (config:file-ignored-p cfg #P"/tests/other.lisp")))))
+
+  (testing "Ignore directory pattern with trailing /"
+    (let* ((sexp '(:mallet-config
+                   (:ignore "/tests/fixtures/")))
+           (cfg (config:parse-config sexp)))
+      (ok (config:file-ignored-p cfg #P"/tests/fixtures/example.lisp"))
+      (ok (config:file-ignored-p cfg #P"/tests/fixtures/nested/deep.lisp"))
+      (ok (not (config:file-ignored-p cfg #P"/tests/main-test.lisp")))))
+
+  (testing "Ignore wildcard patterns"
+    (let* ((sexp '(:mallet-config
+                   (:ignore "**/*-generated.lisp")))
+           (cfg (config:parse-config sexp)))
+      (ok (config:file-ignored-p cfg #P"/src/auto-generated.lisp"))
+      (ok (config:file-ignored-p cfg #P"/tests/fixtures/foo-generated.lisp"))
+      (ok (not (config:file-ignored-p cfg #P"/src/main.lisp")))))
+
+  (testing "Multiple ignore patterns"
+    (let* ((sexp '(:mallet-config
+                   (:ignore "/tests/fixtures/"
+                            "**/*-generated.lisp"
+                            "/build/")))
+           (cfg (config:parse-config sexp)))
+      (ok (config:file-ignored-p cfg #P"/tests/fixtures/example.lisp"))
+      (ok (config:file-ignored-p cfg #P"/src/auto-generated.lisp"))
+      (ok (config:file-ignored-p cfg #P"/build/output.lisp"))
+      (ok (not (config:file-ignored-p cfg #P"/src/main.lisp")))))
+
+  (testing "Ignore patterns with specific extensions"
+    (let* ((sexp '(:mallet-config
+                   (:ignore "**/*.asd")))
+           (cfg (config:parse-config sexp)))
+      (ok (config:file-ignored-p cfg #P"/mallet.asd"))
+      (ok (config:file-ignored-p cfg #P"/tests/test-system.asd"))
+      (ok (not (config:file-ignored-p cfg #P"/src/main.lisp")))))
+
+  (testing "Ignore nested directories"
+    (let* ((sexp '(:mallet-config
+                   (:ignore "/.qlot/")))
+           (cfg (config:parse-config sexp)))
+      (ok (config:file-ignored-p cfg #P"/.qlot/local-projects/foo/src/main.lisp"))
+      (ok (config:file-ignored-p cfg #P"/.qlot/dists/quicklisp/software/alexandria.lisp"))
+      (ok (not (config:file-ignored-p cfg #P"/src/main.lisp"))))))
+
+;;; Comprehensive :for-paths pattern tests
+
+(deftest for-paths-patterns
+  (testing "For-paths with exact file path"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)
+                   (:enable :line-length :max-length 80)
+                   (:for-paths ("/src/parser.lisp")
+                    (:disable :unused-variables))))
+           (cfg (config:parse-config sexp)))
+      ;; For src/parser.lisp, unused-variables should be disabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/parser.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (not (member :unused-variables rule-names)))
+        (ok (member :line-length rule-names)))
+      ;; For other files, both rules should be enabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :unused-variables rule-names))
+        (ok (member :line-length rule-names)))))
+
+  (testing "For-paths with directory pattern"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)
+                   (:enable :line-length :max-length 80)
+                   (:for-paths ("/tests/")
+                    (:enable :line-length :max-length 120)
+                    (:disable :unused-variables))))
+           (cfg (config:parse-config sexp)))
+      ;; For test files, line-length should be 120 and unused-variables disabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/tests/main-test.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (not (member :unused-variables rule-names)))
+        (ok (= 120 (rules:line-length-rule-max-length line-length-rule))))
+      ;; For src files, should use base config
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (member :unused-variables rule-names))
+        (ok (= 80 (rules:line-length-rule-max-length line-length-rule))))))
+
+  (testing "For-paths with multiple file paths"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)
+                   (:for-paths ("/src/parser.lisp" "/src/tokenizer.lisp")
+                    (:disable :unused-variables))))
+           (cfg (config:parse-config sexp)))
+      ;; Both specified files should have unused-variables disabled
+      (ok (not (member :unused-variables
+                       (mapcar #'rules:rule-name
+                               (config:get-rules-for-file cfg #P"/src/parser.lisp")))))
+      (ok (not (member :unused-variables
+                       (mapcar #'rules:rule-name
+                               (config:get-rules-for-file cfg #P"/src/tokenizer.lisp")))))
+      ;; Other files should have it enabled
+      (ok (member :unused-variables
+                  (mapcar #'rules:rule-name
+                          (config:get-rules-for-file cfg #P"/src/main.lisp"))))))
+
+  (testing "For-paths with wildcard patterns"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)
+                   (:for-paths ("**/*-test.lisp")
+                    (:disable :unused-variables))))
+           (cfg (config:parse-config sexp)))
+      ;; Test files should have unused-variables disabled
+      (ok (not (member :unused-variables
+                       (mapcar #'rules:rule-name
+                               (config:get-rules-for-file cfg #P"/tests/main-test.lisp")))))
+      (ok (not (member :unused-variables
+                       (mapcar #'rules:rule-name
+                               (config:get-rules-for-file cfg #P"/src/parser-test.lisp")))))
+      ;; Non-test files should have it enabled
+      (ok (member :unused-variables
+                  (mapcar #'rules:rule-name
+                          (config:get-rules-for-file cfg #P"/src/main.lisp"))))))
+
+  (testing "For-paths with multiple rule overrides"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)
+                   (:enable :line-length :max-length 80)
+                   (:enable :trailing-whitespace)
+                   (:for-paths ("/scripts/")
+                    (:enable :line-length :max-length 100)
+                    (:disable :unused-variables)
+                    (:disable :trailing-whitespace))))
+           (cfg (config:parse-config sexp)))
+      ;; For scripts, multiple rules should be overridden
+      (let* ((rules (config:get-rules-for-file cfg #P"/scripts/build.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (not (member :unused-variables rule-names)))
+        (ok (not (member :trailing-whitespace rule-names)))
+        (ok (= 100 (rules:line-length-rule-max-length line-length-rule))))
+      ;; For other files, base config applies
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :unused-variables rule-names))
+        (ok (member :trailing-whitespace rule-names)))))
+
+  (testing "For-paths with nested directory patterns"
+    (let* ((sexp '(:mallet-config
+                   (:enable :line-length :max-length 80)
+                   (:for-paths ("/tests/fixtures/")
+                    (:enable :line-length :max-length 200))))
+           (cfg (config:parse-config sexp)))
+      ;; Files in nested fixtures should use overridden config
+      (let* ((rules (config:get-rules-for-file cfg #P"/tests/fixtures/nested/deep/example.lisp"))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (= 200 (rules:line-length-rule-max-length line-length-rule))))
+      ;; Files outside should use base config
+      (let* ((rules (config:get-rules-for-file cfg #P"/tests/main-test.lisp"))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (= 80 (rules:line-length-rule-max-length line-length-rule))))))
+
+  (testing "For-paths with .asd files"
+    (let* ((sexp '(:mallet-config
+                   (:enable :line-length :max-length 80)
+                   (:for-paths ("*.asd")
+                    (:enable :line-length :max-length 100))))
+           (cfg (config:parse-config sexp)))
+      ;; .asd files should use overridden config
+      (let* ((rules (config:get-rules-for-file cfg #P"/mallet.asd"))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (= 100 (rules:line-length-rule-max-length line-length-rule))))
+      ;; .lisp files should use base config
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (= 80 (rules:line-length-rule-max-length line-length-rule)))))))
 
 ;;; Config discovery tests
 

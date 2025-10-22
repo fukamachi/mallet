@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLI="$PROJECT_DIR/bin/mallet"
 FIXTURES="$SCRIPT_DIR/fixtures"
+FIXTURES_CONFIG="$FIXTURES/.mallet.lisp"
 CLEAN_DIR="$FIXTURES/clean"
 VIOLATIONS_DIR="$FIXTURES/violations"
 
@@ -98,7 +99,7 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
 
         # Test that violations are detected
         test_start "Violation file '$filename' detects violations"
-        OUTPUT=$("$CLI" "$file" 2>&1 | grep -c "violation" || true)
+        OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 | grep -c "violation" || true)
         if [ "$OUTPUT" -ge 1 ]; then
             test_pass
         else
@@ -108,7 +109,7 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
         # Test exit code (should be non-zero)
         test_start "Violation file '$filename' returns non-zero exit code"
         EXIT_CODE=0
-        "$CLI" "$file" 2>&1 > /dev/null || EXIT_CODE=$?
+        "$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 > /dev/null || EXIT_CODE=$?
         if [ "$EXIT_CODE" -ne 0 ]; then
             test_pass
         else
@@ -123,7 +124,7 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
             EXPECTED_COUNT=$(grep -v '^#' "$expected_file" | grep -v '^$' | wc -l | tr -d ' ')
 
             # Count actual violations (format: "  line:col  severity  message  rule")
-            ACTUAL_COUNT=$("$CLI" "$file" 2>&1 | grep -E '^\s+[0-9]+:[0-9]+' | wc -l | tr -d ' ')
+            ACTUAL_COUNT=$("$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 | grep -E '^\s+[0-9]+:[0-9]+' | wc -l | tr -d ' ')
 
             if [ "$ACTUAL_COUNT" -eq "$EXPECTED_COUNT" ]; then
                 test_pass
@@ -140,7 +141,7 @@ echo ""
 
 # Test JSON output format
 test_start "JSON output format works"
-OUTPUT=$("$CLI" --format json "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c '"violations"' || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" --format json "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c '"violations"' || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -167,7 +168,7 @@ fi
 
 # Test directory linting
 test_start "Directory linting works"
-OUTPUT=$("$CLI" "$VIOLATIONS_DIR" 2>&1 | grep -c "violation" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR" 2>&1 | grep -c "violation" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -181,7 +182,7 @@ echo ""
 
 # Text-level rules
 test_start "Line-length rule detects violations"
-OUTPUT=$("$CLI" "--all" "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c "Line exceeds maximum length" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c "Line exceeds maximum length" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -190,7 +191,7 @@ fi
 
 # Form-level rules
 test_start "If-without-else rule detects violations"
-OUTPUT=$("$CLI" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "when.*unless" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "when.*unless" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -198,7 +199,7 @@ else
 fi
 
 test_start "Bare-progn-in-if rule detects violations"
-OUTPUT=$("$CLI" "--all" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "cond.*progn" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "cond.*progn" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -206,7 +207,7 @@ else
 fi
 
 test_start "Missing-otherwise rule detects violations"
-OUTPUT=$("$CLI" "--all" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should have 'otherwise' clause" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should have 'otherwise' clause" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -214,7 +215,7 @@ else
 fi
 
 test_start "Wrong-otherwise rule detects violations"
-OUTPUT=$("$CLI" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should not have 'otherwise'" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should not have 'otherwise'" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -223,7 +224,7 @@ fi
 
 # Test severity levels
 test_start "Form rules file returns exit code 2 (has errors)"
-"$CLI" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+"$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
 if [ $EXIT_CODE -eq 2 ]; then
     test_pass
 else

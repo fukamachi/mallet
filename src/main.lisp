@@ -180,9 +180,9 @@ Handles wildcards and directories, excluding common non-source directories."
             ;; Wildcard pattern - expand using directory
             ((or (find #\* arg) (find #\? arg))
              (setf files (nconc files (directory path))))
-            ;; Regular file
+            ;; Regular file - use probe-file result to get absolute path
             ((probe-file path)
-             (push path files))
+             (push (probe-file path) files))
             (t
              (error 'errors:file-not-found :path arg))))))
     (nreverse files)))
@@ -222,7 +222,11 @@ Lints files specified in ARGS and exits with appropriate status code."
 
             (let* ((files (expand-file-args file-args))
                    (config:*default-preset* (or preset :default))
-                   (config (and config-path (config:load-config config-path)))
+                   ;; Auto-discover config from CWD if not explicitly provided
+                   (config (or (and config-path (config:load-config config-path))
+                               (let ((discovered (config:find-config-file (uiop:getcwd))))
+                                 (when discovered
+                                   (config:load-config discovered)))))
                    (severity-counts '())  ; Accumulated counts as plist
                    (has-errors nil)
                    (has-violations nil)
