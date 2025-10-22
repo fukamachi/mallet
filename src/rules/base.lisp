@@ -31,6 +31,7 @@
            #:find-actual-position
            #:collect-violations-from-subexprs
            ;; Auto-fix helpers
+           #:find-clause-boundaries
            #:find-clause-line-range
            #:find-expression-end-position
            #:find-comment-start))
@@ -534,20 +535,16 @@ Example usage:
 
 ;;; Auto-Fix Helpers
 
-(defun find-clause-line-range (text violation-line clause-keyword)
-  "Find the line range of a clause by searching for CLAUSE-KEYWORD.
+(defun find-clause-boundaries (text violation-line clause-keyword)
+  "Find the start and end line numbers of a clause.
 TEXT is the full source text.
 VIOLATION-LINE is a line number (1-based) that's within the clause.
 CLAUSE-KEYWORD is a string to search for (e.g., \":local-nicknames\").
 
-Returns a violation-fix with :type :delete-lines, or NIL if not found.
+Returns (values start-line end-line) or (values nil nil) if not found.
 
 This searches backwards from VIOLATION-LINE to find the clause keyword,
-then scans forward counting parens to find where the clause ends.
-Works by simple character-by-character paren counting, which is sufficient
-for standard Lisp formatting.
-
-Useful for minimal auto-fixes that preserve comments and formatting."
+then scans forward counting parens to find where the clause ends."
   (check-type text string)
   (check-type violation-line integer)
   (check-type clause-keyword string)
@@ -564,7 +561,7 @@ Useful for minimal auto-fixes that preserve comments and formatting."
                (return))
 
     (unless start-line
-      (return-from find-clause-line-range nil))
+      (return-from find-clause-boundaries (values nil nil)))
 
     ;; Find where the clause ends by scanning forward and counting parens
     (let ((paren-depth 0)
@@ -580,14 +577,28 @@ Useful for minimal auto-fixes that preserve comments and formatting."
                            (decf paren-depth)
                            (when (and found-open (zerop paren-depth))
                              (setf end-line line-num)
-                             (return-from find-clause-line-range
-                               (violation:make-violation-fix
-                                :type :delete-lines
-                                :start-line start-line
-                                :end-line end-line)))))))
+                             (return)))))
+            until end-line))
 
-      ;; If we get here, couldn't find balanced parens
-      nil)))
+    (values start-line end-line)))
+
+(defun find-clause-line-range (text violation-line clause-keyword)
+  "Find the line range of a clause by searching for CLAUSE-KEYWORD.
+TEXT is the full source text.
+VIOLATION-LINE is a line number (1-based) that's within the clause.
+CLAUSE-KEYWORD is a string to search for (e.g., \":local-nicknames\").
+
+Returns a violation-fix with :type :delete-lines, or NIL if not found.
+
+Useful for minimal auto-fixes that preserve comments and formatting."
+  (multiple-value-bind (start-line end-line)
+      (find-clause-boundaries text violation-line clause-keyword)
+    (if (and start-line end-line)
+        (violation:make-violation-fix
+         :type :delete-lines
+         :start-line start-line
+         :end-line end-line)
+        nil)))
 
 (defun find-expression-end-position (text start-line start-column)
   "Find the end position of an expression starting at (START-LINE, START-COLUMN).

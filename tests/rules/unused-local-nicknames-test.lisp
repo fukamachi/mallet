@@ -3,7 +3,8 @@
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
-   (#:violation #:mallet/violation)))
+   (#:violation #:mallet/violation)
+   (#:fixer #:mallet/fixer)))
 (in-package #:mallet/tests/rules/unused-local-nicknames)
 
 (defmacro with-test-file ((tmpfile-var code) &body body)
@@ -15,7 +16,7 @@
      ,@body))
 
 (deftest unused-local-nicknames-valid
-  (testing "Valid: all local nicknames are used"
+  (testing "Valid: all local nicknames are used (defpackage)"
     (with-test-file (tmpfile "(defpackage #:test-package
                                  (:use #:cl)
                                  (:local-nicknames
@@ -54,6 +55,24 @@
                                  (:export #:foo))
                                (in-package #:test-package)
                                (defun foo () 42)")
+      (let* ((text (uiop:read-file-string tmpfile))
+             (forms (parser:parse-forms text tmpfile))
+             (rule (make-instance 'rules:unused-local-nicknames-rule))
+             (violations (rules:check-form rule (first forms) tmpfile)))
+        (ok (null violations)))))
+
+  (testing "Valid: all local nicknames are used (uiop:define-package)"
+    (with-test-file (tmpfile "(uiop:define-package #:test-package
+                                 (:use #:cl)
+                                 (:local-nicknames
+                                  (#:a #:alexandria)
+                                  (#:p #:parser))
+                                 (:export #:foo))
+                               (in-package #:test-package)
+                               (defun foo (x)
+                                 (a:if-let ((y (+ x 1)))
+                                   (p:parse y)
+                                   0))")
       (let* ((text (uiop:read-file-string tmpfile))
              (forms (parser:parse-forms text tmpfile))
              (rule (make-instance 'rules:unused-local-nicknames-rule))
@@ -120,7 +139,29 @@
              (rule (make-instance 'rules:unused-local-nicknames-rule))
              (violations (rules:check-form rule (first forms) tmpfile)))
         ;; Should report both 'a' and 'p' as unused
-        (ok (= (length violations) 2))))))
+        (ok (= (length violations) 2)))))
+
+  (testing "Invalid: unused local nickname (uiop:define-package)"
+    (with-test-file (tmpfile "(uiop:define-package #:test-package
+                                 (:use #:cl)
+                                 (:local-nicknames
+                                  (#:a #:alexandria)
+                                  (#:p #:parser))
+                                 (:export #:foo))
+                               (in-package #:test-package)
+                               (defun foo (x)
+                                 (a:if-let ((y (+ x 1)))
+                                   y
+                                   0))")
+      (let* ((text (uiop:read-file-string tmpfile))
+             (forms (parser:parse-forms text tmpfile))
+             (rule (make-instance 'rules:unused-local-nicknames-rule))
+             (violations (rules:check-form rule (first forms) tmpfile)))
+        ;; Should report 'p' as unused
+        (ok (= (length violations) 1))
+        (ok (eq (violation:violation-rule (first violations)) :unused-local-nicknames))
+        (ok (search "Local nickname 'p'" (violation:violation-message (first violations))))
+        (ok (search "parser" (violation:violation-message (first violations))))))))
 
 (deftest unused-local-nicknames-severity
   (testing "Rule has :info severity"
@@ -300,4 +341,216 @@
                  (ok (= open-count close-count)
                      "Parens should be balanced"))))
             (t
-             (ok nil "Expected :replace-form fix type"))))))))
+             (ok nil "Expected :replace-form fix type")))))))
+
+  (testing "Auto-fix with multiple unused nicknames - all violations get fixes"
+    (with-test-file (tmpfile "(defpackage #:test-multi-unused
+  (:use #:cl)
+  (:local-nicknames
+   (#:a #:alexandria)
+   (#:u #:uiop))
+  (:export #:foo))
+(in-package #:test-multi-unused)
+(defun foo () 42)")
+      (let* ((text (uiop:read-file-string tmpfile))
+             (forms (parser:parse-forms text tmpfile))
+             (rule (make-instance 'rules:unused-local-nicknames-rule))
+             (violations (rules:check-form rule (first forms) tmpfile)))
+        ;; Should report 2 unused nicknames
+        (ok (= (length violations) 2))
+
+        ;; All violations should get fixes
+        (let ((fixes (mapcar (lambda (v) (rules:make-fix rule text tmpfile v))
+                            violations)))
+          (ok (every #'identity fixes)
+              "All violations should have fixes")
+
+          ;; All fixes should be identical (delete entire :local-nicknames clause)
+          (let ((first-fix (first fixes)))
+            (ok (eq (violation:violation-fix-type first-fix) :delete-lines))
+            (ok (every (lambda (fix)
+                        (and (eq (violation:violation-fix-type fix) :delete-lines)
+                             (= (violation:violation-fix-start-line fix)
+                                (violation:violation-fix-start-line first-fix))
+                             (= (violation:violation-fix-end-line fix)
+                                (violation:violation-fix-end-line first-fix))))
+                      fixes)
+                "All fixes should be identical"))))))
+
+  (testing "Auto-fix deduplication - multiple identical fixes applied only once"
+    (with-test-file (tmpfile "(defpackage #:test-dedup
+  (:use #:cl)
+  (:local-nicknames
+   (#:a #:alexandria)
+   (#:u #:uiop))
+  (:export #:foo))
+(in-package #:test-dedup)
+(defun foo () 42)")
+      (let* ((text (uiop:read-file-string tmpfile))
+             (forms (parser:parse-forms text tmpfile))
+             (rule (make-instance 'rules:unused-local-nicknames-rule))
+             (violations (rules:check-form rule (first forms) tmpfile)))
+        ;; Should report 2 unused nicknames
+        (ok (= (length violations) 2))
+
+        ;; Generate fixes and attach them to violations
+        (dolist (v violations)
+          (let ((fix (rules:make-fix rule text tmpfile v)))
+            (setf (violation:violation-fix v) fix)))
+
+        ;; Apply fixes through the fixer (which has deduplication)
+        ;; Test dry-run first
+        (let ((fixed-violations (fixer:apply-fixes-to-file tmpfile violations :dry-run t)))
+          ;; Both violations should be in fixed list
+          (ok (= (length fixed-violations) 2)
+              "Both violations should be marked as fixed"))
+
+        ;; Actually apply the fix (not dry-run)
+        (fixer:apply-fixes-to-file tmpfile violations :dry-run nil)
+
+        ;; Read result and verify
+        (let ((result (uiop:read-file-string tmpfile)))
+          ;; Should not have :local-nicknames clause
+          (ok (not (search ":local-nicknames" result))
+              "Should remove entire :local-nicknames clause")
+
+          ;; Should have other clauses
+          (ok (search "(:use #:cl)" result)
+              "Should preserve :use clause")
+          (ok (search "(:export #:foo)" result)
+              "Should preserve :export clause")
+
+          ;; Parens should be balanced
+          (let ((open-count (count #\( result))
+                (close-count (count #\) result)))
+            (ok (= open-count close-count)
+                "Parens should be balanced after fix"))
+
+          ;; File should be parseable
+          (ok (handler-case
+                  (progn
+                    (parser:parse-forms result tmpfile)
+                    t)
+                (error () nil))
+              "Fixed file should be parseable")))))
+
+  (testing "Auto-fix with some used and some unused nicknames"
+    (with-test-file (tmpfile "(defpackage #:test-partial
+  (:use #:cl)
+  (:local-nicknames
+   (#:a #:alexandria)
+   (#:glob #:trivial-glob)
+   (#:u #:uiop))
+  (:export #:main))
+(in-package #:test-partial)
+(defun main ()
+  (glob:glob \"*.lisp\"))")
+      (let* ((text (uiop:read-file-string tmpfile))
+             (forms (parser:parse-forms text tmpfile))
+             (rule (make-instance 'rules:unused-local-nicknames-rule))
+             (violations (rules:check-form rule (first forms) tmpfile)))
+        ;; Should report 2 unused nicknames (a and u)
+        (ok (= (length violations) 2))
+
+        ;; Generate fixes and attach them to violations
+        (let ((fixes (mapcar (lambda (v)
+                              (let ((fix (rules:make-fix rule text tmpfile v)))
+                                (setf (violation:violation-fix v) fix)
+                                fix))
+                            violations)))
+          (ok (every #'identity fixes)
+              "All violations should have fixes")
+
+          ;; Fixes should NOT be delete-lines (since some nicknames are still used)
+          (ok (every (lambda (fix)
+                      (not (eq (violation:violation-fix-type fix) :delete-lines)))
+                    fixes)
+              "Should not delete entire clause when some nicknames are used")
+
+          ;; Apply fixes
+          (fixer:apply-fixes-to-file tmpfile violations :dry-run nil)
+
+          ;; Read result and verify
+          (let ((result (uiop:read-file-string tmpfile)))
+            ;; Should still have :local-nicknames clause
+            (ok (search ":local-nicknames" result)
+                "Should keep :local-nicknames clause")
+
+            ;; Should keep used nickname
+            (ok (search "#:glob" result)
+                "Should keep used nickname")
+
+            ;; Should remove unused nicknames
+            (ok (not (search "#:alexandria" result))
+                "Should remove unused nickname 'a'")
+            (ok (not (search "#:uiop" result))
+                "Should remove unused nickname 'u'")
+
+            ;; Parens should be balanced
+            (let ((open-count (count #\( result))
+                  (close-count (count #\) result)))
+              (ok (= open-count close-count)
+                  "Parens should be balanced"))
+
+            ;; File should be parseable
+            (ok (handler-case
+                    (progn
+                      (parser:parse-forms result tmpfile)
+                      t)
+                  (error () nil))
+                "Fixed file should be parseable"))))))
+
+  (testing "Auto-fix works with uiop:define-package"
+    (with-test-file (tmpfile "(uiop:define-package #:test-uiop
+  (:use #:cl)
+  (:local-nicknames
+   (#:a #:alexandria)
+   (#:glob #:trivial-glob))
+  (:export #:main))
+(in-package #:test-uiop)
+(defun main ()
+  (glob:glob \"*.lisp\"))")
+      (let* ((text (uiop:read-file-string tmpfile))
+             (forms (parser:parse-forms text tmpfile))
+             (rule (make-instance 'rules:unused-local-nicknames-rule))
+             (violations (rules:check-form rule (first forms) tmpfile)))
+        ;; Should report 'a' as unused
+        (ok (= (length violations) 1))
+
+        ;; Generate fix and attach it to violation
+        (let ((fix (rules:make-fix rule text tmpfile (first violations))))
+          (setf (violation:violation-fix (first violations)) fix)
+          (ok (not (null fix)))
+
+          ;; Apply fix
+          (fixer:apply-fixes-to-file tmpfile violations :dry-run nil)
+
+          ;; Read result and verify
+          (let ((result (uiop:read-file-string tmpfile)))
+            ;; Should still have uiop:define-package and :local-nicknames
+            (ok (search "uiop:define-package" result)
+                "Should preserve uiop:define-package")
+            (ok (search ":local-nicknames" result)
+                "Should keep :local-nicknames clause")
+
+            ;; Should keep used nickname
+            (ok (search "#:glob" result)
+                "Should keep used nickname")
+
+            ;; Should remove unused nickname
+            (ok (not (search "#:alexandria" result))
+                "Should remove unused nickname 'a'")
+
+            ;; Parens should be balanced
+            (let ((open-count (count #\( result))
+                  (close-count (count #\) result)))
+              (ok (= open-count close-count)
+                  "Parens should be balanced"))
+
+            ;; File should be parseable
+            (ok (handler-case
+                    (progn
+                      (parser:parse-forms result tmpfile)
+                      t)
+                  (error () nil))
+                "Fixed file should be parseable")))))))

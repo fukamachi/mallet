@@ -60,11 +60,20 @@ Returns list of violations that were successfully fixed."
     (let ((sorted (sort (copy-list violations) #'>
                         :key #'violation:violation-line)))
 
-      ;; Apply each fix
-      (dolist (v sorted)
-        (let ((fix (violation:violation-fix v)))
-          (when fix
-            (setf text (apply-fix text fix)))))
+      ;; Deduplicate identical fixes (e.g., multiple violations deleting same clause)
+      (let ((seen-fixes (make-hash-table :test 'equal))
+            (unique-fixes '()))
+        (dolist (v sorted)
+          (let ((fix (violation:violation-fix v)))
+            (when fix
+              (let ((fix-key (fix-key fix)))
+                (unless (gethash fix-key seen-fixes)
+                  (setf (gethash fix-key seen-fixes) t)
+                  (push fix unique-fixes))))))
+
+        ;; Apply each unique fix
+        (dolist (fix (nreverse unique-fixes))
+          (setf text (apply-fix text fix))))
 
       ;; Write fixed content back to file (unless dry-run)
       (unless dry-run
@@ -76,6 +85,15 @@ Returns list of violations that were successfully fixed."
 
       ;; Return list of fixed violations
       (remove-if-not #'violation:violation-fix violations))))
+
+(defun fix-key (fix)
+  "Generate a unique key for a fix for deduplication purposes.
+Two fixes with the same key are considered identical and only one should be applied."
+  (list (violation:violation-fix-type fix)
+        (violation:violation-fix-start-line fix)
+        (violation:violation-fix-end-line fix)
+        (violation:violation-fix-start-column fix)
+        (violation:violation-fix-end-column fix)))
 
 (defun apply-fix (text fix)
   "Apply a single FIX to TEXT, returning modified TEXT.

@@ -11,6 +11,13 @@
 
 ;;; Unused Local Nicknames Rule
 
+(defun defpackage-form-p (expr)
+  "Check if EXPR is a defpackage or uiop:define-package form."
+  (and (consp expr)
+       (stringp (first expr))
+       (or (base:symbol-matches-p (first expr) "DEFPACKAGE")
+           (base:symbol-matches-p (first expr) "DEFINE-PACKAGE"))))
+
 (defclass unused-local-nicknames-rule (base:rule)
   ()
   (:default-initargs
@@ -20,11 +27,9 @@
    :type :form))
 
 (defmethod base:check-form ((rule unused-local-nicknames-rule) form file)
-  "Check for unused local nicknames in defpackage forms."
+  "Check for unused local nicknames in defpackage/define-package forms."
   (let ((expr (parser:form-expr form)))
-    (when (and (consp expr)
-               (stringp (first expr))
-               (base:symbol-matches-p (first expr) "DEFPACKAGE"))
+    (when (defpackage-form-p expr)
       ;; This is a defpackage form
       ;; Re-parse file to get all forms (we need forms after this defpackage)
       (let* ((text (uiop:read-file-string file))
@@ -89,9 +94,7 @@ Preserves comments, formatting, and structural close parens."
            (defpkg-form (find-if
                          (lambda (f)
                            (let ((expr (parser:form-expr f)))
-                             (and (consp expr)
-                                  (stringp (first expr))
-                                  (base:symbol-matches-p (first expr) "DEFPACKAGE")
+                             (and (defpackage-form-p expr)
                                   (or
                                    (and (violation:violation-end-line violation)
                                         (= (parser:form-end-line f) (violation:violation-end-line violation))
@@ -103,16 +106,17 @@ Preserves comments, formatting, and structural close parens."
         (return-from base:make-fix nil))
 
       (let* ((defpkg-expr (parser:form-expr defpkg-form))
-             (nickname-count (count-local-nicknames defpkg-expr))
+             (used-count (count-used-local-nicknames defpkg-expr text file))
              (violation-line (violation:violation-line violation))
              (violation-col (violation:violation-column violation)))
 
         (cond
-          ;; Last nickname: delete entire :local-nicknames clause
-          ((= nickname-count 1)
+          ;; All nicknames unused: delete entire clause
+          ;; All violations get the same fix; fixer will deduplicate
+          ((zerop used-count)
            (find-local-nicknames-clause-line-range text violation-line))
 
-          ;; Multiple nicknames: delete nickname expression, tidy up trailing parens
+          ;; Some nicknames still used: delete only this nickname
           (t
            (multiple-value-bind (end-line end-col)
                (base:find-expression-end-position text violation-line violation-col)
@@ -189,11 +193,9 @@ Preserves comments, formatting, and structural close parens."
    :type :form))
 
 (defmethod base:check-form ((rule unused-imported-symbols-rule) form file)
-  "Check for unused imported symbols in defpackage forms."
+  "Check for unused imported symbols in defpackage/define-package forms."
   (let ((expr (parser:form-expr form)))
-    (when (and (consp expr)
-               (stringp (first expr))
-               (base:symbol-matches-p (first expr) "DEFPACKAGE"))
+    (when (defpackage-form-p expr)
       ;; This is a defpackage form
       ;; Re-parse file to get all forms (we need forms after this defpackage)
       (let* ((text (uiop:read-file-string file))
@@ -331,9 +333,7 @@ Preserves comments, formatting, and structural close parens."
            (defpkg-form (find-if
                          (lambda (f)
                            (let ((expr (parser:form-expr f)))
-                             (and (consp expr)
-                                  (stringp (first expr))
-                                  (base:symbol-matches-p (first expr) "DEFPACKAGE")
+                             (and (defpackage-form-p expr)
                                   (or
                                    (and (violation:violation-end-line violation)
                                         (= (parser:form-end-line f) (violation:violation-end-line violation))
@@ -595,6 +595,56 @@ Returns the modified defpackage form, or NIL if symbol not found."
                  (string-equal (first clause) ":local-nicknames"))
         (setf count (length (rest clause)))))
     count))
+
+(defun count-used-local-nicknames (defpackage-expr text file)
+  "Count how many local nicknames in DEFPACKAGE-EXPR are actually used.
+Returns the count of USED nicknames."
+  (let ((nicknames (extract-local-nicknames-with-exprs defpackage-expr)))
+    (if (null nicknames)
+        0
+        ;; Need to find code forms after in-package to check usage
+        (let* ((all-forms (nth-value 0 (parser:parse-forms text file)))
+               (defpkg-pos (position-if
+                            (lambda (f)
+                              (defpackage-form-p (parser:form-expr f)))
+                            all-forms))
+               (forms-after-defpkg (when defpkg-pos (nthcdr (1+ defpkg-pos) all-forms)))
+               (in-package-pos (position-if
+                                (lambda (f)
+                                  (let ((e (parser:form-expr f)))
+                                    (and (consp e)
+                                         (stringp (first e))
+                                         (base:symbol-matches-p (first e) "IN-PACKAGE"))))
+                                forms-after-defpkg))
+               (code-forms (when in-package-pos
+                             (nthcdr (1+ in-package-pos) forms-after-defpkg))))
+          (if (null code-forms)
+              0  ; No code after in-package, so no nicknames used
+              ;; Count how many nicknames are used
+              (count-if (lambda (nick-tuple)
+                          (let ((nickname (first nick-tuple)))
+                            (plusp (length (find-nickname-references code-forms nickname)))))
+                        nicknames))))))
+
+(defun is-last-nickname-line-p (text violation-line)
+  "Check if VIOLATION-LINE is the last nickname in the :local-nicknames clause.
+This is used to ensure only one fix deletes the entire clause when all are unused."
+  (multiple-value-bind (clause-start clause-end)
+      (base:find-clause-boundaries text violation-line ":local-nicknames")
+    (unless (and clause-start clause-end)
+      (return-from is-last-nickname-line-p nil))
+
+    ;; Find the last line within the clause that contains a nickname pattern "(#:"
+    (let ((lines (uiop:split-string text :separator '(#\Newline)))
+          (last-nickname-line nil))
+      (loop for line-num from clause-end downto (1+ clause-start)
+            for line-text = (nth (1- line-num) lines)
+            when (search "(#:" line-text)
+              do (setf last-nickname-line line-num)
+                 (return))
+
+      ;; Check if violation-line is the last nickname line
+      (and last-nickname-line (= violation-line last-nickname-line)))))
 
 (defun find-local-nicknames-clause-line-range (text violation-line)
   "Find the line range of the :local-nicknames clause containing VIOLATION-LINE.
