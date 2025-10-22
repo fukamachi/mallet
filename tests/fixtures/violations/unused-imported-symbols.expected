@@ -1,0 +1,5 @@
+# Expected violations for unused-imported-symbols.lisp
+# Format: line:column rule-name severity
+
+7:16 unused-imported-symbols info
+8:16 unused-imported-symbols info

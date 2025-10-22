@@ -1,0 +1,6 @@
+# Expected violations for unused-local-nicknames.lisp
+# Format: line:column rule-name severity
+
+5:3 unused-local-nicknames info
+23:3 unused-local-nicknames info
+25:3 unused-local-nicknames info

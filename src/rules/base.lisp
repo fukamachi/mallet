@@ -32,7 +32,8 @@
            #:collect-violations-from-subexprs
            ;; Auto-fix helpers
            #:find-clause-line-range
-           #:find-expression-end-position))
+           #:find-expression-end-position
+           #:find-comment-start))
 (in-package #:mallet/rules/base)
 
 ;;; Rule class
@@ -655,4 +656,32 @@ Uses paren counting with basic string/char literal handling."
                              (values line-num (1+ col))))))))
 
     ;; Didn't find balanced expression
+    nil))
+
+(defun find-comment-start (text)
+  "Find the position of the first comment character (;) in TEXT,
+ignoring semicolons inside string literals.
+Returns NIL if no comment found."
+  (check-type text string)
+  (let ((in-string nil)
+        (escape-next nil))
+    (loop for i from 0 below (length text)
+          for ch = (char text i)
+          do (cond
+               ;; Handle escape sequences
+               (escape-next
+                (setf escape-next nil))
+               ;; Inside string
+               (in-string
+                (cond
+                  ((char= ch #\\)
+                   (setf escape-next t))
+                  ((char= ch #\")
+                   (setf in-string nil))))
+               ;; Start of string
+               ((char= ch #\")
+                (setf in-string t))
+               ;; Found comment (not in string)
+               ((char= ch #\;)
+                (return-from find-comment-start i))))
     nil))

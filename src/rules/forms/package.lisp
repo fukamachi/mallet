@@ -73,33 +73,6 @@
                                                               nickname package)
                                              :severity (base:rule-severity rule))))))))))
 
-(defun find-comment-start (text)
-  "Find the position of the first comment character (;) in TEXT,
-ignoring semicolons inside string literals.
-Returns NIL if no comment found."
-  (let ((in-string nil)
-        (escape-next nil))
-    (loop for i from 0 below (length text)
-          for ch = (char text i)
-          do (cond
-               ;; Handle escape sequences
-               (escape-next
-                (setf escape-next nil))
-               ;; Inside string
-               (in-string
-                (cond
-                  ((char= ch #\\)
-                   (setf escape-next t))
-                  ((char= ch #\")
-                   (setf in-string nil))))
-               ;; Start of string
-               ((char= ch #\")
-                (setf in-string t))
-               ;; Found comment (not in string)
-               ((char= ch #\;)
-                (return-from find-comment-start i))))
-    nil))
-
 (defmethod base:make-fix ((rule unused-local-nicknames-rule) text file violation)
   "Generate minimal fix for unused local nickname - remove just that line.
 Preserves comments, formatting, and structural close parens."
@@ -158,7 +131,7 @@ Preserves comments, formatting, and structural close parens."
                        (let* ((prev-line (nth (- violation-line 2) lines))
                               ;; Find where comment starts (if any) in trailing-text
                               ;; Use string-aware detection to avoid false positives with semicolons in strings
-                              (trailing-comment-pos (find-comment-start trailing-text))
+                              (trailing-comment-pos (base:find-comment-start trailing-text))
                               ;; Extract just the close parens part (before comment/whitespace)
                               (parens-only (string-trim '(#\Space #\Tab)
                                              (if trailing-comment-pos
@@ -166,7 +139,7 @@ Preserves comments, formatting, and structural close parens."
                                                  trailing-text)))
                               ;; Find comment in previous line (if any)
                               ;; Use string-aware detection
-                              (prev-comment-pos (find-comment-start prev-line))
+                              (prev-comment-pos (base:find-comment-start prev-line))
                               ;; Split previous line into code and comment parts
                               ;; Trim trailing whitespace from code part
                               (prev-line-code (string-right-trim '(#\Space #\Tab)
@@ -280,8 +253,64 @@ Preserves comments, formatting, and structural close parens."
                               violations)))))))
             (nreverse violations)))))))
 
+(defun count-imported-symbols-in-clause (defpackage-expr package-name)
+  "Count the number of symbols imported from PACKAGE-NAME in DEFPACKAGE-EXPR."
+  (let ((count 0))
+    (dolist (clause (cddr defpackage-expr))
+      (when (and (consp clause)
+                 (stringp (first clause))
+                 (string-equal (first clause) ":import-from"))
+        (let ((pkg (second clause)))
+          (when (string-equal (base:symbol-name-from-string pkg) package-name)
+            (setf count (length (cddr clause)))
+            (return)))))
+    count))
+
+(defun find-import-from-clause-line-range (text violation-line package-name)
+  "Find the line range of the :import-from clause for PACKAGE-NAME containing VIOLATION-LINE.
+Returns a violation-fix for :delete-lines."
+  (let* ((lines (uiop:split-string text :separator '(#\Newline)))
+         (start-line nil)
+         (end-line nil))
+
+    ;; Search backward to find the :import-from clause start
+    (loop for line-num from violation-line downto 1
+          for line-text = (nth (1- line-num) lines)
+          do (when (search ":import-from" line-text :test #'char-equal)
+               (setf start-line line-num)
+               (return)))
+
+    (unless start-line
+      (return-from find-import-from-clause-line-range nil))
+
+    ;; Find the end by counting parens from start-line
+    (let ((paren-depth 0)
+          (found-open nil))
+      (loop for line-num from start-line to (length lines)
+            for line-text = (nth (1- line-num) lines)
+            do (loop for ch across line-text
+                     do (cond
+                          ((char= ch #\()
+                           (incf paren-depth)
+                           (setf found-open t))
+                          ((char= ch #\))
+                           (decf paren-depth)
+                           (when (and found-open (zerop paren-depth))
+                             (setf end-line line-num)
+                             (return-from find-import-from-clause-line-range
+                               (violation:make-violation-fix
+                                :type :delete-lines
+                                :start-line start-line
+                                :end-line end-line))))))
+            when (and found-open (zerop paren-depth))
+              do (return)))
+
+    ;; If we get here, couldn't find balanced parens
+    nil))
+
 (defmethod base:make-fix ((rule unused-imported-symbols-rule) text file violation)
-  "Generate fix for unused imported symbol - remove it from defpackage."
+  "Generate minimal fix for unused imported symbol - remove just that line.
+Preserves comments, formatting, and structural close parens."
   (declare (ignore file))
   (check-type text string)
 
@@ -297,44 +326,101 @@ Preserves comments, formatting, and structural close parens."
     (unless (and symbol package)
       (return-from base:make-fix nil))
 
-    ;; Re-parse the file to get the defpackage form
+    ;; Re-parse to check if this is the last symbol in the import-from clause
     (let* ((all-forms (nth-value 0 (parser:parse-forms text file)))
-           ;; Find the defpackage form that contains this violation
-           ;; The violation has end-line/end-column pointing to the whole defpackage
            (defpkg-form (find-if
                          (lambda (f)
                            (let ((expr (parser:form-expr f)))
                              (and (consp expr)
                                   (stringp (first expr))
                                   (base:symbol-matches-p (first expr) "DEFPACKAGE")
-                                  ;; Check if this defpackage contains the violation
                                   (or
-                                   ;; Match by end positions (if available)
                                    (and (violation:violation-end-line violation)
                                         (= (parser:form-end-line f) (violation:violation-end-line violation))
                                         (= (parser:form-end-column f) (violation:violation-end-column violation)))
-                                   ;; Or check if violation is within the form
                                    (and (<= (parser:form-line f) (violation:violation-line violation))
                                         (>= (parser:form-end-line f) (violation:violation-line violation)))))))
                          all-forms)))
       (unless defpkg-form
         (return-from base:make-fix nil))
 
-      ;; Get the S-expression and remove the unused symbol
       (let* ((defpkg-expr (parser:form-expr defpkg-form))
-             (modified-expr (remove-imported-symbol defpkg-expr symbol package)))
-        (unless modified-expr
-          (return-from base:make-fix nil))
+             (symbol-count (count-imported-symbols-in-clause defpkg-expr package))
+             (violation-line (violation:violation-line violation))
+             (violation-col (violation:violation-column violation)))
 
-        ;; Pretty-print the modified form
-        (let ((replacement-content (pretty-print-defpackage modified-expr)))
-          ;; Create the fix
-          ;; Use defpackage form's line/column, not violation's (which points to the nickname/symbol)
-          (violation:make-violation-fix
-           :type :replace-form
-           :start-line (parser:form-line defpkg-form)
-           :end-line (parser:form-end-line defpkg-form)
-           :replacement-content replacement-content))))))
+        (cond
+          ;; Last symbol: delete entire :import-from clause
+          ((= symbol-count 1)
+           (find-import-from-clause-line-range text violation-line package))
+
+          ;; Multiple symbols: delete just this line, tidy up trailing parens
+          (t
+           ;; Calculate symbol's end position (symbol is on single line)
+           ;; The violation's end-line/end-column are for the whole defpackage form, not the symbol
+           (let* ((lines (uiop:split-string text :separator '(#\Newline)))
+                  (line-text (nth (1- violation-line) lines))
+                  ;; Find end of symbol by scanning for whitespace or paren
+                  (end-col (loop for i from violation-col below (length line-text)
+                                 for ch = (char line-text i)
+                                 when (or (char= ch #\Space)
+                                          (char= ch #\Tab)
+                                          (char= ch #\))
+                                          (char= ch #\Newline))
+                                   return i
+                                 finally (return (length line-text)))))
+             (if end-col
+                 ;; Expression is on single line
+                 (let ((trailing-text (subseq line-text end-col)))
+                   (if (and (> (length trailing-text) 0)
+                            (find #\) trailing-text)
+                            ;; Only tidy parens if there's a previous line
+                            (> violation-line 1))
+                       ;; Has trailing close parens - move them to previous line
+                       (let* ((prev-line (nth (- violation-line 2) lines))
+                              ;; Find where comment starts (if any) in trailing-text
+                              (trailing-comment-pos (base:find-comment-start trailing-text))
+                              ;; Extract just the close parens part (before comment/whitespace)
+                              (parens-only (string-trim '(#\Space #\Tab)
+                                             (if trailing-comment-pos
+                                                 (subseq trailing-text 0 trailing-comment-pos)
+                                                 trailing-text)))
+                              ;; Find comment in previous line (if any)
+                              (prev-comment-pos (base:find-comment-start prev-line))
+                              ;; Split previous line into code and comment parts
+                              (prev-line-code (string-right-trim '(#\Space #\Tab)
+                                                (if prev-comment-pos
+                                                    (subseq prev-line 0 prev-comment-pos)
+                                                    prev-line)))
+                              (prev-line-comment (if prev-comment-pos
+                                                     (subseq prev-line prev-comment-pos)
+                                                     ""))
+                              ;; New content: code + parens + comment (comment after parens)
+                              (replacement (concatenate 'string
+                                             prev-line-code
+                                             parens-only
+                                             (if (> (length prev-line-comment) 0)
+                                                 (concatenate 'string "  " prev-line-comment)
+                                                 "")
+                                             (string #\Newline))))
+                         ;; Replace both lines (prev and current) with new content
+                         (violation:make-violation-fix
+                          :type :replace-form
+                          :start-line (1- violation-line)
+                          :end-line violation-line
+                          :replacement-content replacement))
+                       ;; No trailing close parens - delete entire line including newline
+                       (violation:make-violation-fix
+                        :type :delete-range
+                        :start-line violation-line
+                        :start-column 0
+                        :end-line (1+ violation-line)
+                        :end-column 0)))
+                 ;; Multi-line or couldn't find end - fall back to line deletion
+                 (violation:make-violation-fix
+                  :type :delete-lines
+                  :start-line violation-line
+                  :end-line violation-line)))))))))
 
 ;;; Helper Functions
 
@@ -498,12 +584,6 @@ Returns the modified defpackage form, or NIL if symbol not found."
                                   ;; Not an :import-from clause, keep as-is
                                   clause))))))
 
-(defun symbol-name-matches-p (str target)
-  "Check if symbol string STR matches TARGET (ignoring package prefix and case)."
-  (let* ((colon-pos (position #\: str :from-end t))
-         (symbol-part (if colon-pos (subseq str (1+ colon-pos)) str)))
-    (string-equal symbol-part target)))
-
 ;;; Defpackage-Specific Helpers
 
 (defun count-local-nicknames (defpackage-expr)
@@ -521,105 +601,3 @@ Returns the modified defpackage form, or NIL if symbol not found."
 Returns a violation-fix to delete those lines, or NIL if not found.
 Uses the generic base:find-clause-line-range helper."
   (base:find-clause-line-range text violation-line ":local-nicknames"))
-
-(defun print-symbol-string (str out)
-  "Print a symbol string (from parser) as a Lisp symbol.
-The parser returns symbols as strings like 'defpackage', ':use', 'CURRENT:foo', etc."
-  (cond
-    ;; Keyword (starts with :)
-    ((and (> (length str) 0) (char= (char str 0) #\:))
-     (format out "~(~A~)" str))
-    ;; Special forms (defpackage, in-package) - print without #: prefix
-    ;; These are only valid as the operator (first element), but we handle them here
-    ;; for consistency with the original code structure
-    ((or (symbol-name-matches-p str "defpackage")
-         (symbol-name-matches-p str "in-package"))
-     ;; Extract just the symbol part (after last :)
-     (let ((colon-pos (position #\: str :from-end t)))
-       (if colon-pos
-           (format out "~(~A~)" (subseq str (1+ colon-pos)))
-           (format out "~(~A~)" str))))
-    ;; Qualified symbol (contains :) - strip package prefix, print symbol part as uninterned
-    ((position #\: str)
-     (let ((colon-pos (position #\: str :from-end t)))
-       (format out "#:~(~A~)" (subseq str (1+ colon-pos)))))
-    ;; Unqualified symbol - print as uninterned
-    (t
-     (format out "#:~(~A~)" str))))
-
-(defun pretty-print-defpackage (defpackage-form)
-  "Pretty-print a defpackage form with proper indentation.
-Returns a string with the formatted defpackage form."
-  (with-output-to-string (out)
-    ;; Print opening: (defpackage #:package-name
-    (format out "(")
-    (print-symbol-string (first defpackage-form) out)
-    (format out " ")
-    (print-symbol-string (second defpackage-form) out)
-
-    ;; Print each clause on its own line
-    (dolist (clause (cddr defpackage-form))
-      (when clause  ; Skip nil clauses (removed clauses)
-        (format out "~%  ")
-        (if (and (consp clause) (stringp (first clause)))
-            ;; Print clause keyword and contents
-            (progn
-              (format out "(")
-              (print-symbol-string (first clause) out)
-              ;; Handle different clause types
-              (cond
-                ;; :local-nicknames - print each pair on its own line
-                ((string-equal (first clause) ":local-nicknames")
-                 (dolist (pair (rest clause))
-                   (format out "~%   (")
-                   (print-symbol-string (first pair) out)
-                   (format out " ")
-                   (print-symbol-string (second pair) out)
-                   (format out ")")))
-                ;; :import-from - package on same line, symbols on next lines
-                ((string-equal (first clause) ":import-from")
-                 (format out " ")
-                 (print-symbol-string (second clause) out)
-                 (dolist (sym (cddr clause))
-                   (format out "~%   ")
-                   (print-symbol-string sym out)))
-                ;; :use - print items on same line
-                ((string-equal (first clause) ":use")
-                 (dolist (item (rest clause))
-                   (format out " ")
-                   (print-symbol-string item out)))
-                ;; :export - print each item on its own line
-                ((string-equal (first clause) ":export")
-                 (let ((first-item t))
-                   (dolist (item (rest clause))
-                     (if first-item
-                         (progn
-                           (format out " ")
-                           (setf first-item nil))
-                         (format out "~%           "))
-                     (print-symbol-string item out))))
-                ;; Other clauses
-                (t
-                 (dolist (item (rest clause))
-                   (if (consp item)
-                       (progn
-                         (format out "~%   (")
-                         (dolist (sub-item item)
-                           (if (stringp sub-item)
-                               (print-symbol-string sub-item out)
-                               (format out "~S" sub-item))
-                           (format out " "))
-                         (format out ")"))
-                       (progn
-                         (format out " ")
-                         (if (stringp item)
-                             (print-symbol-string item out)
-                             (format out "~S" item)))))))
-              (format out ")"))
-            ;; Non-list clause (shouldn't happen in defpackage)
-            (format out "~S" clause))))
-
-    ;; Print closing
-    (format out ")")
-    ;; Add final newline
-    (format out "~%")))

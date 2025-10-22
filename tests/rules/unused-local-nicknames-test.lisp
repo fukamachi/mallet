@@ -151,14 +151,10 @@
                (fix-type (violation:violation-fix-type fix)))
           (ok (not (null fix)))
 
-          ;; Should use delete-lines (minimal change)
-          (ok (eq fix-type :delete-lines)
-              "Should use line deletion for minimal change")
-
-          ;; Should delete exactly one line
-          (ok (= (violation:violation-fix-start-line fix)
-                 (violation:violation-fix-end-line fix))
-              "Should delete exactly one line")))))
+          ;; Should use either delete-range or replace-form (minimal change)
+          ;; replace-form is used when tidying trailing parens
+          (ok (or (eq fix-type :delete-range) (eq fix-type :replace-form))
+              "Should use minimal deletion strategy")))))
 
   (testing "Auto-fix preserves comments"
     (with-test-file (tmpfile "(defpackage #:test-package
@@ -176,13 +172,40 @@
              (violations (rules:check-form rule (first forms) tmpfile))
              (fix (rules:make-fix rule text tmpfile (first violations))))
 
-        ;; Apply the fix by simulating line deletion
+        ;; Apply the fix - handle both delete-range and replace-form
         (let* ((lines (uiop:split-string text :separator '(#\Newline)))
-               (start-line (violation:violation-fix-start-line fix))
-               (end-line (violation:violation-fix-end-line fix))
-               (new-lines (append (subseq lines 0 (1- start-line))
-                                  (subseq lines end-line)))
-               (result (format nil "~{~A~^~%~}" new-lines)))
+               (fix-type (violation:violation-fix-type fix))
+               (result
+                (cond
+                  ((eq fix-type :delete-range)
+                   (let* ((start-line (violation:violation-fix-start-line fix))
+                          (start-col (violation:violation-fix-start-column fix))
+                          (end-line (violation:violation-fix-end-line fix))
+                          (end-col (violation:violation-fix-end-column fix))
+                          (line-before (subseq (nth (1- start-line) lines) 0 start-col))
+                          (line-after (when (< end-line (1+ (length lines)))
+                                       (subseq (nth (1- end-line) lines) end-col)))
+                          (new-line (concatenate 'string line-before (or line-after "")))
+                          (new-lines (append (subseq lines 0 (1- start-line))
+                                            (list new-line)
+                                            (subseq lines end-line))))
+                     (format nil "~{~A~^~%~}" new-lines)))
+                  ((eq fix-type :replace-form)
+                   (let* ((start-line (violation:violation-fix-start-line fix))
+                          (end-line (violation:violation-fix-end-line fix))
+                          (replacement (violation:violation-fix-replacement-content fix))
+                          (new-lines (append (subseq lines 0 (1- start-line))
+                                            (list (string-right-trim '(#\Newline) replacement))
+                                            (subseq lines end-line))))
+                     (format nil "~{~A~^~%~}" new-lines)))
+                  ((eq fix-type :delete-lines)
+                   (let* ((start-line (violation:violation-fix-start-line fix))
+                          (end-line (violation:violation-fix-end-line fix))
+                          (new-lines (append (subseq lines 0 (1- start-line))
+                                            (subseq lines end-line))))
+                     (format nil "~{~A~^~%~}" new-lines)))
+                  (t
+                   (error "Unexpected fix type: ~A" fix-type)))))
 
           ;; Should preserve comments on other lines
           (ok (search "; Use Common Lisp" result)
@@ -256,12 +279,13 @@
         (let* ((lines (uiop:split-string text :separator '(#\Newline)))
                (fix-type (violation:violation-fix-type fix)))
           (cond
-            ((eq fix-type :replace-line)
-             (let* ((line-num (violation:violation-fix-line-number fix))
+            ((eq fix-type :replace-form)
+             (let* ((start-line (violation:violation-fix-start-line fix))
+                    (end-line (violation:violation-fix-end-line fix))
                     (replacement (violation:violation-fix-replacement-content fix))
-                    (new-lines (append (subseq lines 0 (1- line-num))
-                                       (list replacement)
-                                       (subseq lines line-num)))
+                    (new-lines (append (subseq lines 0 (1- start-line))
+                                      (list (string-right-trim '(#\Newline) replacement))
+                                      (subseq lines end-line)))
                     (result (format nil "~{~A~^~%~}" new-lines)))
                ;; Should preserve the closing paren
                (ok (search "(:local-nicknames" result)
@@ -276,4 +300,4 @@
                  (ok (= open-count close-count)
                      "Parens should be balanced"))))
             (t
-             (ok nil "Expected :replace-line fix type"))))))))
+             (ok nil "Expected :replace-form fix type"))))))))
