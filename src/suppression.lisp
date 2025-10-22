@@ -1,7 +1,6 @@
 (defpackage #:mallet/suppression
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria)
    (#:utils #:mallet/utils))
   (:export #:suppression-state
            #:make-suppression-state

@@ -1,7 +1,6 @@
 (defpackage #:mallet/fixer
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria)
    (#:violation #:mallet/violation))
   (:export #:apply-fixes
            #:apply-fixes-to-file))

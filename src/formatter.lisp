@@ -1,7 +1,6 @@
 (defpackage #:mallet/formatter
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria)
    (#:violation #:mallet/violation))
   (:export #:format-text-file
            #:format-json-file

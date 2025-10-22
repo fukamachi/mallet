@@ -1,7 +1,6 @@
 (defpackage #:mallet/engine
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria)
    (#:parser #:mallet/parser)
    (#:rules #:mallet/rules)
    (#:config #:mallet/config)

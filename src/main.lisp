@@ -4,7 +4,6 @@
         #:mallet/parser
         #:mallet/rules)
   (:local-nicknames
-   (#:a #:alexandria)
    (#:engine #:mallet/engine)
    (#:config #:mallet/config)
    (#:formatter #:mallet/formatter)

@@ -1,7 +1,6 @@
 (defpackage #:mallet/config
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria)
    (#:glob #:trivial-glob)
    (#:rules #:mallet/rules))
   (:export #:config

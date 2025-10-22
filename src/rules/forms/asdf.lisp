@@ -1,7 +1,6 @@
 (defpackage #:mallet/rules/forms/asdf
   (:use #:cl)
   (:local-nicknames
-   (#:a #:alexandria)
    (#:base #:mallet/rules/base)
    (#:violation #:mallet/violation)
    (#:parser #:mallet/parser)
