@@ -102,6 +102,13 @@ Returns the modified text."
                          (violation:violation-fix-start-line fix)
                          (violation:violation-fix-end-line fix)))
 
+    (:delete-range
+     (apply-delete-range text
+                         (violation:violation-fix-start-line fix)
+                         (violation:violation-fix-start-column fix)
+                         (violation:violation-fix-end-line fix)
+                         (violation:violation-fix-end-column fix)))
+
     (:replace-form
      (apply-replace-form text
                          (violation:violation-fix-start-line fix)
@@ -162,14 +169,71 @@ Returns modified text."
                             (<= current-line end-line))
                  (write-line line out))))))
 
+(defun apply-delete-range (text start-line start-column end-line end-column)
+  "Delete a precise character range from TEXT.
+
+START-LINE - 1-indexed starting line
+START-COLUMN - 0-indexed starting column
+END-LINE - 1-indexed ending line
+END-COLUMN - 0-indexed ending column (exclusive)
+
+Returns modified text with the range deleted."
+  (check-type text string)
+  (check-type start-line (integer 1))
+  (check-type start-column (integer 0))
+  (check-type end-line (integer 1))
+  (check-type end-column (integer 0))
+
+  (with-output-to-string (out)
+    (with-input-from-string (in text)
+      (loop for current-line from 1
+            for line = (read-line in nil nil)
+            while line
+            do (cond
+                 ;; Before the range: write line as-is
+                 ((< current-line start-line)
+                  (write-line line out))
+
+                 ;; Single line deletion
+                 ((= start-line end-line current-line)
+                  (let ((before (subseq line 0 start-column))
+                        (after (if (< end-column (length line))
+                                   (subseq line end-column)
+                                   "")))
+                    (write-line (concatenate 'string before after) out)))
+
+                 ;; Start line of multi-line deletion
+                 ((= current-line start-line)
+                  (write-string (subseq line 0 start-column) out))
+
+                 ;; End line of multi-line deletion
+                 ((= current-line end-line)
+                  (let ((after (if (< end-column (length line))
+                                   (subseq line end-column)
+                                   "")))
+                    (write-line after out)))
+
+                 ;; Middle lines of multi-line deletion: skip
+                 ((and (> current-line start-line)
+                       (< current-line end-line))
+                  nil)
+
+                 ;; After the range: write line as-is
+                 ((> current-line end-line)
+                  (write-line line out)))))))
+
 (defun apply-replace-form (text start-line end-line replacement-content)
   "Replace lines START-LINE through END-LINE in TEXT with REPLACEMENT-CONTENT.
 
 START-LINE - 1-indexed starting line
 END-LINE - 1-indexed ending line
-REPLACEMENT-CONTENT - New content to insert (without trailing newline)
+REPLACEMENT-CONTENT - New content to insert
 
-Returns modified text."
+Returns modified text.
+
+Note: REPLACEMENT-CONTENT should include its own trailing newline.
+If it doesn't end with a newline, one will be added automatically to prevent
+the next line from being concatenated."
   (check-type text string)
   (check-type start-line (integer 1))
   (check-type end-line (integer 1))
@@ -189,7 +253,11 @@ Returns modified text."
                   (write-line line out))
                  ;; At start of form: write replacement
                  ((= current-line start-line)
-                  (write-string replacement-content out))
+                  ;; Ensure replacement ends with newline to avoid concatenation
+                  (if (and (> (length replacement-content) 0)
+                           (char= (char replacement-content (1- (length replacement-content))) #\Newline))
+                      (write-string replacement-content out)
+                      (write-line replacement-content out)))
                  ;; Inside or at end of form: skip
                  ((<= current-line end-line)
                   nil)

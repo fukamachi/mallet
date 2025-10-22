@@ -16,6 +16,8 @@
            #:violation-fix-replacement-content
            #:violation-fix-start-line
            #:violation-fix-end-line
+           #:violation-fix-start-column
+           #:violation-fix-end-column
            #:violation-fix-appended-content
            #:violation-fix-original-form
            #:violation-fix-replacement-form
@@ -35,11 +37,13 @@ Fix types:
     Required: appended-content
   :delete-lines - Delete a range of lines
     Required: start-line, end-line
+  :delete-range - Delete a precise range (line + column)
+    Required: start-line, start-column, end-line, end-column
   :replace-form - Replace a form spanning multiple lines with new content
     Required: start-line, end-line, replacement-content"
   (type
    nil
-   :type (member :replace-line :append-to-file :delete-lines :replace-form nil)
+   :type (member :replace-line :append-to-file :delete-lines :delete-range :replace-form nil)
    :read-only t)
   ;; For :replace-line
   (line-number
@@ -50,7 +54,7 @@ Fix types:
    nil
    :type (or null string)
    :read-only t)
-  ;; For :delete-lines
+  ;; For :delete-lines and :delete-range
   (start-line
    nil
    :type (or null (integer 1))
@@ -58,6 +62,15 @@ Fix types:
   (end-line
    nil
    :type (or null (integer 1))
+   :read-only t)
+  ;; For :delete-range
+  (start-column
+   nil
+   :type (or null (integer 0))
+   :read-only t)
+  (end-column
+   nil
+   :type (or null (integer 0))
    :read-only t)
   ;; For :append-to-file
   (appended-content

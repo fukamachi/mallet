@@ -73,8 +73,36 @@
                                                               nickname package)
                                              :severity (base:rule-severity rule))))))))))
 
+(defun find-comment-start (text)
+  "Find the position of the first comment character (;) in TEXT,
+ignoring semicolons inside string literals.
+Returns NIL if no comment found."
+  (let ((in-string nil)
+        (escape-next nil))
+    (loop for i from 0 below (length text)
+          for ch = (char text i)
+          do (cond
+               ;; Handle escape sequences
+               (escape-next
+                (setf escape-next nil))
+               ;; Inside string
+               (in-string
+                (cond
+                  ((char= ch #\\)
+                   (setf escape-next t))
+                  ((char= ch #\")
+                   (setf in-string nil))))
+               ;; Start of string
+               ((char= ch #\")
+                (setf in-string t))
+               ;; Found comment (not in string)
+               ((char= ch #\;)
+                (return-from find-comment-start i))))
+    nil))
+
 (defmethod base:make-fix ((rule unused-local-nicknames-rule) text file violation)
-  "Generate fix for unused local nickname - remove it from defpackage."
+  "Generate minimal fix for unused local nickname - remove just that line.
+Preserves comments, formatting, and structural close parens."
   (declare (ignore file))
   (check-type text string)
 
@@ -83,44 +111,99 @@
     (unless nickname
       (return-from base:make-fix nil))
 
-    ;; Re-parse the file to get the defpackage form
+    ;; Re-parse to check if this is the last nickname
     (let* ((all-forms (nth-value 0 (parser:parse-forms text file)))
-           ;; Find the defpackage form that contains this violation
-           ;; The violation has end-line/end-column pointing to the whole defpackage
            (defpkg-form (find-if
                          (lambda (f)
                            (let ((expr (parser:form-expr f)))
                              (and (consp expr)
                                   (stringp (first expr))
                                   (base:symbol-matches-p (first expr) "DEFPACKAGE")
-                                  ;; Check if this defpackage contains the violation
                                   (or
-                                   ;; Match by end positions (if available)
                                    (and (violation:violation-end-line violation)
                                         (= (parser:form-end-line f) (violation:violation-end-line violation))
                                         (= (parser:form-end-column f) (violation:violation-end-column violation)))
-                                   ;; Or check if violation is within the form
                                    (and (<= (parser:form-line f) (violation:violation-line violation))
                                         (>= (parser:form-end-line f) (violation:violation-line violation)))))))
                          all-forms)))
       (unless defpkg-form
         (return-from base:make-fix nil))
 
-      ;; Get the S-expression and remove the unused nickname
       (let* ((defpkg-expr (parser:form-expr defpkg-form))
-             (modified-expr (remove-local-nickname defpkg-expr nickname)))
-        (unless modified-expr
-          (return-from base:make-fix nil))
+             (nickname-count (count-local-nicknames defpkg-expr))
+             (violation-line (violation:violation-line violation))
+             (violation-col (violation:violation-column violation)))
 
-        ;; Pretty-print the modified form
-        (let ((replacement-content (pretty-print-defpackage modified-expr)))
-          ;; Create the fix
-          ;; Use defpackage form's line/column, not violation's (which points to the nickname/symbol)
-          (violation:make-violation-fix
-           :type :replace-form
-           :start-line (parser:form-line defpkg-form)
-           :end-line (parser:form-end-line defpkg-form)
-           :replacement-content replacement-content))))))
+        (cond
+          ;; Last nickname: delete entire :local-nicknames clause
+          ((= nickname-count 1)
+           (find-local-nicknames-clause-line-range text violation-line))
+
+          ;; Multiple nicknames: delete nickname expression, tidy up trailing parens
+          (t
+           (multiple-value-bind (end-line end-col)
+               (base:find-expression-end-position text violation-line violation-col)
+             (if (and end-line end-col (= violation-line end-line))
+                 ;; Expression is on single line
+                 (let* ((lines (uiop:split-string text :separator '(#\Newline)))
+                        (line-text (nth (1- violation-line) lines))
+                        (trailing-text (subseq line-text end-col)))
+                   (if (and (> (length trailing-text) 0)
+                            (find #\) trailing-text)
+                            ;; Only tidy parens if there's a previous line
+                            (> violation-line 1))
+                       ;; Has trailing close parens - move them to previous line
+                       ;; Delete from end of previous line through the current line,
+                       ;; but only preserve close parens (strip comments)
+                       (let* ((prev-line (nth (- violation-line 2) lines))
+                              ;; Find where comment starts (if any) in trailing-text
+                              ;; Use string-aware detection to avoid false positives with semicolons in strings
+                              (trailing-comment-pos (find-comment-start trailing-text))
+                              ;; Extract just the close parens part (before comment/whitespace)
+                              (parens-only (string-trim '(#\Space #\Tab)
+                                             (if trailing-comment-pos
+                                                 (subseq trailing-text 0 trailing-comment-pos)
+                                                 trailing-text)))
+                              ;; Find comment in previous line (if any)
+                              ;; Use string-aware detection
+                              (prev-comment-pos (find-comment-start prev-line))
+                              ;; Split previous line into code and comment parts
+                              ;; Trim trailing whitespace from code part
+                              (prev-line-code (string-right-trim '(#\Space #\Tab)
+                                                (if prev-comment-pos
+                                                    (subseq prev-line 0 prev-comment-pos)
+                                                    prev-line)))
+                              (prev-line-comment (if prev-comment-pos
+                                                     (subseq prev-line prev-comment-pos)
+                                                     ""))
+                              ;; New content: code + parens + comment (comment after parens)
+                              ;; (strips current line's comment)
+                              (replacement (concatenate 'string
+                                             prev-line-code
+                                             parens-only
+                                             (if (> (length prev-line-comment) 0)
+                                                 (concatenate 'string "  " prev-line-comment)
+                                                 "")
+                                             (string #\Newline))))
+                         ;; Replace both lines (prev and current) with new content
+                         ;; This moves close parens up, deletes unused nickname, strips comment
+                         (violation:make-violation-fix
+                          :type :replace-form
+                          :start-line (1- violation-line)
+                          :end-line violation-line
+                          :replacement-content replacement))
+                       ;; No trailing close parens - delete entire line including newline
+                       (violation:make-violation-fix
+                        :type :delete-range
+                        :start-line violation-line
+                        :start-column 0
+                        :end-line (1+ violation-line)
+                        :end-column 0)))
+                 ;; Multi-line or couldn't find end - fall back to line deletion
+                 (violation:make-violation-fix
+                  :type :delete-lines
+                  :start-line violation-line
+                  :end-line violation-line)))))))))
 
 ;;; Unused Imported Symbols Rule
 
@@ -421,6 +504,24 @@ Returns the modified defpackage form, or NIL if symbol not found."
          (symbol-part (if colon-pos (subseq str (1+ colon-pos)) str)))
     (string-equal symbol-part target)))
 
+;;; Defpackage-Specific Helpers
+
+(defun count-local-nicknames (defpackage-expr)
+  "Count how many local nicknames are in DEFPACKAGE-EXPR."
+  (let ((count 0))
+    (dolist (clause (cddr defpackage-expr))
+      (when (and (consp clause)
+                 (stringp (first clause))
+                 (string-equal (first clause) ":local-nicknames"))
+        (setf count (length (rest clause)))))
+    count))
+
+(defun find-local-nicknames-clause-line-range (text violation-line)
+  "Find the line range of the :local-nicknames clause containing VIOLATION-LINE.
+Returns a violation-fix to delete those lines, or NIL if not found.
+Uses the generic base:find-clause-line-range helper."
+  (base:find-clause-line-range text violation-line ":local-nicknames"))
+
 (defun print-symbol-string (str out)
   "Print a symbol string (from parser) as a Lisp symbol.
 The parser returns symbols as strings like 'defpackage', ':use', 'CURRENT:foo', etc."
@@ -428,11 +529,11 @@ The parser returns symbols as strings like 'defpackage', ':use', 'CURRENT:foo', 
     ;; Keyword (starts with :)
     ((and (> (length str) 0) (char= (char str 0) #\:))
      (format out "~(~A~)" str))
-    ;; Common Lisp special operators and macros - print without #: prefix
+    ;; Special forms (defpackage, in-package) - print without #: prefix
+    ;; These are only valid as the operator (first element), but we handle them here
+    ;; for consistency with the original code structure
     ((or (symbol-name-matches-p str "defpackage")
-         (symbol-name-matches-p str "in-package")
-         (symbol-name-matches-p str "cl")
-         (symbol-name-matches-p str "common-lisp"))
+         (symbol-name-matches-p str "in-package"))
      ;; Extract just the symbol part (after last :)
      (let ((colon-pos (position #\: str :from-end t)))
        (if colon-pos
@@ -482,12 +583,21 @@ Returns a string with the formatted defpackage form."
                  (dolist (sym (cddr clause))
                    (format out "~%   ")
                    (print-symbol-string sym out)))
-                ;; :use, :export - print items on same line or separate lines depending on count
-                ((or (string-equal (first clause) ":use")
-                     (string-equal (first clause) ":export"))
+                ;; :use - print items on same line
+                ((string-equal (first clause) ":use")
                  (dolist (item (rest clause))
                    (format out " ")
                    (print-symbol-string item out)))
+                ;; :export - print each item on its own line
+                ((string-equal (first clause) ":export")
+                 (let ((first-item t))
+                   (dolist (item (rest clause))
+                     (if first-item
+                         (progn
+                           (format out " ")
+                           (setf first-item nil))
+                         (format out "~%           "))
+                     (print-symbol-string item out))))
                 ;; Other clauses
                 (t
                  (dolist (item (rest clause))

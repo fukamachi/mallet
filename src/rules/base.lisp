@@ -29,7 +29,10 @@
            #:with-safe-code-expr
            #:should-create-violation-p
            #:find-actual-position
-           #:collect-violations-from-subexprs))
+           #:collect-violations-from-subexprs
+           ;; Auto-fix helpers
+           #:find-clause-line-range
+           #:find-expression-end-position))
 (in-package #:mallet/rules/base)
 
 ;;; Rule class
@@ -527,3 +530,129 @@ Example usage:
                (return-from ,block-name nil)))
 
            ,@body)))))
+
+;;; Auto-Fix Helpers
+
+(defun find-clause-line-range (text violation-line clause-keyword)
+  "Find the line range of a clause by searching for CLAUSE-KEYWORD.
+TEXT is the full source text.
+VIOLATION-LINE is a line number (1-based) that's within the clause.
+CLAUSE-KEYWORD is a string to search for (e.g., \":local-nicknames\").
+
+Returns a violation-fix with :type :delete-lines, or NIL if not found.
+
+This searches backwards from VIOLATION-LINE to find the clause keyword,
+then scans forward counting parens to find where the clause ends.
+Works by simple character-by-character paren counting, which is sufficient
+for standard Lisp formatting.
+
+Useful for minimal auto-fixes that preserve comments and formatting."
+  (check-type text string)
+  (check-type violation-line integer)
+  (check-type clause-keyword string)
+
+  (let* ((lines (uiop:split-string text :separator '(#\Newline)))
+         (start-line nil)
+         (end-line nil))
+
+    ;; Search backwards from violation-line to find the clause keyword
+    (loop for line-num from (1- violation-line) downto 1
+          for line-text = (nth (1- line-num) lines)
+          when (search clause-keyword line-text :test #'char-equal)
+            do (setf start-line line-num)
+               (return))
+
+    (unless start-line
+      (return-from find-clause-line-range nil))
+
+    ;; Find where the clause ends by scanning forward and counting parens
+    (let ((paren-depth 0)
+          (found-open nil))
+      (loop for line-num from start-line to (length lines)
+            for line-text = (nth (1- line-num) lines)
+            do (loop for ch across line-text
+                     do (cond
+                          ((char= ch #\()
+                           (incf paren-depth)
+                           (setf found-open t))
+                          ((char= ch #\))
+                           (decf paren-depth)
+                           (when (and found-open (zerop paren-depth))
+                             (setf end-line line-num)
+                             (return-from find-clause-line-range
+                               (violation:make-violation-fix
+                                :type :delete-lines
+                                :start-line start-line
+                                :end-line end-line)))))))
+
+      ;; If we get here, couldn't find balanced parens
+      nil)))
+
+(defun find-expression-end-position (text start-line start-column)
+  "Find the end position of an expression starting at (START-LINE, START-COLUMN).
+TEXT is the full source text.
+START-LINE is 1-based.
+START-COLUMN is 0-based, pointing to the opening paren.
+
+Returns (values end-line end-column) where end-column is 0-based and points
+one past the closing paren, or NIL if not found.
+
+Uses paren counting with basic string/char literal handling."
+  (check-type text string)
+  (check-type start-line (integer 1))
+  (check-type start-column (integer 0))
+
+  (let ((lines (uiop:split-string text :separator '(#\Newline)))
+        (paren-depth 0)
+        (found-open nil)
+        (in-string nil)
+        (in-char nil)
+        (escape-next nil))
+
+    ;; Start from the specified position
+    (loop for line-num from start-line to (length lines)
+          for line-text = (nth (1- line-num) lines)
+          for start-col = (if (= line-num start-line) start-column 0)
+          do (loop for col from start-col below (length line-text)
+                   for ch = (char line-text col)
+                   do (cond
+                        ;; Handle escape sequences
+                        (escape-next
+                         (setf escape-next nil))
+
+                        ;; Inside string literal
+                        (in-string
+                         (cond
+                           ((char= ch #\\)
+                            (setf escape-next t))
+                           ((char= ch #\")
+                            (setf in-string nil))))
+
+                        ;; Inside character literal
+                        (in-char
+                         (setf in-char nil))
+
+                        ;; Start of string literal
+                        ((char= ch #\")
+                         (setf in-string t))
+
+                        ;; Start of character literal (#\x)
+                        ((and (char= ch #\#)
+                              (< (1+ col) (length line-text))
+                              (char= (char line-text (1+ col)) #\\))
+                         (setf in-char t))
+
+                        ;; Count parens only when not in string/char
+                        ((char= ch #\()
+                         (incf paren-depth)
+                         (setf found-open t))
+
+                        ((char= ch #\))
+                         (decf paren-depth)
+                         (when (and found-open (zerop paren-depth))
+                           ;; Found the end - return position after the closing paren
+                           (return-from find-expression-end-position
+                             (values line-num (1+ col))))))))
+
+    ;; Didn't find balanced expression
+    nil))
