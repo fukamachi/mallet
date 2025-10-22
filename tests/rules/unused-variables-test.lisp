@@ -165,9 +165,9 @@
       ;; Filter out violations for other undefined variables (pos, text, etc)
       ;; We only care about start-pos and start-column
       (let ((start-pos-violations (remove-if-not
-                                    (lambda (v)
-                                      (search "start-pos" (violation:violation-message v)))
-                                    violations)))
+                                   (lambda (v)
+                                     (search "start-pos" (violation:violation-message v)))
+                                   violations)))
         (ok (null start-pos-violations)))))
 
   (testing "Valid: LET* variable used in subsequent binding"
@@ -261,41 +261,41 @@
                   (violation:violation-message (first violations))))))
 
   (testing "Valid: all destructured variables used"
-      (let* ((code "(destructuring-bind (x y) '(1 2)
+    (let* ((code "(destructuring-bind (x y) '(1 2)
                        (+ x y))")
-             (forms (parser:parse-forms code #p"test.lisp"))
-             (rule (make-instance 'rules:unused-variables-rule))
-             (violations (rules:check-form rule (first forms) #p"test.lisp")))
-        (ok (null violations))))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
 
-    (testing "Invalid: nested destructuring with unused"
-      (let* ((code "(destructuring-bind ((a b) c) '((1 2) 3)
+  (testing "Invalid: nested destructuring with unused"
+    (let* ((code "(destructuring-bind ((a b) c) '((1 2) 3)
                        (+ a c))")
-             (forms (parser:parse-forms code #p"test.lisp"))
-             (rule (make-instance 'rules:unused-variables-rule))
-             (violations (rules:check-form rule (first forms) #p"test.lisp")))
-        (ok (= (length violations) 1))
-        (ok (search "Variable 'b' is unused"
-                    (violation:violation-message (first violations)))))))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'b' is unused"
+                  (violation:violation-message (first violations)))))))
 
 (deftest multiple-value-bind-bindings
   (testing "Invalid: unused value binding"
-      (let* ((code "(multiple-value-bind (x y z) (values 1 2 3)
+    (let* ((code "(multiple-value-bind (x y z) (values 1 2 3)
                        (+ x y))")
-             (forms (parser:parse-forms code #p"test.lisp"))
-             (rule (make-instance 'rules:unused-variables-rule))
-             (violations (rules:check-form rule (first forms) #p"test.lisp")))
-        (ok (= (length violations) 1))
-        (ok (search "Variable 'z' is unused"
-                    (violation:violation-message (first violations))))))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'z' is unused"
+                  (violation:violation-message (first violations))))))
 
-    (testing "Valid: all value bindings used"
-      (let* ((code "(multiple-value-bind (a b) (values 1 2)
+  (testing "Valid: all value bindings used"
+    (let* ((code "(multiple-value-bind (a b) (values 1 2)
                        (+ a b))")
-             (forms (parser:parse-forms code #p"test.lisp"))
-             (rule (make-instance 'rules:unused-variables-rule))
-             (violations (rules:check-form rule (first forms) #p"test.lisp")))
-        (ok (null violations)))))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
 
 (deftest init-form-scoping
   (testing "Valid: parameter used in multiple-value-bind init-form"
@@ -842,7 +842,7 @@
       (ok (= (length violations) 1))
       (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations)))
-           "Should only report 'y' as unused, not the default value")))
+          "Should only report 'y' as unused, not the default value")))
 
   (testing "Valid: &allow-other-keys is not a variable"
     (let* ((code "(defun foo (x &key y &allow-other-keys)
@@ -854,11 +854,11 @@
       (ok (= (length violations) 1))
       (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations)))
-           "Should report only 'y' as unused")
+          "Should report only 'y' as unused")
       (ok (not (some (lambda (v)
                        (search "&allow-other-keys" (violation:violation-message v)))
                      violations))
-           "Should NOT report &allow-other-keys as unused variable")))
+          "Should NOT report &allow-other-keys as unused variable")))
 
   (testing "Valid: other lambda-list keywords are not variables"
     (let* ((code "(defmacro foo (x &body body)
@@ -870,7 +870,7 @@
       (ok (= (length violations) 1))
       (ok (search "Variable 'body' is unused"
                   (violation:violation-message (first violations)))
-           "Should report only 'body' as unused, not the &body keyword"))))
+          "Should report only 'body' as unused, not the &body keyword"))))
 
 (deftest loop-do-cond-false-positive
   (testing "Bug: Variable used in LOOP DO COND test clause (trivial-glob pattern.lisp:60)"
@@ -888,7 +888,7 @@
       ;; 'pattern' is used in the COND test clause (char pattern i)
       ;; Bug: DO loop handler was matching LOOP DO keyword and stopping search
       (ok (null violations)
-           "Should not report 'pattern' as unused when used in LOOP DO COND test")))
+          "Should not report 'pattern' as unused when used in LOOP DO COND test")))
 
   (testing "Valid: Simpler LOOP DO COND case"
     (let* ((code "(defun test-cond (pattern start end)
@@ -903,7 +903,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
-           "All parameters should be recognized as used")))
+          "All parameters should be recognized as used")))
 
   (testing "Valid: LOOP DO with nested IF"
     (let* ((code "(loop for item in list
@@ -914,7 +914,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
-           "Pattern used in IF test should not be flagged as unused"))))
+          "Pattern used in IF test should not be flagged as unused"))))
 
 (deftest let-init-form-false-positive
   (testing "Bug: Variable used only in LET init form (trivial-glob pattern.lisp:70)"
@@ -931,7 +931,7 @@
       ;; Bug: extract-bindings was treating (content bracket-content) as destructuring
       ;; and extracting both as variable names, causing shadowing detection to fail
       (ok (null violations)
-           "Should not report 'bracket-content' as unused when used in LET init form")))
+          "Should not report 'bracket-content' as unused when used in LET init form")))
 
   (testing "Valid: Simpler LET init form case"
     (let* ((code "(defun test-let (bracket-content)
@@ -941,7 +941,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
-           "Parameter used in init form should not be flagged as unused")))
+          "Parameter used in init form should not be flagged as unused")))
 
   (testing "Valid: Multiple LET bindings with init forms"
     (let* ((code "(defun process (input1 input2)
@@ -1298,11 +1298,11 @@
           (config (mallet/config:make-config
                    :rules (list (rules:make-rule ,rule-name)))))
      (unwind-protect
-         (progn
-           (with-open-file (out test-file :direction :output :if-exists :supersede)
-             (write-string ,code out))
-           (let ((violations (mallet/engine:lint-file test-file :config config)))
-             ,@body))
+          (progn
+            (with-open-file (out test-file :direction :output :if-exists :supersede)
+              (write-string ,code out))
+            (let ((violations (mallet/engine:lint-file test-file :config config)))
+              ,@body))
        (when (probe-file test-file)
          (delete-file test-file)))))
 
@@ -1530,11 +1530,11 @@
           (config (mallet/config:make-config
                    :rules (list (rules:make-rule ,rule-name)))))
      (unwind-protect
-         (progn
-           (with-open-file (out test-file :direction :output :if-exists :supersede)
-             (write-string ,code out))
-           (let ((violations (mallet/engine:lint-file test-file :config config)))
-             ,@body))
+          (progn
+            (with-open-file (out test-file :direction :output :if-exists :supersede)
+              (write-string ,code out))
+            (let ((violations (mallet/engine:lint-file test-file :config config)))
+              ,@body))
        (when (probe-file test-file)
          (delete-file test-file)))))
 

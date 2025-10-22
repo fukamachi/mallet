@@ -165,45 +165,45 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...),
     ;; Parse top-level options
     (loop for item in (rest sexp)
           when (consp item)
-          do (let ((key (first item)))
-               (case key
-                 (:extends
-                  ;; Process extends to get base rules
-                  (let ((extends-value (second item)))
-                    (setf extends (if (keywordp extends-value)
-                                      (get-built-in-config extends-value)
-                                      (load-config extends-value)))))
-                 (:enable
-                  ;; New syntax: (:enable :rule-name :option value ...)
-                  (let* ((rule-name (second item))
-                         (options (cddr item)))
-                    (push (cons rule-name options) rule-specs)))
-                 (:disable
-                  ;; New syntax: (:disable :rule-name)
-                  (let ((rule-name (second item)))
-                    (push rule-name disabled-rules)))
-                 (:ignore
-                  ;; Ignore patterns: (:ignore "pattern1" "pattern2" ...)
-                  (setf ignore-patterns (rest item)))
-                 (:for-paths
-                  ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
-                  (let* ((patterns (second item))
-                         (override-forms (cddr item))
-                         (expanded-patterns (mapcar #'expand-path-pattern patterns))
-                         ;; Get base rules from extends or current specs
-                         (base-rules (if extends
-                                         (config-rules extends)
-                                         (mapcar #'create-rule-from-spec (reverse rule-specs))))
-                         (base-disabled (if extends
-                                            (config-disabled-rules extends)
-                                            disabled-rules)))
-                    (multiple-value-bind (override-rules override-disabled)
-                        (parse-override-rules override-forms base-rules base-disabled)
-                      (push (make-path-override
-                             :patterns expanded-patterns
-                             :rules override-rules
-                             :disabled-rules override-disabled)
-                            path-rules)))))))
+            do (let ((key (first item)))
+                 (case key
+                   (:extends
+                    ;; Process extends to get base rules
+                    (let ((extends-value (second item)))
+                      (setf extends (if (keywordp extends-value)
+                                        (get-built-in-config extends-value)
+                                        (load-config extends-value)))))
+                   (:enable
+                    ;; New syntax: (:enable :rule-name :option value ...)
+                    (let* ((rule-name (second item))
+                           (options (cddr item)))
+                      (push (cons rule-name options) rule-specs)))
+                   (:disable
+                    ;; New syntax: (:disable :rule-name)
+                    (let ((rule-name (second item)))
+                      (push rule-name disabled-rules)))
+                   (:ignore
+                    ;; Ignore patterns: (:ignore "pattern1" "pattern2" ...)
+                    (setf ignore-patterns (rest item)))
+                   (:for-paths
+                    ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
+                    (let* ((patterns (second item))
+                           (override-forms (cddr item))
+                           (expanded-patterns (mapcar #'expand-path-pattern patterns))
+                           ;; Get base rules from extends or current specs
+                           (base-rules (if extends
+                                           (config-rules extends)
+                                           (mapcar #'create-rule-from-spec (reverse rule-specs))))
+                           (base-disabled (if extends
+                                              (config-disabled-rules extends)
+                                              disabled-rules)))
+                      (multiple-value-bind (override-rules override-disabled)
+                          (parse-override-rules override-forms base-rules base-disabled)
+                        (push (make-path-override
+                               :patterns expanded-patterns
+                               :rules override-rules
+                               :disabled-rules override-disabled)
+                              path-rules)))))))
 
     ;; Create rule instances
     (let ((rules (mapcar #'create-rule-from-spec (nreverse rule-specs))))
@@ -259,11 +259,11 @@ Sets root-dir to the directory containing the config file."
                                           pattern)))
                          (glob:glob-path-match pattern file-namestring)))
                      (path-override-patterns path-override))
-          ;; Found matching path-specific rules - filter out disabled ones
-          return (remove-if (lambda (rule)
-                              (member (rules:rule-name rule)
-                                      (path-override-disabled-rules path-override)))
-                            (path-override-rules path-override))
+            ;; Found matching path-specific rules - filter out disabled ones
+            return (remove-if (lambda (rule)
+                                (member (rules:rule-name rule)
+                                        (path-override-disabled-rules path-override)))
+                              (path-override-rules path-override))
           ;; No match? Use base rules, filtering out disabled ones
           finally (return (remove-if (lambda (rule)
                                        (member (rules:rule-name rule)
@@ -289,28 +289,28 @@ Sets root-dir to the directory containing the config file."
 Enables rules that catch bugs or follow strong community conventions.
 Style preferences are disabled to keep output clean."
   (let ((enabled-rules
-         '(;; Universally accepted - keep enabled
-           :trailing-whitespace
-           :no-tabs
-           :final-newline
-           :wrong-otherwise
-           :unused-variables
-           :unused-local-functions
-           :unused-local-nicknames
-           :unused-imported-symbols
-           :asdf-component-strings
-           :mixed-optional-and-key
-           :if-without-else))
+          '(;; Universally accepted - keep enabled
+            :trailing-whitespace
+            :no-tabs
+            :final-newline
+            :wrong-otherwise
+            :unused-variables
+            :unused-local-functions
+            :unused-local-nicknames
+            :unused-imported-symbols
+            :asdf-component-strings
+            :mixed-optional-and-key
+            :if-without-else))
         (disabled-rules
-         '(;; Style preferences - disabled (too noisy, no consensus)
-           :line-length
-           :consecutive-blank-lines
-           :bare-progn-in-if
-           :missing-otherwise
-           :constant-naming
-           :special-variable-naming
-           ;; LOOP variables - disabled
-           :unused-loop-variables)))
+          '(;; Style preferences - disabled (too noisy, no consensus)
+            :line-length
+            :consecutive-blank-lines
+            :bare-progn-in-if
+            :missing-otherwise
+            :constant-naming
+            :special-variable-naming
+            ;; LOOP variables - disabled
+            :unused-loop-variables)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
@@ -319,30 +319,30 @@ Style preferences are disabled to keep output clean."
   "Create configuration with all rules enabled.
 Useful for exploration and discovering what rules exist."
   (let ((all-rules
-         '(;; ERROR: Objectively wrong code
-           :wrong-otherwise
-           ;; WARNING: Likely bugs or dangerous patterns
-           :unused-variables
-           :unused-local-functions
-           :missing-otherwise
-           :mixed-optional-and-key
-           ;; INFO: Code quality suggestions
-           :unused-local-nicknames
-           :unused-imported-symbols
-           :constant-naming
-           :unused-loop-variables
-           ;; CONVENTION: Style/idiom suggestions
-           :if-without-else
-           :bare-progn-in-if
-           :special-variable-naming
-           :asdf-component-strings
-           ;; FORMAT: Consensus formatting (Emacs/SLIME standards)
-           :no-tabs
-           :trailing-whitespace
-           :final-newline
-           ;; INFO: Subjective preferences
-           (:line-length :max-length 100)
-           (:consecutive-blank-lines :max-consecutive 2))))
+          '(;; ERROR: Objectively wrong code
+            :wrong-otherwise
+            ;; WARNING: Likely bugs or dangerous patterns
+            :unused-variables
+            :unused-local-functions
+            :missing-otherwise
+            :mixed-optional-and-key
+            ;; INFO: Code quality suggestions
+            :unused-local-nicknames
+            :unused-imported-symbols
+            :constant-naming
+            :unused-loop-variables
+            ;; CONVENTION: Style/idiom suggestions
+            :if-without-else
+            :bare-progn-in-if
+            :special-variable-naming
+            :asdf-component-strings
+            ;; FORMAT: Consensus formatting (Emacs/SLIME standards)
+            :no-tabs
+            :trailing-whitespace
+            :final-newline
+            ;; INFO: Subjective preferences
+            (:line-length :max-length 100)
+            (:consecutive-blank-lines :max-consecutive 2))))
     (make-config
      :rules (mapcar (lambda (spec)
                       (if (consp spec)

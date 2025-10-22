@@ -115,19 +115,19 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                 (t
                  ;; Apply pending suppress-next if we have one
                  (unwind-protect
-                     (progn
-                       (when pending-next-form-suppression
-                         (suppression:push-scope-suppression *suppression-state*
-                                                            pending-next-form-suppression))
-                       ;; Check form with all rules
-                       (dolist (rule rules)
-                         (when (and (eq (rules:rule-type rule) :form)
-                                    ;; Only run rule if file has extension AND it matches rule's file-types
-                                    (and file-type
-                                         (member file-type (rules:rule-file-types rule))))
-                           (setf violations
-                                 (nconc violations
-                                        (rules:check-form rule form file))))))
+                      (progn
+                        (when pending-next-form-suppression
+                          (suppression:push-scope-suppression *suppression-state*
+                                                              pending-next-form-suppression))
+                        ;; Check form with all rules
+                        (dolist (rule rules)
+                          (when (and (eq (rules:rule-type rule) :form)
+                                     ;; Only run rule if file has extension AND it matches rule's file-types
+                                     (and file-type
+                                          (member file-type (rules:rule-file-types rule))))
+                            (setf violations
+                                  (nconc violations
+                                         (rules:check-form rule form file))))))
                    ;; AUTOMATIC CLEANUP: Pop scope and clear pending
                    (when pending-next-form-suppression
                      (suppression:pop-scope-suppression *suppression-state*)
@@ -151,6 +151,6 @@ Ignored files are excluded from results entirely."
 
   (loop for file in files
         for (violations ignored-p) = (multiple-value-list
-                                       (lint-file file :config config))
+                                      (lint-file file :config config))
         unless ignored-p
-        collect (cons file violations)))
+          collect (cons file violations)))

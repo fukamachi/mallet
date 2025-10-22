@@ -9,7 +9,7 @@
 (defmacro with-test-file ((tmpfile-var code) &body body)
   "Helper macro to create temporary file with CODE and clean up after."
   `(uiop:with-temporary-file (:stream stream :pathname ,tmpfile-var
-                                      :type "lisp" :keep t)
+                              :type "lisp" :keep t)
      (write-string ,code stream)
      (finish-output stream)
      ,@body))

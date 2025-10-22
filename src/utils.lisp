@@ -29,7 +29,7 @@ Also handles Eclector reader objects gracefully."
           (symbolp (first str))
           (or (eq (first str) 'eclector.reader:unquote)
               (and (eq (symbol-package (first str))
-                      (find-package "ECLECTOR.READER"))
+                       (find-package "ECLECTOR.READER"))
                    (string-equal (symbol-name (first str)) "UNQUOTE"))))
      ;; Recursively process the unquoted value
      (when (rest str)

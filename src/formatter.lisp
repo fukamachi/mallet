@@ -81,7 +81,7 @@ Returns a plist of severity counts (:error N :warning M ...)."
 
     ;; Return counts as plist
     (loop for severity being the hash-keys of severity-counts
-          using (hash-value count)
+            using (hash-value count)
           nconc (list severity count))))
 
 (defun format-text-summary (severity-counts &key (stream *standard-output*))
@@ -93,7 +93,7 @@ SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
          (format-count (or (getf severity-counts :format) 0))
          (info-count (or (getf severity-counts :info) 0))
          (total-violations (+ error-count warning-count convention-count
-                             format-count info-count)))
+                              format-count info-count)))
 
     (format stream "~%")
     (if (zerop total-violations)
@@ -114,9 +114,9 @@ SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
             (push (format nil "~A info" info-count) parts))
 
           (let ((summary (format nil "✗ ~A ~A (~{~A~^, ~})"
-                                total-violations
-                                problem-word
-                                (nreverse parts))))
+                                 total-violations
+                                 problem-word
+                                 (nreverse parts))))
             (format stream "~A~%"
                     (colorize summary *color-red* stream)))))
 

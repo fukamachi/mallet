@@ -84,17 +84,17 @@
 
       ;; Should be suppressed for that function
       (ok (suppression:rule-suppressed-p state :line-length
-                                        :form-type :function-body
-                                        :function-name 'factorial))
+                                         :form-type :function-body
+                                         :function-name 'factorial))
 
       ;; Should NOT be suppressed for other functions
       (ng (suppression:rule-suppressed-p state :line-length
-                                        :form-type :function-body
-                                        :function-name 'other-function))
+                                         :form-type :function-body
+                                         :function-name 'other-function))
 
       ;; Should NOT be suppressed at top-level
       (ng (suppression:rule-suppressed-p state :line-length
-                                        :form-type :top-level)))))
+                                         :form-type :top-level)))))
 
 (deftest suppression-state-function-multiple-rules
   (testing "Multiple rules for same function"
@@ -106,11 +106,11 @@
 
       ;; Both rules should be suppressed
       (ok (suppression:rule-suppressed-p state :line-length
-                                        :form-type :function-body
-                                        :function-name 'factorial))
+                                         :form-type :function-body
+                                         :function-name 'factorial))
       (ok (suppression:rule-suppressed-p state :if-without-else
-                                        :form-type :function-body
-                                        :function-name 'factorial)))))
+                                         :form-type :function-body
+                                         :function-name 'factorial)))))
 
 (deftest suppression-state-function-all
   (testing "Function-specific :all suppression"
@@ -119,11 +119,11 @@
 
       ;; All rules should be suppressed for that function
       (ok (suppression:rule-suppressed-p state :line-length
-                                        :form-type :function-body
-                                        :function-name 'legacy-code))
+                                         :form-type :function-body
+                                         :function-name 'legacy-code))
       (ok (suppression:rule-suppressed-p state :any-rule
-                                        :form-type :function-body
-                                        :function-name 'legacy-code)))))
+                                         :form-type :function-body
+                                         :function-name 'legacy-code)))))
 
 (deftest suppression-state-combined
   (testing "Combined suppressions (region + scope + function)"
@@ -140,34 +140,34 @@
       ;; Check combinations
       ;; 1. In function foo: all three rules suppressed
       (ok (suppression:rule-suppressed-p state :line-length
-                                        :form-type :function-body
-                                        :function-name 'foo))
+                                         :form-type :function-body
+                                         :function-name 'foo))
       (ok (suppression:rule-suppressed-p state :unused-variables
-                                        :form-type :function-body
-                                        :function-name 'foo))
+                                         :form-type :function-body
+                                         :function-name 'foo))
       (ok (suppression:rule-suppressed-p state :if-without-else
-                                        :form-type :function-body
-                                        :function-name 'foo))
+                                         :form-type :function-body
+                                         :function-name 'foo))
 
       ;; 2. In other function: only region and scope
       (ok (suppression:rule-suppressed-p state :line-length
-                                        :form-type :function-body
-                                        :function-name 'bar))
+                                         :form-type :function-body
+                                         :function-name 'bar))
       (ok (suppression:rule-suppressed-p state :unused-variables
-                                        :form-type :function-body
-                                        :function-name 'bar))
+                                         :form-type :function-body
+                                         :function-name 'bar))
       (ng (suppression:rule-suppressed-p state :if-without-else
-                                        :form-type :function-body
-                                        :function-name 'bar))
+                                         :form-type :function-body
+                                         :function-name 'bar))
 
       ;; 3. Pop scope - only region remains
       (suppression:pop-scope-suppression state)
       (ok (suppression:rule-suppressed-p state :line-length
-                                        :form-type :function-body
-                                        :function-name 'bar))
+                                         :form-type :function-body
+                                         :function-name 'bar))
       (ng (suppression:rule-suppressed-p state :unused-variables
-                                        :form-type :function-body
-                                        :function-name 'bar)))))
+                                         :form-type :function-body
+                                         :function-name 'bar)))))
 
 (deftest suppression-next-form
   (testing "Next-form suppression"
@@ -200,8 +200,8 @@
       ;; Test 1: Without :mallet in *features*
       (with-open-file (in file)
         (let ((forms (loop for form = (read in nil :eof)
-                          until (eq form :eof)
-                          collect form)))
+                           until (eq form :eof)
+                           collect form)))
           ;; Should only see the defun, not the declaim
           (ok (= (length forms) 1))
           (ok (eq (first (first forms)) 'defun))))
@@ -211,8 +211,8 @@
       (let ((*features* (cons :mallet *features*)))
         (with-open-file (in file)
           (let ((forms (loop for form = (read in nil :eof)
-                            until (eq form :eof)
-                            collect form)))
+                             until (eq form :eof)
+                             collect form)))
             ;; Should see both declaim and defun
             (ok (= (length forms) 2))
             (ok (eq (first (first forms)) 'declaim))

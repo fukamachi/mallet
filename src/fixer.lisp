@@ -58,7 +58,7 @@ Returns list of violations that were successfully fixed."
 
     ;; Sort violations by line number (bottom to top) to preserve line numbers
     (let ((sorted (sort (copy-list violations) #'>
-                       :key #'violation:violation-line)))
+                        :key #'violation:violation-line)))
 
       ;; Apply each fix
       (dolist (v sorted)
@@ -159,7 +159,7 @@ Returns modified text."
             for line = (read-line in nil nil)
             while line
             do (unless (and (<= start-line current-line)
-                           (<= current-line end-line))
+                            (<= current-line end-line))
                  (write-line line out))))))
 
 (defun apply-replace-form (text start-line end-line replacement-content)

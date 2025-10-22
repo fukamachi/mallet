@@ -148,11 +148,11 @@ SOURCE is a cons cell (start . end) of character positions."
 Returns a vector where element N is the character position of line N (0-based)."
   (let ((len (length text)))
     (coerce
-      (cons 0
-            (loop for i from 0 below len
-                  when (char= (char text i) #\Newline)
-                  collect (1+ i)))
-      'vector)))
+     (cons 0
+           (loop for i from 0 below len
+                 when (char= (char text i) #\Newline)
+                   collect (1+ i)))
+     'vector)))
 
 (defun char-pos-to-line-column (char-pos line-starts)
   "Convert character position CHAR-POS to (line . column).
@@ -162,11 +162,11 @@ Returns 1-based line and 0-based column."
     (loop for line-num from 1 below line-count
           for line-start = (aref line-starts line-num)
           when (< char-pos line-start)
-          do (let ((prev-line-start (aref line-starts (1- line-num))))
-               (return (values line-num (- char-pos prev-line-start))))
+            do (let ((prev-line-start (aref line-starts (1- line-num))))
+                 (return (values line-num (- char-pos prev-line-start))))
           finally
-          (return (values line-count
-                          (- char-pos (aref line-starts (1- line-count))))))))
+             (return (values line-count
+                             (- char-pos (aref line-starts (1- line-count))))))))
 
 (defun extract-source (text source)
   "Extract source text from TEXT using SOURCE range (start . end)."

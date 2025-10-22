@@ -73,12 +73,12 @@ Suppressions are handled automatically by the :around method."
                      ;; Recursively check nested forms
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule head file
-                                                                        actual-line actual-column
-                                                                        position-map))
+                                                                      actual-line actual-column
+                                                                      position-map))
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule rest-args file
-                                                                        actual-line actual-column
-                                                                        position-map)))))))
+                                                                      actual-line actual-column
+                                                                      position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))
@@ -170,12 +170,12 @@ Suppressions are handled automatically by the :around method."
                      ;; Recursively check nested forms
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule head file
-                                                                        actual-line actual-column
-                                                                        position-map))
+                                                                      actual-line actual-column
+                                                                      position-map))
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule rest-args file
-                                                                        actual-line actual-column
-                                                                        position-map)))))))
+                                                                      actual-line actual-column
+                                                                      position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))
@@ -286,12 +286,12 @@ Suppressions are handled automatically by the :around method."
                      ;; Recursively check nested forms
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule head file
-                                                                        actual-line actual-column
-                                                                        position-map))
+                                                                      actual-line actual-column
+                                                                      position-map))
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule rest-args file
-                                                                        actual-line actual-column
-                                                                        position-map)))))))
+                                                                      actual-line actual-column
+                                                                      position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))
@@ -380,12 +380,12 @@ Suppressions are handled automatically by the :around method."
                      ;; Recursively check nested forms
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule head file
-                                                                        actual-line actual-column
-                                                                        position-map))
+                                                                      actual-line actual-column
+                                                                      position-map))
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule rest-args file
-                                                                        actual-line actual-column
-                                                                        position-map)))))))
+                                                                      actual-line actual-column
+                                                                      position-map)))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))

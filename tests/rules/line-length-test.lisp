@@ -36,9 +36,9 @@
 
   (testing "Multiple lines, one exceeding"
     (let ((text (format nil "~A~%~A~%~A"
-                       (make-string 50 :initial-element #\a)
-                       (make-string 100 :initial-element #\b)
-                       (make-string 50 :initial-element #\c)))
+                        (make-string 50 :initial-element #\a)
+                        (make-string 100 :initial-element #\b)
+                        (make-string 50 :initial-element #\c)))
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:line-length-rule)))
       (let ((violations (rules:check-text rule text file)))
@@ -48,9 +48,9 @@
 
   (testing "Multiple lines exceeding"
     (let ((text (format nil "~A~%~A~%~A"
-                       (make-string 100 :initial-element #\a)
-                       (make-string 50 :initial-element #\b)
-                       (make-string 90 :initial-element #\c)))
+                        (make-string 100 :initial-element #\a)
+                        (make-string 50 :initial-element #\b)
+                        (make-string 90 :initial-element #\c)))
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:line-length-rule)))
       (let ((violations (rules:check-text rule text file)))

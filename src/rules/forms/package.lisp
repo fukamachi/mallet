@@ -47,7 +47,7 @@
                                        (base:symbol-matches-p (first e) "IN-PACKAGE"))))
                               forms-after-defpkg))
              (code-forms (when in-package-pos
-                          (nthcdr (1+ in-package-pos) forms-after-defpkg)))
+                           (nthcdr (1+ in-package-pos) forms-after-defpkg)))
              (position-map (when defpkg-form (parser:form-position-map defpkg-form))))
 
         ;; Only check if there's actual code after in-package (not a package-only file)
@@ -56,22 +56,22 @@
             (loop for (nickname package nick-expr) in nicknames
                   for refs = (find-nickname-references code-forms nickname)
                   when (zerop (length refs))
-                  collect (multiple-value-bind (line column)
-                              (if (and position-map nick-expr)
-                                  (parser:find-position nick-expr position-map
-                                                       (parser:form-line form)
-                                                       (parser:form-column form))
-                                  (values (parser:form-line form) (parser:form-column form)))
-                            (make-instance 'violation:violation
-                                           :rule (base:rule-name rule)
-                                           :file file
-                                           :line line
-                                           :column column
-                                           :end-line (parser:form-end-line form)
-                                           :end-column (parser:form-end-column form)
-                                           :message (format nil "Local nickname '~A' (for ~A) is unused"
-                                                            nickname package)
-                                           :severity (base:rule-severity rule))))))))))
+                    collect (multiple-value-bind (line column)
+                                (if (and position-map nick-expr)
+                                    (parser:find-position nick-expr position-map
+                                                          (parser:form-line form)
+                                                          (parser:form-column form))
+                                    (values (parser:form-line form) (parser:form-column form)))
+                              (make-instance 'violation:violation
+                                             :rule (base:rule-name rule)
+                                             :file file
+                                             :line line
+                                             :column column
+                                             :end-line (parser:form-end-line form)
+                                             :end-column (parser:form-end-column form)
+                                             :message (format nil "Local nickname '~A' (for ~A) is unused"
+                                                              nickname package)
+                                             :severity (base:rule-severity rule))))))))))
 
 (defmethod base:make-fix ((rule unused-local-nicknames-rule) text file violation)
   "Generate fix for unused local nickname - remove it from defpackage."
@@ -160,7 +160,7 @@
                                        (base:symbol-matches-p (first e) "IN-PACKAGE"))))
                               forms-after-defpkg))
              (code-forms (when in-package-pos
-                          (nthcdr (1+ in-package-pos) forms-after-defpkg)))
+                           (nthcdr (1+ in-package-pos) forms-after-defpkg)))
              (position-map (when defpkg-form (parser:form-position-map defpkg-form))))
 
         ;; Only check if there's actual code after in-package (not a package-only file)
@@ -181,8 +181,8 @@
                       (multiple-value-bind (line column)
                           (if (and position-map sym-expr)
                               (parser:find-position sym-expr position-map
-                                                   (parser:form-line form)
-                                                   (parser:form-column form))
+                                                    (parser:form-line form)
+                                                    (parser:form-column form))
                               (values (parser:form-line form) (parser:form-column form)))
                         (push (make-instance 'violation:violation
                                              :rule (base:rule-name rule)
@@ -210,7 +210,7 @@
          (pkg-start (search " from " message))
          (pkg-end (when pkg-start (search " is unused" message)))
          (package (when (and pkg-start pkg-end)
-                   (string-upcase (string-trim " " (subseq message (+ pkg-start 6) pkg-end))))))
+                    (string-upcase (string-trim " " (subseq message (+ pkg-start 6) pkg-end))))))
     (unless (and symbol package)
       (return-from base:make-fix nil))
 
@@ -301,13 +301,13 @@ Returns list of strings where nickname was found."
   (let ((references '()))
     (dolist (form forms)
       (base:traverse-expr (parser:form-expr form)
-        (lambda (expr)
-          (when (and (stringp expr)
-                     (position #\: expr :test #'char=))
-            (let ((colon-pos (position #\: expr :test #'char=)))
-              (when (string-equal (subseq expr 0 colon-pos)
-                                  nickname)
-                (push expr references)))))))
+                          (lambda (expr)
+                            (when (and (stringp expr)
+                                       (position #\: expr :test #'char=))
+                              (let ((colon-pos (position #\: expr :test #'char=)))
+                                (when (string-equal (subseq expr 0 colon-pos)
+                                                    nickname)
+                                  (push expr references)))))))
     references))
 
 (defun find-symbol-references (forms symbol)
@@ -318,10 +318,10 @@ Returns list of strings where symbol was found."
   (let ((references '()))
     (dolist (form forms)
       (base:traverse-expr (parser:form-expr form)
-        (lambda (expr)
-          (when (and (stringp expr)
-                     (string-equal (base:symbol-name-from-string expr) symbol))
-            (push expr references)))))
+                          (lambda (expr)
+                            (when (and (stringp expr)
+                                       (string-equal (base:symbol-name-from-string expr) symbol))
+                              (push expr references)))))
     references))
 
 ;;; Defpackage Modification Helpers for Auto-Fix
@@ -356,18 +356,18 @@ Returns the modified defpackage form, or NIL if nickname not found."
           (cons (second defpackage-form)  ; package name
                 (loop for clause in (cddr defpackage-form)
                       collect (if (and (consp clause)
-                                      (stringp (first clause))
-                                      (string-equal (first clause) ":local-nicknames"))
+                                       (stringp (first clause))
+                                       (string-equal (first clause) ":local-nicknames"))
                                   ;; This is the :local-nicknames clause
                                   (let ((filtered-nicknames
-                                         (loop for pair in (rest clause)
-                                               unless (and (consp pair)
-                                                          (stringp (first pair))
-                                                          (string-equal
-                                                           (string-trim "#:" (first pair))
-                                                           (string-trim "#:" nickname)))
-                                               collect pair
-                                               else do (setf found t))))
+                                          (loop for pair in (rest clause)
+                                                unless (and (consp pair)
+                                                            (stringp (first pair))
+                                                            (string-equal
+                                                             (string-trim "#:" (first pair))
+                                                             (string-trim "#:" nickname)))
+                                                  collect pair
+                                                else do (setf found t))))
                                     (setf modified t)
                                     ;; If there are remaining nicknames, keep the clause
                                     ;; Otherwise, don't include it (remove empty clause)
@@ -389,22 +389,22 @@ Returns the modified defpackage form, or NIL if symbol not found."
           (cons (second defpackage-form)  ; package name
                 (loop for clause in (cddr defpackage-form)
                       collect (if (and (consp clause)
-                                      (stringp (first clause))
-                                      (string-equal (first clause) ":import-from"))
+                                       (stringp (first clause))
+                                       (string-equal (first clause) ":import-from"))
                                   ;; This is an :import-from clause
                                   (let* ((pkg-name (second clause))
                                          (symbols (cddr clause)))
                                     (if (string-equal (string-trim "#:" pkg-name)
-                                                     (string-trim "#:" package))
+                                                      (string-trim "#:" package))
                                         ;; This is the package we're looking for
                                         (let ((filtered-symbols
-                                               (loop for sym in symbols
-                                                     unless (and (stringp sym)
-                                                                (string-equal
-                                                                 (string-trim "#:" sym)
-                                                                 (string-trim "#:" symbol)))
-                                                     collect sym
-                                                     else do (setf found t))))
+                                                (loop for sym in symbols
+                                                      unless (and (stringp sym)
+                                                                  (string-equal
+                                                                   (string-trim "#:" sym)
+                                                                   (string-trim "#:" symbol)))
+                                                        collect sym
+                                                      else do (setf found t))))
                                           (setf modified t)
                                           ;; If there are remaining symbols, keep the clause
                                           ;; Otherwise, don't include it (remove empty clause)

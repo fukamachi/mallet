@@ -59,18 +59,18 @@
                         (when (>= (length current-expr) 3)
                           (loop for item in (cddr current-expr)
                                 when (consp item)
-                                do (let ((result (check-lambda-list-mixed item position-map fallback-line fallback-column "defmethod")))
-                                     (when (and result
-                                                (base:should-create-violation-p rule))
-                                       (push (make-instance 'violation:violation
-                                                            :rule :mixed-optional-and-key
-                                                            :file file
-                                                            :line (first result)
-                                                            :column (second result)
-                                                            :severity (base:rule-severity rule)
-                                                            :message (third result))
-                                             violations)))
-                                   (return))))
+                                  do (let ((result (check-lambda-list-mixed item position-map fallback-line fallback-column "defmethod")))
+                                       (when (and result
+                                                  (base:should-create-violation-p rule))
+                                         (push (make-instance 'violation:violation
+                                                              :rule :mixed-optional-and-key
+                                                              :file file
+                                                              :line (first result)
+                                                              :column (second result)
+                                                              :severity (base:rule-severity rule)
+                                                              :message (third result))
+                                               violations)))
+                                     (return))))
                        ;; lambda (lambda lambda-list ...)
                        ((base:symbol-matches-p operator "LAMBDA")
                         (when (>= (length current-expr) 2)

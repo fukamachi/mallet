@@ -55,14 +55,14 @@
                                (multiple-value-bind (var-line var-column)
                                    (base:find-actual-position var-name-expr position-map fallback-line fallback-column)
                                  (push (make-instance 'violation:violation
-                                                    :rule :special-variable-naming
-                                                    :file file
-                                                    :line var-line
-                                                    :column var-column
-                                                    :severity (base:rule-severity rule)
-                                                    :message (format nil "Special variable '~A' should be named *~A*"
-                                                                     var-name
-                                                                     (string-trim '(#\*) var-name)))
+                                                      :rule :special-variable-naming
+                                                      :file file
+                                                      :line var-line
+                                                      :column var-column
+                                                      :severity (base:rule-severity rule)
+                                                      :message (format nil "Special variable '~A' should be named *~A*"
+                                                                       var-name
+                                                                       (string-trim '(#\*) var-name)))
                                        violations)))))))))
 
                  ;; Recursively check nested forms
@@ -72,7 +72,7 @@
                    (dolist (subexpr current-expr)
                      (when (consp subexpr)
                        (a:nconcf violations (base:check-form-recursive rule subexpr file
-                                                                        fallback-line fallback-column))))))))
+                                                                       fallback-line fallback-column))))))))
       (check-expr expr line column))
     violations))
 
@@ -120,14 +120,14 @@
                                (multiple-value-bind (const-line const-column)
                                    (base:find-actual-position const-name-expr position-map fallback-line fallback-column)
                                  (push (make-instance 'violation:violation
-                                                    :rule :constant-naming
-                                                    :file file
-                                                    :line const-line
-                                                    :column const-column
-                                                    :severity (base:rule-severity rule)
-                                                    :message (format nil "Constant '~A' should be named +~A+"
-                                                                     const-name
-                                                                     (string-trim '(#\+) const-name)))
+                                                      :rule :constant-naming
+                                                      :file file
+                                                      :line const-line
+                                                      :column const-column
+                                                      :severity (base:rule-severity rule)
+                                                      :message (format nil "Constant '~A' should be named +~A+"
+                                                                       const-name
+                                                                       (string-trim '(#\+) const-name)))
                                        violations)))))))))
 
                  ;; Recursively check nested forms
@@ -137,7 +137,7 @@
                    (dolist (subexpr current-expr)
                      (when (consp subexpr)
                        (a:nconcf violations (base:check-form-recursive rule subexpr file
-                                                                        fallback-line fallback-column))))))))
+                                                                       fallback-line fallback-column))))))))
       (check-expr expr line column))
     violations))
 

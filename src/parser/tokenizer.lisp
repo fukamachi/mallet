@@ -51,13 +51,13 @@ Returns a list of TOKEN objects."
            (let* ((start-pos pos)
                   (start-column column)
                   (semicolon-count
-                   (count-leading-semicolons text start-pos))
+                    (count-leading-semicolons text start-pos))
                   (comment-type
-                   (case semicolon-count
-                     (1 :comment-inline)
-                     (2 :comment-line)
-                     (3 :comment-section)
-                     (otherwise :comment-file)))
+                    (case semicolon-count
+                      (1 :comment-inline)
+                      (2 :comment-line)
+                      (3 :comment-section)
+                      (otherwise :comment-file)))
                   (comment-start (+ start-pos semicolon-count))
                   (comment-text (read-until-newline text comment-start))
                   (comment-value (string-trim '(#\Space #\Tab) comment-text))
@@ -104,9 +104,9 @@ Returns a list of TOKEN objects."
                   (start-column column)
                   (end-pos (position #\" text :start (1+ pos)))
                   (raw
-                   (if end-pos
-                       (subseq text start-pos (1+ end-pos))
-                       (subseq text start-pos)))
+                    (if end-pos
+                        (subseq text start-pos (1+ end-pos))
+                        (subseq text start-pos)))
                   (value (subseq raw 1 (1- (length raw)))))
              (push (make-token :string value file line start-column raw) tokens)
              (incf pos (length raw))
@@ -121,12 +121,12 @@ Returns a list of TOKEN objects."
                    do (incf pos))
              (let* ((raw (subseq text start-pos pos))
                     (type
-                     (if (every (lambda (c)
-                                  (or (digit-char-p c)
-                                      (member c '(#\+ #\- #\. #\e #\d #\f))))
-                                raw)
-                         :number
-                         :symbol)))
+                      (if (every (lambda (c)
+                                   (or (digit-char-p c)
+                                       (member c '(#\+ #\- #\. #\e #\d #\f))))
+                                 raw)
+                          :number
+                          :symbol)))
                (push (make-token type raw file line start-column raw) tokens)
                (incf column (length raw)))))
 

@@ -145,9 +145,9 @@ Handles: simple-name | (:feature expr dep) | (:version name ver) | (:require nam
       ((stringp dep)
        (when (looks-like-symbol-p dep source)
          (list (create-violation dep form file severity
-                                (format nil "Dependency should be string \"~A\", instead of symbol ~A"
-                                       (extract-symbol-name dep)
-                                       (format-symbol-for-message dep source))))))
+                                 (format nil "Dependency should be string \"~A\", instead of symbol ~A"
+                                         (extract-symbol-name dep)
+                                         (format-symbol-for-message dep source))))))
 
       ;; Complex dependency - list form
       ((consp dep)
@@ -162,9 +162,9 @@ Handles: simple-name | (:feature expr dep) | (:version name ver) | (:require nam
                     (let ((sys-name (second dep)))
                       (when (looks-like-symbol-p sys-name source)
                         (list (create-violation sys-name form file severity
-                                               (format nil "System name should be string \"~A\", instead of symbol ~A"
-                                                      (extract-symbol-name sys-name)
-                                                      (format-symbol-for-message sys-name source))))))))
+                                                (format nil "System name should be string \"~A\", instead of symbol ~A"
+                                                        (extract-symbol-name sys-name)
+                                                        (format-symbol-for-message sys-name source))))))))
 
                  ;; (:require "module") - check module name (2nd element)
                  ((string-equal type-name "REQUIRE")
@@ -172,9 +172,9 @@ Handles: simple-name | (:feature expr dep) | (:version name ver) | (:require nam
                     (let ((mod-name (second dep)))
                       (when (looks-like-symbol-p mod-name source)
                         (list (create-violation mod-name form file severity
-                                               (format nil "Module name should be string \"~A\", instead of symbol ~A"
-                                                      (extract-symbol-name mod-name)
-                                                      (format-symbol-for-message mod-name source))))))))
+                                                (format nil "Module name should be string \"~A\", instead of symbol ~A"
+                                                        (extract-symbol-name mod-name)
+                                                        (format-symbol-for-message mod-name source))))))))
 
                  ;; (:feature expr dependency-def) - recursively check dependency-def (3rd element)
                  ((string-equal type-name "FEATURE")
@@ -203,9 +203,9 @@ Structure: ((operation (operation system-name) ...) ...)"
               (when (looks-like-symbol-p system-name source)
                 (let ((sym-name (extract-symbol-name system-name)))
                   (push (create-violation system-name form file severity
-                                         (format nil "System name should be string \"~A\", instead of symbol ~A"
-                                                sym-name
-                                                (format-symbol-for-message system-name source)))
+                                          (format nil "System name should be string \"~A\", instead of symbol ~A"
+                                                  sym-name
+                                                  (format-symbol-for-message system-name source)))
                         violations))))))))
     violations))
 
@@ -225,29 +225,29 @@ Component-def structure: (component-type component-name option*)
             (when (looks-like-symbol-p component-name source)
               (let ((sym-name (extract-symbol-name component-name)))
                 (push (create-violation component-name form file severity
-                                       (format nil "Component name should be string \"~A\", instead of symbol ~A"
-                                              sym-name
-                                              (format-symbol-for-message component-name source)))
+                                        (format nil "Component name should be string \"~A\", instead of symbol ~A"
+                                                sym-name
+                                                (format-symbol-for-message component-name source)))
                       violations)))))
 
         ;; Check component options (starting at position 2)
         ;; Options: :depends-on, :components, etc.
         (loop for (key value) on (cddr component-def) by #'cddr
               when (stringp key)
-              do (let ((key-name (base:symbol-name-from-string key)))
-                   (cond
-                     ;; Nested :components (in :module components)
-                     ((string-equal key-name "COMPONENTS")
-                      (when (consp value)
-                        (setf violations (nconc violations
-                                               (check-components-list value form file severity)))))
-                     ;; Component :depends-on
-                     ((string-equal key-name "DEPENDS-ON")
-                      (when (consp value)
-                        (dolist (dep value)
-                          (let ((dep-violations (check-dependency dep form file severity)))
-                            (when dep-violations
-                              (setf violations (nconc violations dep-violations))))))))))))
+                do (let ((key-name (base:symbol-name-from-string key)))
+                     (cond
+                       ;; Nested :components (in :module components)
+                       ((string-equal key-name "COMPONENTS")
+                        (when (consp value)
+                          (setf violations (nconc violations
+                                                  (check-components-list value form file severity)))))
+                       ;; Component :depends-on
+                       ((string-equal key-name "DEPENDS-ON")
+                        (when (consp value)
+                          (dolist (dep value)
+                            (let ((dep-violations (check-dependency dep form file severity)))
+                              (when dep-violations
+                                (setf violations (nconc violations dep-violations))))))))))))
     violations))
 
 (defun check-defsystem-source (form file severity)
@@ -263,35 +263,35 @@ Parses the semantic structure: system name, :depends-on dependencies, :component
         (when (looks-like-symbol-p system-name source)
           (let ((sym-name (extract-symbol-name system-name)))
             (push (create-violation system-name form file severity
-                                   (format nil "System name should be string \"~A\", instead of symbol ~A"
-                                          sym-name
-                                          (format-symbol-for-message system-name source)))
+                                    (format nil "System name should be string \"~A\", instead of symbol ~A"
+                                            sym-name
+                                            (format-symbol-for-message system-name source)))
                   violations)))))
 
     ;; Parse options (everything after system name)
     ;; Structure: (defsystem system-name :option1 value1 :option2 value2 ...)
     (loop for (key value) on (cddr expr) by #'cddr
           when (stringp key)
-          do (let ((key-name (base:symbol-name-from-string key)))
-               (cond
-                 ;; Check :depends-on - dependencies can be simple names or complex forms
-                 ((string-equal key-name "DEPENDS-ON")
-                  (when (consp value)
-                    (dolist (dep value)
-                      (let ((dep-violations (check-dependency dep form file severity)))
-                        (when dep-violations
-                          (setf violations (nconc violations dep-violations)))))))
+            do (let ((key-name (base:symbol-name-from-string key)))
+                 (cond
+                   ;; Check :depends-on - dependencies can be simple names or complex forms
+                   ((string-equal key-name "DEPENDS-ON")
+                    (when (consp value)
+                      (dolist (dep value)
+                        (let ((dep-violations (check-dependency dep form file severity)))
+                          (when dep-violations
+                            (setf violations (nconc violations dep-violations)))))))
 
-                 ;; Check :components - validate component definitions
-                 ((string-equal key-name "COMPONENTS")
-                  (when (consp value)
-                    (setf violations (nconc violations
-                                           (check-components-list value form file severity)))))
+                   ;; Check :components - validate component definitions
+                   ((string-equal key-name "COMPONENTS")
+                    (when (consp value)
+                      (setf violations (nconc violations
+                                              (check-components-list value form file severity)))))
 
-                 ;; Check :in-order-to - system names in dependencies
-                 ((string-equal key-name "IN-ORDER-TO")
-                  (when (consp value)
-                    (setf violations (nconc violations
-                                           (check-in-order-to-list value form file severity))))))))
+                   ;; Check :in-order-to - system names in dependencies
+                   ((string-equal key-name "IN-ORDER-TO")
+                    (when (consp value)
+                      (setf violations (nconc violations
+                                              (check-in-order-to-list value form file severity))))))))
 
     (nreverse violations)))

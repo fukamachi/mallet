@@ -250,7 +250,7 @@
                     (let ((pkg (symbol-package (first declaration))))
                       (and pkg (string= (package-name pkg) "MALLET")))
                     (string= (symbol-name (first declaration)) "SUPPRESS"))
-          append (rest declaration))))
+            append (rest declaration))))
 
 ;;; Form Processing Helpers
 
@@ -290,22 +290,22 @@
                               (string= (symbol-name first-elem) "SUPPRESS-NEXT"))))
                       ((stringp first-elem)
                        (search "MALLET:suppress-next" first-elem :test #'char-equal)))))
-        append (loop for arg in (rest declaration)
-                     collect (cond
-                               ;; Already a keyword - return as-is
-                               ((keywordp arg) arg)
-                               ;; Symbol - intern in keyword package
-                               ((symbolp arg)
-                                (intern (symbol-name arg) :keyword))
-                               ;; String from parser - convert to keyword
-                               ;; Strip leading colon if present
-                               ((stringp arg)
-                                (let ((name (string-upcase arg)))
-                                  (intern (if (utils:keyword-string-p name)
-                                              (subseq name 1)
-                                              name)
-                                          :keyword)))
-                               (t arg)))))
+          append (loop for arg in (rest declaration)
+                       collect (cond
+                                 ;; Already a keyword - return as-is
+                                 ((keywordp arg) arg)
+                                 ;; Symbol - intern in keyword package
+                                 ((symbolp arg)
+                                  (intern (symbol-name arg) :keyword))
+                                 ;; String from parser - convert to keyword
+                                 ;; Strip leading colon if present
+                                 ((stringp arg)
+                                  (let ((name (string-upcase arg)))
+                                    (intern (if (utils:keyword-string-p name)
+                                                (subseq name 1)
+                                                name)
+                                            :keyword)))
+                                 (t arg)))))
 
 (defun update-suppression-for-declaim (declaim-form state)
   "Update SUPPRESSION-STATE for disable/enable/suppress-function declarations.
@@ -314,22 +314,22 @@
    Returns the updated state."
   (loop for declaration in (rest declaim-form)
         when (mallet-declaration-p declaration)
-        do (multiple-value-bind (type rules function-names)
-               (parse-mallet-declaration declaration)
-             (ecase type
-               (:disable
-                (set-region-disabled state rules))
+          do (multiple-value-bind (type rules function-names)
+                 (parse-mallet-declaration declaration)
+               (ecase type
+                 (:disable
+                  (set-region-disabled state rules))
 
-               (:enable
-                (enable-region-rules state rules))
+                 (:enable
+                  (enable-region-rules state rules))
 
-               (:suppress-function
-                (loop for fn-name in function-names
-                      do (add-function-suppression state fn-name rules)))
+                 (:suppress-function
+                  (loop for fn-name in function-names
+                        do (add-function-suppression state fn-name rules)))
 
-               ;; suppress-next is handled separately in process-top-level-forms
-               (:suppress-next
-                nil))))
+                 ;; suppress-next is handled separately in process-top-level-forms
+                 (:suppress-next
+                  nil))))
   state)
 
 ;;; Stub Package Creation
@@ -341,7 +341,7 @@
    The package may already exist (as the main Mallet linter package), so we just
    ensure the necessary symbols are interned and exported."
   (let ((pkg (or (find-package '#:mallet)
-                  (make-package '#:mallet :use '()))))
+                 (make-package '#:mallet :use '()))))
     ;; Intern and export the declaration symbols
     ;; Use dolist to intern each symbol and export it
     (dolist (symbol-name '("DISABLE" "ENABLE" "SUPPRESS" "SUPPRESS-NEXT" "SUPPRESS-FUNCTION"))

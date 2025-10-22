@@ -161,7 +161,7 @@ Returns T if OBJ is a cons whose car is ECLECTOR.READER:UNQUOTE."
        (symbolp (first obj))
        (or (eq (first obj) 'eclector.reader:unquote)
            (and (eq (symbol-package (first obj))
-                   (find-package "ECLECTOR.READER"))
+                    (find-package "ECLECTOR.READER"))
                 (string-equal (symbol-name (first obj)) "UNQUOTE")))))
 
 (defun extract-from-eclector-unquote (unquote-obj)

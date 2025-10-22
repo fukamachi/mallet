@@ -188,11 +188,11 @@ This :around method checks for (declare (mallet:suppress ...)) forms and manages
 
           ;; Now check if rule is suppressed at current scope (includes newly pushed suppressions)
           (unwind-protect
-              (if (suppression:rule-suppressed-p state (rule-name rule)
+               (if (suppression:rule-suppressed-p state (rule-name rule)
                                                   :form-type (if function-name :function-body :lexical-scope)
                                                   :function-name function-name)
-                  nil  ; Return empty violations list if suppressed
-                  (call-next-method))  ; Not suppressed, proceed with checking
+                   nil  ; Return empty violations list if suppressed
+                   (call-next-method))  ; Not suppressed, proceed with checking
             ;; Always pop the suppression scope if we pushed one
             (when declare-suppressions
               (suppression:pop-scope-suppression state))))
@@ -250,20 +250,20 @@ Handles forms like:
                                            (and (stringp decl-head)
                                                 (search "MALLET:suppress" decl-head
                                                         :test #'char-equal)))))
-                           append (mapcar (lambda (rule)
-                                            (cond
-                                              ((keywordp rule) rule)
-                                              ((symbolp rule)
-                                               (intern (symbol-name rule) :keyword))
-                                              ((stringp rule)
-                                               ;; Strip package prefix first, then intern as keyword
-                                               (let ((name (string-upcase (symbol-name-from-string rule))))
-                                                 (intern (if (utils:keyword-string-p name)
-                                                             (subseq name 1)
-                                                             name)
-                                                         :keyword)))
-                                              (t rule)))
-                                          (rest declaration))))))))
+                             append (mapcar (lambda (rule)
+                                              (cond
+                                                ((keywordp rule) rule)
+                                                ((symbolp rule)
+                                                 (intern (symbol-name rule) :keyword))
+                                                ((stringp rule)
+                                                 ;; Strip package prefix first, then intern as keyword
+                                                 (let ((name (string-upcase (symbol-name-from-string rule))))
+                                                   (intern (if (utils:keyword-string-p name)
+                                                               (subseq name 1)
+                                                               name)
+                                                           :keyword)))
+                                                (t rule)))
+                                            (rest declaration))))))))
 
 (defun find-form-body (expr)
   "Find the body of a form that may contain declarations.

@@ -402,11 +402,11 @@ Unlike variable references, this ONLY matches when the name appears in function 
                    (parser:find-position subexpr position-map line column)
                  ;; Recurse using check-form-recursive to get suppression handling
                  (let ((nested-violations
-                        (base:check-form-recursive rule subexpr *file*
-                                                  (or subexpr-line line)
-                                                  (or subexpr-column column)
-                                                  nil
-                                                  position-map)))
+                         (base:check-form-recursive rule subexpr *file*
+                                                    (or subexpr-line line)
+                                                    (or subexpr-column column)
+                                                    nil
+                                                    position-map)))
                    ;; Accumulate violations from nested call
                    (setf *violations* (append *violations* nested-violations))))))))))))
 
@@ -436,7 +436,7 @@ Unlike variable references, this ONLY matches when the name appears in function 
                              (parser:form-position-map form)))
 
 (defmethod base:check-form-recursive ((rule unused-local-functions-rule) expr file line column
-                                       &optional function-name position-map)
+                                      &optional function-name position-map)
   "Recursively check for unused local functions with automatic suppression handling."
   (declare (ignore function-name))
 

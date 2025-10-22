@@ -7,11 +7,11 @@
                  :defaults *load-pathname*))
 
 (asdf:initialize-source-registry
-  '(:source-registry
-    :ignore-inherited-configuration
-    (:also-exclude ".qlot")
-    (:also-exclude ".bundle-libs")
-    (:directory :here)))
+ '(:source-registry
+   :ignore-inherited-configuration
+   (:also-exclude ".qlot")
+   (:also-exclude ".bundle-libs")
+   (:directory :here)))
 
 (defvar *setup-file*
   (merge-pathnames #P".bundle-libs/setup.lisp" *project-dir*))

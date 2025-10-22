@@ -105,24 +105,24 @@ Returns the line content as a string, or NIL if line doesn't exist."
                 ;; Find the column where trailing whitespace starts
                 ;; by finding the last non-whitespace character
                 (let ((trailing-start (position-if-not
-                                        (lambda (ch) (member ch '(#\Space #\Tab)))
-                                        line
-                                        :from-end t)))
+                                       (lambda (ch) (member ch '(#\Space #\Tab)))
+                                       line
+                                       :from-end t)))
                   (let ((fix (violation:make-violation-fix
-                               :type :replace-line
-                               :line-number line-number
-                               :replacement-content (string-right-trim '(#\Space #\Tab) line))))
-                  (push (make-instance 'violation:violation
-                                       :rule :trailing-whitespace
-                                       :file file
-                                       :line line-number
-                                       ;; Column is right after the last non-whitespace char
-                                       ;; If the entire line is whitespace, report column 0
-                                       :column (if trailing-start (1+ trailing-start) 0)
-                                       :severity (base:rule-severity rule)
-                                       :message "Line has trailing whitespace"
-                                       :fix fix)
-                        violations))))))
+                              :type :replace-line
+                              :line-number line-number
+                              :replacement-content (string-right-trim '(#\Space #\Tab) line))))
+                    (push (make-instance 'violation:violation
+                                         :rule :trailing-whitespace
+                                         :file file
+                                         :line line-number
+                                         ;; Column is right after the last non-whitespace char
+                                         ;; If the entire line is whitespace, report column 0
+                                         :column (if trailing-start (1+ trailing-start) 0)
+                                         :severity (base:rule-severity rule)
+                                         :message "Line has trailing whitespace"
+                                         :fix fix)
+                          violations))))))
 
     (nreverse violations)))
 
@@ -160,16 +160,16 @@ Returns the line content as a string, or NIL if line doesn't exist."
             for line = (read-line stream nil nil)
             while line
             do ;; Check if line contains tab character
-              (when (find #\Tab line)
-                (push (make-instance 'violation:violation
-                                     :rule :no-tabs
-                                     :file file
-                                     :line line-number
-                                     :column 0
-                                     :severity (base:rule-severity rule)
-                                     :message "Tab character found (use spaces instead)"
-                                     :fix nil)
-                      violations))))
+               (when (find #\Tab line)
+                 (push (make-instance 'violation:violation
+                                      :rule :no-tabs
+                                      :file file
+                                      :line line-number
+                                      :column 0
+                                      :severity (base:rule-severity rule)
+                                      :message "Tab character found (use spaces instead)"
+                                      :fix nil)
+                       violations))))
 
     (nreverse violations)))
 
@@ -246,35 +246,35 @@ Returns the line content as a string, or NIL if line doesn't exist."
             for line = (read-line stream nil nil)
             while line
             do ;; A line is blank if it's empty or contains only whitespace
-              (if (or (zerop (length line))
-                      (every (lambda (ch) (member ch '(#\Space #\Tab))) line))
-                  (progn
-                    (incf blank-count)
-                    (when (and (null violation-line)
-                               (> blank-count max-consecutive))
-                      ;; Mark where the violation starts (first excessive blank line)
-                      (setf violation-line line-number)))
-                  (progn
-                    ;; Non-blank line, check if we had a violation
-                    (when violation-line
-                      (let* ((excess-count (- blank-count max-consecutive))
-                             (fix (when (plusp excess-count)
-                                    (violation:make-violation-fix
-                                     :type :delete-lines
-                                     :start-line violation-line
-                                     :end-line (+ violation-line excess-count -1)))))
-                        (push (make-instance 'violation:violation
-                                             :rule :consecutive-blank-lines
-                                             :file file
-                                             :line violation-line
-                                             :column 0
-                                             :severity (base:rule-severity rule)
-                                             :message (format nil "More than ~A consecutive blank lines" max-consecutive)
-                                             :fix fix)
-                              violations)
-                        (setf violation-line nil)))
-                    ;; Reset counter
-                    (setf blank-count 0)))))
+               (if (or (zerop (length line))
+                       (every (lambda (ch) (member ch '(#\Space #\Tab))) line))
+                   (progn
+                     (incf blank-count)
+                     (when (and (null violation-line)
+                                (> blank-count max-consecutive))
+                       ;; Mark where the violation starts (first excessive blank line)
+                       (setf violation-line line-number)))
+                   (progn
+                     ;; Non-blank line, check if we had a violation
+                     (when violation-line
+                       (let* ((excess-count (- blank-count max-consecutive))
+                              (fix (when (plusp excess-count)
+                                     (violation:make-violation-fix
+                                      :type :delete-lines
+                                      :start-line violation-line
+                                      :end-line (+ violation-line excess-count -1)))))
+                         (push (make-instance 'violation:violation
+                                              :rule :consecutive-blank-lines
+                                              :file file
+                                              :line violation-line
+                                              :column 0
+                                              :severity (base:rule-severity rule)
+                                              :message (format nil "More than ~A consecutive blank lines" max-consecutive)
+                                              :fix fix)
+                               violations)
+                         (setf violation-line nil)))
+                     ;; Reset counter
+                     (setf blank-count 0)))))
 
     (nreverse violations)))
 

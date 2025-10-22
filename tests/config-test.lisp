@@ -114,7 +114,7 @@
         (ok (member :trailing-whitespace rule-names)))
       ;; Check that line-length has the overridden max-length
       (let ((line-length-rule (find :line-length (config:config-rules cfg)
-                                     :key #'rules:rule-name)))
+                                    :key #'rules:rule-name)))
         (ok (= 100 (rules:line-length-rule-max-length line-length-rule)))))))
 
 (deftest parse-new-syntax-enable
@@ -180,8 +180,8 @@
     (let* ((sexp '(:mallet-config
                    (:extends :default)
                    (:for-paths ("tests/**/*.lisp")
-                     (:enable :line-length :max-length 120)
-                     (:disable :unused-variables))))
+                    (:enable :line-length :max-length 120)
+                    (:disable :unused-variables))))
            (cfg (config:parse-config sexp)))
       ;; Base config should have default rules
       (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
@@ -192,7 +192,7 @@
   (testing "Parse config with directory name (shorthand)"
     (let* ((sexp '(:mallet-config
                    (:for-paths ("tests" "scripts")
-                     (:disable :line-length))))
+                    (:disable :line-length))))
            (cfg (config:parse-config sexp)))
       ;; Check that path-rules are stored
       (ok (= 1 (length (config:config-path-rules cfg))))
@@ -219,8 +219,8 @@
                    (:enable :line-length :max-length 80)
                    (:enable :unused-variables)
                    (:for-paths ("tests/**/*.lisp")
-                     (:enable :line-length :max-length 120)
-                     (:disable :unused-variables))))
+                    (:enable :line-length :max-length 120)
+                    (:disable :unused-variables))))
            (cfg (config:parse-config sexp)))
       ;; For a normal file, should get base rules
       (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
@@ -244,14 +244,14 @@
            (tmpdir (uiop:ensure-directory-pathname tmpdir-str))
            (config-file (merge-pathnames ".mallet.lisp" tmpdir)))
       (unwind-protect
-          (progn
-            (ensure-directories-exist tmpdir)
-            (with-open-file (out config-file :direction :output :if-exists :supersede)
-              (write-string "(:mallet-config)" out))
-            (let ((found (config:find-config-file tmpdir)))
-              (ok (not (null found)))
-              ;; Compare truenames to handle pathname variations
-              (ok (equal (truename found) (truename config-file)))))
+           (progn
+             (ensure-directories-exist tmpdir)
+             (with-open-file (out config-file :direction :output :if-exists :supersede)
+               (write-string "(:mallet-config)" out))
+             (let ((found (config:find-config-file tmpdir)))
+               (ok (not (null found)))
+               ;; Compare truenames to handle pathname variations
+               (ok (equal (truename found) (truename config-file)))))
         ;; Cleanup
         (when (probe-file config-file)
           (delete-file config-file))
@@ -264,15 +264,15 @@
            (subdir (merge-pathnames "sub/" tmpdir))
            (config-file (merge-pathnames ".mallet.lisp" tmpdir)))
       (unwind-protect
-          (progn
-            (ensure-directories-exist subdir)
-            (with-open-file (out config-file :direction :output :if-exists :supersede)
-              (write-string "(:mallet-config)" out))
-            ;; Search from subdir should find config in parent
-            (let ((found (config:find-config-file subdir)))
-              (ok (not (null found)))
-              ;; Compare truenames to handle pathname variations
-              (ok (equal (truename found) (truename config-file)))))
+           (progn
+             (ensure-directories-exist subdir)
+             (with-open-file (out config-file :direction :output :if-exists :supersede)
+               (write-string "(:mallet-config)" out))
+             ;; Search from subdir should find config in parent
+             (let ((found (config:find-config-file subdir)))
+               (ok (not (null found)))
+               ;; Compare truenames to handle pathname variations
+               (ok (equal (truename found) (truename config-file)))))
         ;; Cleanup
         (when (probe-file config-file)
           (delete-file config-file))

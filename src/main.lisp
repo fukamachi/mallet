@@ -198,16 +198,16 @@ Lints files specified in ARGS and exits with appropriate status code."
         (handler-bind
             ;; Handle CLI errors with nice messages, no stacktrace
             ((errors:cli-error
-              (lambda (e)
-                (format *error-output* "Error: ~A~%" e)
-                (uiop:quit 3)))
+               (lambda (e)
+                 (format *error-output* "Error: ~A~%" e)
+                 (uiop:quit 3)))
              ;; Handle unexpected errors with stacktrace
              (error
-              (lambda (e)
-                (format *error-output* "Fatal error: ~A~%" e)
-                (when *debug-mode*
-                  (uiop:print-condition-backtrace e))
-                (uiop:quit 3))))
+               (lambda (e)
+                 (format *error-output* "Fatal error: ~A~%" e)
+                 (when *debug-mode*
+                   (uiop:print-condition-backtrace e))
+                 (uiop:quit 3))))
 
           (multiple-value-bind (format config-path preset debug fix-mode file-args)
               (parse-args args)
@@ -329,5 +329,5 @@ Lints files specified in ARGS and exits with appropriate status code."
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt
        #-sbcl error ()
-       (format *error-output* "~&Interrupted.~%")
-       (uiop:quit 130)))))
+        (format *error-output* "~&Interrupted.~%")
+        (uiop:quit 130)))))

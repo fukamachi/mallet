@@ -174,10 +174,10 @@ Simple form-based LOOP:
                        ;; Collect the init clause (everything until next clause-starting keyword)
                        (let ((init-forms '()))
                          (loop while (and (< i (length clauses))
-                                         (let ((next (nth i clauses)))
-                                           ;; Stop if we hit a clause-starting keyword
-                                           (not (and (stringp next)
-                                                    (clause-keyword-p next)))))
+                                          (let ((next (nth i clauses)))
+                                            ;; Stop if we hit a clause-starting keyword
+                                            (not (and (stringp next)
+                                                      (clause-keyword-p next)))))
                                do (push (nth i clauses) init-forms)
                                   (incf i))
 
@@ -215,10 +215,10 @@ Simple form-based LOOP:
                       ;; Stop at clause keywords (FOR, DO, COLLECT, etc.) but NOT sub-keywords (FROM, TO, IN, etc.)
                       (let ((init-forms '()))
                         (loop while (and (< i (length clauses))
-                                        (let ((next (nth i clauses)))
-                                          ;; Stop if we hit a clause-starting keyword
-                                          (not (and (stringp next)
-                                                   (clause-keyword-p next)))))
+                                         (let ((next (nth i clauses)))
+                                           ;; Stop if we hit a clause-starting keyword
+                                           (not (and (stringp next)
+                                                     (clause-keyword-p next)))))
                               do (push (nth i clauses) init-forms)
                                  (incf i))
 
@@ -240,9 +240,9 @@ Simple form-based LOOP:
                 (incf i)
                 ;; Skip all forms until next clause-starting keyword
                 (loop while (and (< i (length clauses))
-                                (let ((next (nth i clauses)))
-                                  (not (and (stringp next)
-                                           (clause-keyword-p next)))))
+                                 (let ((next (nth i clauses)))
+                                   (not (and (stringp next)
+                                             (clause-keyword-p next)))))
                       do (incf i))
                 (decf i))
 
@@ -269,13 +269,13 @@ Simple form-based LOOP:
       (loop for j from 0 below (length clauses)
             for elem = (nth j clauses)
             unless (member j var-positions)  ; Skip variable binding positions
-            do (cond
-                 ;; Collect cons forms (function calls, etc.)
-                 ((consp elem)
-                  (push elem expressions))
-                 ;; Also collect non-keyword strings (variable references in COLLECT, etc.)
-                 ((and (stringp elem)
-                       (not (loop-keyword-p elem)))
-                  (push elem expressions))))
+              do (cond
+                   ;; Collect cons forms (function calls, etc.)
+                   ((consp elem)
+                    (push elem expressions))
+                   ;; Also collect non-keyword strings (variable references in COLLECT, etc.)
+                   ((and (stringp elem)
+                         (not (loop-keyword-p elem)))
+                    (push elem expressions))))
 
       (values (nreverse bindings) (nreverse expressions)))))
