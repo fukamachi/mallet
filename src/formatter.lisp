@@ -18,6 +18,29 @@
 (defparameter *color-gray* (format nil "~C[90m" #\Escape))
 (defparameter *color-green* (format nil "~C[32m" #\Escape))
 
+;;; Path utilities
+
+(defun make-relative-path (file)
+  "Convert FILE pathname to a relative path from current working directory.
+If FILE cannot be made relative, returns the namestring as-is."
+  (let* ((file-path (uiop:ensure-absolute-pathname file))
+         (cwd (uiop:getcwd))
+         (file-dir (pathname-directory file-path))
+         (cwd-dir (pathname-directory cwd)))
+    (if (and file-dir cwd-dir
+             (equal (subseq file-dir 0 (min (length file-dir) (length cwd-dir)))
+                    cwd-dir))
+        ;; File is under CWD, make it relative
+        (let ((relative-dir (subseq file-dir (length cwd-dir))))
+          (namestring
+           (make-pathname :directory (if relative-dir
+                                          (cons :relative relative-dir)
+                                          '(:relative))
+                          :name (pathname-name file-path)
+                          :type (pathname-type file-path))))
+        ;; File is outside CWD, use absolute path
+        (namestring file-path))))
+
 (defun use-colors-p (stream)
   "Check if we should use colors for STREAM (only if it's a TTY)."
   (and (member stream (list *standard-output* *error-output*))
@@ -45,7 +68,7 @@ Returns a plist of severity counts (:error N :warning M ...)."
                          (setf (gethash v ht) t))
                        ht))))
     (when violations
-      (format stream "~%~A~%" (namestring file))
+      (format stream "~%~A~%" (make-relative-path file))
       (dolist (v violations)
         ;; Count this violation
         (let ((severity (violation:violation-severity v)))
@@ -162,7 +185,7 @@ Returns a plist of severity counts (:error N :warning M ...)."
              (rule-str (format nil "[~A]" (string-downcase (symbol-name rule))))
              (colored-rule (colorize rule-str *color-gray* stream)))
         (format stream "~A:~A:~A: ~A: ~A ~A~%"
-                (namestring file) line col colored-severity message colored-rule)))
+                (make-relative-path file) line col colored-severity message colored-rule)))
 
     ;; Return counts as plist
     (loop for severity being the hash-keys of severity-counts
@@ -187,7 +210,7 @@ Returns T if this file had violations, NIL otherwise."
   (when violations
     (unless first-file-p (format stream ",~%"))
     (format stream "  {~%")
-    (format stream "    \"file\": ~S,~%" (namestring file))
+    (format stream "    \"file\": ~S,~%" (make-relative-path file))
     (format stream "    \"violations\": [~%")
     (loop for v in violations
           for first-v = t then nil
