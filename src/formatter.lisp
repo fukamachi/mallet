@@ -4,6 +4,7 @@
    (#:violation #:mallet/violation))
   (:export #:format-text-file
            #:format-json-file
+           #:format-line-file
            #:format-text-summary
            #:format-json-start
            #:format-json-end))
@@ -120,6 +121,53 @@ SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
                     (colorize summary *color-red* stream)))))
 
     total-violations))
+
+(defun format-line-file (file violations &key (stream *standard-output*) fixed-violations)
+  "Format VIOLATIONS for a single FILE in GCC/GNU one-line-per-violation format.
+Format: path/to/file.lisp:10:5: warning: message [rule-name]
+FIXED-VIOLATIONS is an optional list of violations that were auto-fixed.
+Returns a plist of severity counts (:error N :warning M ...)."
+  (check-type file pathname)
+  (check-type violations list)
+
+  (let ((severity-counts (make-hash-table :test 'eq))
+        (fixed-set (when fixed-violations
+                     (let ((ht (make-hash-table :test 'eq)))
+                       (dolist (v fixed-violations)
+                         (setf (gethash v ht) t))
+                       ht))))
+    (dolist (v violations)
+      ;; Count this violation
+      (let ((severity (violation:violation-severity v)))
+        (setf (gethash severity severity-counts 0)
+              (1+ (gethash severity severity-counts 0))))
+
+      ;; Format and print violation in GCC/GNU format
+      (let* ((line (violation:violation-line v))
+             (col (violation:violation-column v))
+             (severity (violation:violation-severity v))
+             (message (violation:violation-message v))
+             (rule (violation:violation-rule v))
+             (fixed-p (and fixed-set (gethash v fixed-set)))
+             ;; Format severity or [FIXED]
+             (severity-str (if fixed-p
+                               "[FIXED]"
+                               (string-downcase (symbol-name severity))))
+             (colored-severity (cond
+                                 (fixed-p (colorize severity-str *color-green* stream))
+                                 ((eq severity :error) (colorize severity-str *color-red* stream))
+                                 ((eq severity :warning) (colorize severity-str *color-yellow* stream))
+                                 (t severity-str)))
+             ;; Format rule name
+             (rule-str (format nil "[~A]" (string-downcase (symbol-name rule))))
+             (colored-rule (colorize rule-str *color-gray* stream)))
+        (format stream "~A:~A:~A: ~A: ~A ~A~%"
+                (namestring file) line col colored-severity message colored-rule)))
+
+    ;; Return counts as plist
+    (loop for severity being the hash-keys of severity-counts
+            using (hash-value count)
+          nconc (list severity count))))
 
 (defun format-json-start (&key (stream *standard-output*))
   "Print JSON array opening bracket."
