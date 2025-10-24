@@ -49,7 +49,8 @@
        (:file "package")
        (:file "naming")
        (:file "lambda-list")
-       (:file "asdf")))))
+       (:file "asdf")
+       (:file "metrics")))))
    (:file "rules")
 
    ;; Configuration
@@ -101,6 +102,7 @@
      (:file "lambda-list")
      (:file "asdf")
      (:file "special-forms-test")
-     (:file "with-macros-test"))))
+     (:file "with-macros-test")
+     (:file "metrics-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

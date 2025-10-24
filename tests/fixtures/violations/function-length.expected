@@ -1,0 +1,3 @@
+# Expected violations for function-length.lisp
+
+7:0 function-length info
