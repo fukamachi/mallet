@@ -8,7 +8,8 @@
                  #:mallet/rules/forms/package
                  #:mallet/rules/forms/naming
                  #:mallet/rules/forms/lambda-list
-                 #:mallet/rules/forms/asdf)
+                 #:mallet/rules/forms/asdf
+                 #:mallet/rules/forms/metrics)
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
@@ -76,6 +77,16 @@ Always returns a rule object - enabled/disabled state is handled by config."
     (:asdf-component-strings
      (make-instance 'asdf-component-strings-rule
                     :severity (or severity :convention)))
+
+    ;; Metric rules
+    (:function-length
+     (make-instance 'function-length-rule
+                    :severity (or severity :info)
+                    :max-lines (getf options :max-lines 50)))
+    (:cyclomatic-complexity
+     (make-instance 'cyclomatic-complexity-rule
+                    :severity (or severity :info)
+                    :max-complexity (getf options :max-complexity 10)))
 
     (otherwise
      (error "Unknown rule name: ~A" name))))

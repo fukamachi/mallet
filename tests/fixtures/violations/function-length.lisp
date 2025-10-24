@@ -6,7 +6,7 @@
   (+ x 1))
 
 ;; Long function - should violate (assuming 50 line default)
-(defun very-long-function (data)
+(defun very-long-function ()
   "This function is intentionally long."
   (print 1)
   (print 2)

@@ -1,0 +1,3 @@
+# Expected violations for cyclomatic-complexity.lisp
+
+17:0 cyclomatic-complexity info

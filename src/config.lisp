@@ -338,7 +338,9 @@ Useful for exploration and discovering what rules exist."
             :final-newline
             ;; INFO: Subjective preferences
             (:line-length :max-length 100)
-            (:consecutive-blank-lines :max-consecutive 2))))
+            (:consecutive-blank-lines :max-consecutive 2)
+            (:function-length :max-lines 50)
+            (:cyclomatic-complexity :max-complexity 10))))
     (make-config
      :rules (mapcar (lambda (spec)
                       (if (consp spec)
