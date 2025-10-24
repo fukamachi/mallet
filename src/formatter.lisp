@@ -4,6 +4,7 @@
    (#:violation #:mallet/violation))
   (:export #:format-text-file
            #:format-json-file
+           #:format-line-file
            #:format-text-summary
            #:format-json-start
            #:format-json-end))
@@ -16,6 +17,29 @@
 (defparameter *color-yellow* (format nil "~C[33m" #\Escape))
 (defparameter *color-gray* (format nil "~C[90m" #\Escape))
 (defparameter *color-green* (format nil "~C[32m" #\Escape))
+
+;;; Path utilities
+
+(defun make-relative-path (file)
+  "Convert FILE pathname to a relative path from current working directory.
+If FILE cannot be made relative, returns the namestring as-is."
+  (let* ((file-path (uiop:ensure-absolute-pathname file))
+         (cwd (uiop:getcwd))
+         (file-dir (pathname-directory file-path))
+         (cwd-dir (pathname-directory cwd)))
+    (if (and file-dir cwd-dir
+             (equal (subseq file-dir 0 (min (length file-dir) (length cwd-dir)))
+                    cwd-dir))
+        ;; File is under CWD, make it relative
+        (let ((relative-dir (subseq file-dir (length cwd-dir))))
+          (namestring
+           (make-pathname :directory (if relative-dir
+                                          (cons :relative relative-dir)
+                                          '(:relative))
+                          :name (pathname-name file-path)
+                          :type (pathname-type file-path))))
+        ;; File is outside CWD, use absolute path
+        (namestring file-path))))
 
 (defun use-colors-p (stream)
   "Check if we should use colors for STREAM (only if it's a TTY)."
@@ -44,7 +68,7 @@ Returns a plist of severity counts (:error N :warning M ...)."
                          (setf (gethash v ht) t))
                        ht))))
     (when violations
-      (format stream "~%~A~%" (namestring file))
+      (format stream "~%~A~%" (make-relative-path file))
       (dolist (v violations)
         ;; Count this violation
         (let ((severity (violation:violation-severity v)))
@@ -121,6 +145,53 @@ SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
 
     total-violations))
 
+(defun format-line-file (file violations &key (stream *standard-output*) fixed-violations)
+  "Format VIOLATIONS for a single FILE in GCC/GNU one-line-per-violation format.
+Format: path/to/file.lisp:10:5: warning: message [rule-name]
+FIXED-VIOLATIONS is an optional list of violations that were auto-fixed.
+Returns a plist of severity counts (:error N :warning M ...)."
+  (check-type file pathname)
+  (check-type violations list)
+
+  (let ((severity-counts (make-hash-table :test 'eq))
+        (fixed-set (when fixed-violations
+                     (let ((ht (make-hash-table :test 'eq)))
+                       (dolist (v fixed-violations)
+                         (setf (gethash v ht) t))
+                       ht))))
+    (dolist (v violations)
+      ;; Count this violation
+      (let ((severity (violation:violation-severity v)))
+        (setf (gethash severity severity-counts 0)
+              (1+ (gethash severity severity-counts 0))))
+
+      ;; Format and print violation in GCC/GNU format
+      (let* ((line (violation:violation-line v))
+             (col (violation:violation-column v))
+             (severity (violation:violation-severity v))
+             (message (violation:violation-message v))
+             (rule (violation:violation-rule v))
+             (fixed-p (and fixed-set (gethash v fixed-set)))
+             ;; Format severity or [FIXED]
+             (severity-str (if fixed-p
+                               "[FIXED]"
+                               (string-downcase (symbol-name severity))))
+             (colored-severity (cond
+                                 (fixed-p (colorize severity-str *color-green* stream))
+                                 ((eq severity :error) (colorize severity-str *color-red* stream))
+                                 ((eq severity :warning) (colorize severity-str *color-yellow* stream))
+                                 (t severity-str)))
+             ;; Format rule name
+             (rule-str (format nil "[~A]" (string-downcase (symbol-name rule))))
+             (colored-rule (colorize rule-str *color-gray* stream)))
+        (format stream "~A:~A:~A: ~A: ~A ~A~%"
+                (make-relative-path file) line col colored-severity message colored-rule)))
+
+    ;; Return counts as plist
+    (loop for severity being the hash-keys of severity-counts
+            using (hash-value count)
+          nconc (list severity count))))
+
 (defun format-json-start (&key (stream *standard-output*))
   "Print JSON array opening bracket."
   (format stream "[~%"))
@@ -139,7 +210,7 @@ Returns T if this file had violations, NIL otherwise."
   (when violations
     (unless first-file-p (format stream ",~%"))
     (format stream "  {~%")
-    (format stream "    \"file\": ~S,~%" (namestring file))
+    (format stream "    \"file\": ~S,~%" (make-relative-path file))
     (format stream "    \"violations\": [~%")
     (loop for v in violations
           for first-v = t then nil

@@ -84,10 +84,11 @@ Signals specific error conditions for invalid input."
              (setf format (cond
                             ((string= fmt "text") :text)
                             ((string= fmt "json") :json)
+                            ((string= fmt "line") :line)
                             (t (error 'errors:invalid-format
                                       :option "--format"
                                       :value fmt
-                                      :expected "text or json"))))))
+                                      :expected "text, json, or line"))))))
           ((string= arg "--config")
            (let ((path (pop args)))
              (unless path
@@ -132,7 +133,7 @@ Mallet - A sensible Common Lisp linter that catches mistakes, not style
 Usage: mallet [options] <file>...
 
 Options:
-  --format <format>   Output format (text or json, default: text)
+  --format <format>   Output format (text, line, or json; default: text)
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
   --preset <name>     Use built-in preset (default or all)
   --all, -a           Alias for --preset all
@@ -142,6 +143,11 @@ Options:
   --help              Show this help message
   --version           Show version information
 
+Output Formats:
+  text                Human-readable grouped by file (default)
+  line                One violation per line (file:line:col: severity: message)
+  json                Machine-readable JSON format
+
 Presets:
   default             Only universally-accepted rules (quiet, recommended)
   all                 All rules enabled (useful for exploration)
@@ -150,10 +156,11 @@ Examples:
   mallet src
   mallet src/main.lisp
   mallet -a src/*.lisp
+  mallet --format line src/*.lisp     # GCC/GNU format for editor integration
   mallet --format json src/*.lisp
   mallet --config .mallet.lisp src/
-  mallet --fix src/                  # Auto-fix violations
-  mallet --fix-dry-run src/          # Preview fixes without changing files
+  mallet --fix src/                   # Auto-fix violations
+  mallet --fix-dry-run src/           # Preview fixes without changing files
 "))
 
 (defun expand-file-args (file-args)
@@ -256,6 +263,13 @@ Lints files specified in ARGS and exits with appropriate status code."
                             (loop for (severity count) on file-counts by #'cddr
                                   do (setf (getf severity-counts severity 0)
                                            (+ (getf severity-counts severity 0) count)))))
+                         (:line
+                          ;; Output violations in line format and accumulate counts
+                          (let ((file-counts (formatter:format-line-file file violations)))
+                            ;; Merge counts into accumulated counts
+                            (loop for (severity count) on file-counts by #'cddr
+                                  do (setf (getf severity-counts severity 0)
+                                           (+ (getf severity-counts severity 0) count)))))
                          (:json
                           ;; Output JSON for this file
                           (when (formatter:format-json-file file violations
@@ -315,6 +329,9 @@ Lints files specified in ARGS and exits with appropriate status code."
                 (ecase format
                   (:text
                    ;; Print summary with accumulated counts
+                   (formatter:format-text-summary severity-counts))
+                  (:line
+                   ;; Print summary with accumulated counts (same as text)
                    (formatter:format-text-summary severity-counts))
                   (:json
                    ;; Print closing bracket
