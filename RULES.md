@@ -272,3 +272,100 @@ Constants should be named `+foo+`.
 ```
 
 **Default**: disabled
+
+### `:unused-loop-variables`
+
+Loop variables should be used within the loop body.
+
+```lisp
+;; Bad: loop variable not used
+(loop for x in list
+      for y in other-list  ; y is unused
+      collect x)
+
+;; Good: all loop variables used
+(loop for x in list
+      for y in other-list
+      collect (cons x y))
+
+;; Good: explicitly ignore with underscore
+(loop for x in list
+      for _y in other-list
+      collect x)
+```
+
+**Default**: disabled
+
+### `:function-length`
+
+Functions should not exceed maximum line count.
+
+**Options**: `:max-lines` (default: 50)
+
+```lisp
+(:function-length :max-lines 100)
+```
+
+```lisp
+;; Bad: function exceeds 50 lines (default)
+(defun very-long-function (data)
+  "This function has too many lines."
+  (line-1)
+  (line-2)
+  (line-3)
+  ...
+  (line-52))
+
+;; Good: function within limit
+(defun well-sized-function (data)
+  "This function is appropriately sized."
+  (process data))
+```
+
+**Counting**: Lines are counted from the first line of the function definition to the last closing parenthesis. Nested `flet`/`labels` functions are counted separately.
+
+**Default**: disabled
+
+### `:cyclomatic-complexity`
+
+Functions should not exceed maximum cyclomatic complexity.
+
+**Options**: `:max-complexity` (default: 10)
+
+```lisp
+(:cyclomatic-complexity :max-complexity 15)
+```
+
+```lisp
+;; Bad: complexity of 12 (too high with default max of 10)
+(defun high-complexity (cmd)
+  (cond
+    ((string= cmd "start") (start-server))
+    ((string= cmd "stop") (stop-server))
+    ((string= cmd "restart") (restart-server))
+    ((string= cmd "status") (show-status))
+    ((string= cmd "config") (show-config))
+    ((string= cmd "init") (initialize))
+    ((string= cmd "destroy") (destroy))
+    ((string= cmd "pause") (pause-server))
+    ((string= cmd "resume") (resume-server))
+    ((string= cmd "test") (run-tests))
+    (t (error "Unknown command"))))
+
+;; Good: lower complexity
+(defun simple-function (x)
+  (if (< x 0)
+      'negative
+      'positive))
+```
+
+**Complexity Calculation**: Uses modified cyclomatic complexity:
+- Base complexity: 1 per function
+- +1 for each conditional clause (`if`, `when`, `unless`, `cond` clause, `case` clause, etc.)
+- +1 for each logical operator (`and`, `or`)
+- +1 for each exception handler clause (`handler-case`, `handler-bind`, etc.)
+- +1 for each loop construct (`loop`, `dotimes`, `dolist`, `do`, etc.)
+
+Nested `flet`/`labels` functions are counted separately.
+
+**Default**: disabled
