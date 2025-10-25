@@ -171,9 +171,9 @@
 ;;; Cyclomatic-complexity rule
 
 (defclass cyclomatic-complexity-rule (base:rule)
-  ((max-complexity
-    :initarg :max-complexity
-    :initform 10
+  ((max
+    :initarg :max
+    :initform 20
     :accessor max-complexity))
   (:default-initargs
    :name :cyclomatic-complexity
@@ -335,17 +335,20 @@
     ;; COND: +1 per clause
     ((cond-p head) (count-cond-clauses expr))
 
-    ;; CASE/TYPECASE: +1 total (modified variant)
-    ((case-p head) 1)
+    ;; CASE/TYPECASE: +1 per clause (excluding otherwise/t)
+    ((case-p head) (count-case-clauses expr))
 
-    ;; Simple loops: +1 each
-    ((simple-loop-p head) 1)
+    ;; Simple iteration: +0 (dotimes, dolist)
+    ((simple-iteration-p head) 0)
+
+    ;; DO/DO*: +1 (has end-test condition)
+    ((do-loop-p head) 1)
 
     ;; LOOP: +1 for loop + count internal conditionals
     ((loop-p head) (calculate-loop-complexity expr))
 
-    ;; AND/OR: +(N-1) for N arguments
-    ((logical-operator-p head) (max 0 (1- (length (rest expr)))))
+    ;; AND/OR: +1 for each operator (regardless of argument count)
+    ((logical-operator-p head) 1)
 
     ;; Exception handling: +1 per handler
     ((ignore-errors-p head) 1)
@@ -370,22 +373,76 @@
        (string-equal (base:symbol-name-from-string head) "COND")))
 
 (defun count-cond-clauses (expr)
-  "Count clauses in a COND form."
+  "Count clauses in a COND form, excluding final t/otherwise clause.
+   Like if-elseif-else: only if and elseif count, not the final else."
   (let ((clauses (rest expr)))
-    (count-if #'consp clauses)))
+    (if (null clauses)
+        0
+        (let ((clause-count (count-if #'consp clauses)))
+          ;; Check if the last clause is t or otherwise (the 'else' clause)
+          (let ((last-clause (car (last clauses))))
+            (if (and (consp last-clause)
+                     (let ((test (first last-clause)))
+                       (or (eq test t)
+                           (and (stringp test)
+                                (let ((name (base:symbol-name-from-string test)))
+                                  (or (string-equal name "T")
+                                      (string-equal name "OTHERWISE")))))))
+                ;; Exclude the final else clause
+                (max 0 (1- clause-count))
+                ;; All clauses are conditionals
+                clause-count))))))
 
 (defun case-p (head)
-  "Check if HEAD is a case-like form (case, typecase, ecase, etypecase)."
+  "Check if HEAD is a case-like form (case, typecase, ecase, etypecase, ccase, ctypecase)."
   (and (stringp head)
        (member (base:symbol-name-from-string head)
-               '("CASE" "TYPECASE" "ECASE" "ETYPECASE")
+               '("CASE" "TYPECASE" "ECASE" "ETYPECASE" "CCASE" "CTYPECASE")
                :test #'string-equal)))
 
-(defun simple-loop-p (head)
-  "Check if HEAD is a simple loop (dotimes, dolist, do, do*)."
+(defun count-case-clauses (expr)
+  "Count clauses in a CASE-like form, excluding otherwise/t clause.
+   Like switch statements: each case counts, but not the default case."
+  (let* ((head (first expr))
+         (is-ecase (and (stringp head)
+                        (member (base:symbol-name-from-string head)
+                                '("ECASE" "ETYPECASE" "CCASE" "CTYPECASE")
+                                :test #'string-equal)))
+         ;; case/typecase: (case expr clause1 clause2 ...)
+         ;; Skip first two elements (operator and expression)
+         (clauses (cddr expr)))
+    (if (null clauses)
+        0
+        (let ((clause-count (count-if #'consp clauses)))
+          (if is-ecase
+              ;; ecase/etypecase/ccase/ctypecase don't have otherwise
+              clause-count
+              ;; Check if the last clause is otherwise/t (the 'default' clause)
+              (let ((last-clause (car (last clauses))))
+                (if (and (consp last-clause)
+                         (let ((key (first last-clause)))
+                           (or (eq key t)
+                               (and (stringp key)
+                                    (let ((name (base:symbol-name-from-string key)))
+                                      (or (string-equal name "T")
+                                          (string-equal name "OTHERWISE")))))))
+                    ;; Exclude the default clause
+                    (max 0 (1- clause-count))
+                    ;; All clauses are cases
+                    clause-count)))))))
+
+(defun simple-iteration-p (head)
+  "Check if HEAD is simple iteration without conditionals (dotimes, dolist)."
   (and (stringp head)
        (member (base:symbol-name-from-string head)
-               '("DOTIMES" "DOLIST" "DO" "DO*")
+               '("DOTIMES" "DOLIST")
+               :test #'string-equal)))
+
+(defun do-loop-p (head)
+  "Check if HEAD is DO or DO* (has end-test condition)."
+  (and (stringp head)
+       (member (base:symbol-name-from-string head)
+               '("DO" "DO*")
                :test #'string-equal)))
 
 (defun loop-p (head)
@@ -395,8 +452,9 @@
 
 (defun calculate-loop-complexity (expr)
   "Calculate complexity of a LOOP form.
-   Base +1 for the loop, +1 for each conditional keyword."
-  (let ((complexity 1)  ; Base for the loop itself
+   Only count conditional keywords (when, unless, if, while, until).
+   Simple loops without conditionals add no complexity."
+  (let ((complexity 0)  ; No base cost for the loop itself
         (keywords (rest expr)))
     ;; Count conditional keywords in the loop
     (dolist (kw keywords)

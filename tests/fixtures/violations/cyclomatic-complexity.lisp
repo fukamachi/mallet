@@ -1,10 +1,20 @@
 ;;; Test fixture for cyclomatic-complexity rule
+;;;
+;;; Calculation rules:
+;;; - Base: 1
+;;; - COND: +1 per clause (excluding final t/otherwise)
+;;; - CASE/TYPECASE: +1 per clause (excluding final otherwise/t)
+;;; - IF/WHEN/UNLESS: +1 each
+;;; - AND/OR: +1 each (regardless of argument count)
+;;; - Simple iteration (DOTIMES/DOLIST): +0 (no conditional)
+;;; - DO/DO*: +1 each (has end-test condition)
+;;; - LOOP: +1 per conditional keyword only (when/unless/if/while/until)
 
 ;; Simple function - complexity 1 (OK)
 (defun simple (x)
   (+ x 1))
 
-;; Medium complexity - complexity 5 (OK with default 10)
+;; Medium complexity - complexity 5 (1 + 4 cond clauses, OK with default 20)
 (defun medium (x)
   (cond
     ((< x 0) 'negative)
@@ -13,7 +23,7 @@
     ((> x 100) 'large)
     (t 'other)))
 
-;; High complexity - complexity 12 (VIOLATION with default 10)
+;; High complexity - complexity 11 (1 + 10 cond clauses, OK with default 20)
 (defun high-complexity (cmd)
   (cond
     ((string= cmd "start") (start-server))
@@ -26,6 +36,54 @@
     ((string= cmd "pause") (pause-server))
     ((string= cmd "resume") (resume-server))
     ((string= cmd "test") (run-tests))
+    (t (error "Unknown command"))))
+
+;; High complexity - complexity 19 (1 + 18 cond clauses, OK with default 20)
+(defun high-complexity-19 (cmd)
+  (cond
+    ((string= cmd "start") (start-server))
+    ((string= cmd "stop") (stop-server))
+    ((string= cmd "restart") (restart-server))
+    ((string= cmd "status") (show-status))
+    ((string= cmd "config") (show-config))
+    ((string= cmd "init") (initialize))
+    ((string= cmd "destroy") (destroy))
+    ((string= cmd "pause") (pause-server))
+    ((string= cmd "resume") (resume-server))
+    ((string= cmd "test") (run-tests))
+    ((string= cmd "logs") (show-logs))
+    ((string= cmd "backup") (backup-data))
+    ((string= cmd "restore") (restore-data))
+    ((string= cmd "upgrade") (upgrade-system))
+    ((string= cmd "downgrade") (downgrade-system))
+    ((string= cmd "monitor") (start-monitoring))
+    ((string= cmd "alert") (send-alert))
+    ((string= cmd "clean") (clean-cache))
+    (t (error "Unknown command"))))
+
+;; Very high complexity - complexity 21 (1 + 20 cond clauses, VIOLATION with default 20)
+(defun very-high-complexity (cmd)
+  (cond
+    ((string= cmd "start") (start-server))
+    ((string= cmd "stop") (stop-server))
+    ((string= cmd "restart") (restart-server))
+    ((string= cmd "status") (show-status))
+    ((string= cmd "config") (show-config))
+    ((string= cmd "init") (initialize))
+    ((string= cmd "destroy") (destroy))
+    ((string= cmd "pause") (pause-server))
+    ((string= cmd "resume") (resume-server))
+    ((string= cmd "test") (run-tests))
+    ((string= cmd "logs") (show-logs))
+    ((string= cmd "backup") (backup-data))
+    ((string= cmd "restore") (restore-data))
+    ((string= cmd "upgrade") (upgrade-system))
+    ((string= cmd "downgrade") (downgrade-system))
+    ((string= cmd "monitor") (start-monitoring))
+    ((string= cmd "alert") (send-alert))
+    ((string= cmd "clean") (clean-cache))
+    ((string= cmd "export") (export-data))
+    ((string= cmd "import") (import-data))
     (t (error "Unknown command"))))
 
 ;; Another simple function

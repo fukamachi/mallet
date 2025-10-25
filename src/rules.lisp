@@ -86,7 +86,7 @@ Always returns a rule object - enabled/disabled state is handled by config."
     (:cyclomatic-complexity
      (make-instance 'cyclomatic-complexity-rule
                     :severity (or severity :info)
-                    :max-complexity (getf options :max-complexity 10)))
+                    :max (getf options :max 20)))
 
     (otherwise
      (error "Unknown rule name: ~A" name))))

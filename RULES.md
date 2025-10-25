@@ -330,14 +330,14 @@ Functions should not exceed maximum line count.
 
 Functions should not exceed maximum cyclomatic complexity.
 
-**Options**: `:max-complexity` (default: 10)
+**Options**: `:max` (default: 20)
 
 ```lisp
-(:cyclomatic-complexity :max-complexity 15)
+(:cyclomatic-complexity :max 20)
 ```
 
 ```lisp
-;; Bad: complexity of 12 (too high with default max of 10)
+;; Bad: complexity of 19 (OK with default max of 20, shown for illustration)
 (defun high-complexity (cmd)
   (cond
     ((string= cmd "start") (start-server))
@@ -350,21 +350,38 @@ Functions should not exceed maximum cyclomatic complexity.
     ((string= cmd "pause") (pause-server))
     ((string= cmd "resume") (resume-server))
     ((string= cmd "test") (run-tests))
+    ((string= cmd "logs") (show-logs))
+    ((string= cmd "backup") (backup-data))
+    ((string= cmd "restore") (restore-data))
+    ((string= cmd "upgrade") (upgrade-system))
+    ((string= cmd "downgrade") (downgrade-system))
+    ((string= cmd "monitor") (start-monitoring))
+    ((string= cmd "alert") (send-alert))
+    ((string= cmd "clean") (clean-cache))
     (t (error "Unknown command"))))
+  ;; = 1 (base) + 18 (cond clauses, excluding final 't') = 19
 
 ;; Good: lower complexity
 (defun simple-function (x)
   (if (< x 0)
       'negative
       'positive))
+  ;; = 1 (base) + 1 (if) = 2
 ```
 
-**Complexity Calculation**: Uses modified cyclomatic complexity:
-- Base complexity: 1 per function
-- +1 for each conditional clause (`if`, `when`, `unless`, `cond` clause, `case` clause, etc.)
-- +1 for each logical operator (`and`, `or`)
-- +1 for each exception handler clause (`handler-case`, `handler-bind`, etc.)
-- +1 for each loop construct (`loop`, `dotimes`, `dolist`, `do`, etc.)
+**Complexity Calculation**:
+- **Base**: 1 per function
+- **Conditionals**: +1 for each `if`, `when`, `unless`
+- **COND**: +1 per clause (excluding final `t`/`otherwise` clause, like if-elseif-else)
+- **CASE/TYPECASE**: +1 per clause (excluding final `otherwise`/`t` clause, like switch)
+  - `ecase`, `etypecase`, `ccase`, `ctypecase`: all clauses count (no default)
+- **Logical operators**: +1 for each `and` or `or` (regardless of argument count)
+  - Example: `(and x (or y z))` = +2 (one for `and`, one for `or`)
+- **Simple iteration**: +0 for `dotimes`, `dolist` (no conditional branching)
+- **DO/DO***: +1 each (has end-test condition, like while loops)
+- **LOOP**: +1 per conditional keyword only (`when`, `unless`, `if`, `while`, `until`)
+  - Simple loops without conditionals add no complexity
+- **Exception handling**: +1 per handler clause (`handler-case`, `restart-case`, etc.)
 
 Nested `flet`/`labels` functions are counted separately.
 

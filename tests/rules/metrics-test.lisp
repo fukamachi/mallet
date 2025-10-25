@@ -132,11 +132,11 @@
 
 ;;; Cyclomatic-complexity tests
 
-(defun test-complexity (code expected-complexity &optional (max-complexity nil))
+(defun test-complexity (code expected-complexity &optional (max nil))
   "Test that CODE has EXPECTED-COMPLEXITY.
-   If MAX-COMPLEXITY is not provided, use (1- expected-complexity) to trigger violation."
+   If MAX is not provided, use (1- expected-complexity) to trigger violation."
   (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                              :max-complexity (or max-complexity (1- expected-complexity))))
+                              :max (or max (1- expected-complexity))))
          (forms (parser:parse-forms code #P"test.lisp"))
          (form (first forms))
          (violations (base:check-form rule form #P"test.lisp")))
@@ -145,10 +145,10 @@
       (ok (search (format nil "complexity of ~D" expected-complexity)
                   (violation:violation-message (first violations)))))))
 
-(defun test-no-complexity-violation (code max-complexity)
-  "Test that CODE does not violate with given MAX-COMPLEXITY."
+(defun test-no-complexity-violation (code max)
+  "Test that CODE does not violate with given MAX."
   (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                              :max-complexity max-complexity))
+                              :max max))
          (forms (parser:parse-forms code #P"test.lisp"))
          (form (first forms))
          (violations (base:check-form rule form #P"test.lisp")))
@@ -178,82 +178,159 @@
         (if (> y 0) 3 4))" 3)))
 
 (deftest complexity-cond
-  (testing "COND with 3 clauses adds 3"
+  (testing "COND with 3 clauses (2 conditionals + 1 else) adds 2"
     (test-complexity
      "(defun foo (x)
         (cond
           ((< x 0) -1)
           ((> x 0) 1)
-          (t 0)))" 4)))
+          (t 0)))" 3)))
+
+(deftest complexity-cond-no-else
+  (testing "COND with 3 clauses (all conditionals) adds 3"
+    (test-complexity
+     "(defun foo (x)
+        (cond
+          ((< x 0) -1)
+          ((= x 0) 0)
+          ((> x 0) 1)))" 4)))
+
+(deftest complexity-cond-otherwise
+  (testing "COND with otherwise instead of t also excludes it"
+    (test-complexity
+     "(defun foo (x)
+        (cond
+          ((< x 0) -1)
+          ((> x 0) 1)
+          (otherwise 0)))" 3)))
 
 (deftest complexity-case
-  (testing "CASE with 4 clauses adds 1 (modified variant)"
+  (testing "CASE with 3 cases + otherwise adds 3"
     (test-complexity
      "(defun foo (x)
         (case x
           (a 1)
           (b 2)
           (c 3)
-          (otherwise 4)))" 2)))
+          (otherwise 4)))" 4)))
+
+(deftest complexity-case-no-otherwise
+  (testing "CASE with 4 cases (no otherwise) adds 4"
+    (test-complexity
+     "(defun foo (x)
+        (case x
+          (a 1)
+          (b 2)
+          (c 3)
+          (d 4)))" 5)))
 
 (deftest complexity-typecase
-  (testing "TYPECASE adds 1 (modified variant)"
+  (testing "TYPECASE with 2 types + otherwise adds 2"
     (test-complexity
      "(defun foo (x)
         (typecase x
           (integer 1)
           (string 2)
-          (otherwise 3)))" 2)))
+          (otherwise 3)))" 3)))
+
+(deftest complexity-ecase
+  (testing "ECASE with 3 cases adds 3 (no otherwise needed)"
+    (test-complexity
+     "(defun foo (x)
+        (ecase x
+          (a 1)
+          (b 2)
+          (c 3)))" 4)))
+
+(deftest complexity-etypecase
+  (testing "ETYPECASE with 2 types adds 2 (no otherwise needed)"
+    (test-complexity
+     "(defun foo (x)
+        (etypecase x
+          (integer 1)
+          (string 2)))" 3)))
 
 ;; Phase 3B: Loops
 
 (deftest complexity-dotimes
-  (testing "DOTIMES adds 1"
-    (test-complexity
+  (testing "DOTIMES adds 0 (simple iteration)"
+    (test-no-complexity-violation
      "(defun foo (n)
         (dotimes (i n)
-          (print i)))" 2)))
+          (print i)))" 10)))
 
 (deftest complexity-dolist
-  (testing "DOLIST adds 1"
-    (test-complexity
+  (testing "DOLIST adds 0 (simple iteration)"
+    (test-no-complexity-violation
      "(defun foo (list)
         (dolist (x list)
-          (print x)))" 2)))
+          (print x)))" 10)))
+
+(deftest complexity-do
+  (testing "DO adds 1 (has end-test condition)"
+    (test-complexity
+     "(defun foo (n)
+        (do ((i 0 (1+ i)))
+            ((>= i n))
+          (print i)))" 2)))
+
+(deftest complexity-do-star
+  (testing "DO* adds 1 (has end-test condition)"
+    (test-complexity
+     "(defun foo (n)
+        (do* ((i 0 (1+ i)))
+             ((>= i n))
+          (print i)))" 2)))
 
 (deftest complexity-loop-simple
-  (testing "Simple LOOP adds 1"
-    (test-complexity
+  (testing "Simple LOOP adds 0 (no conditionals)"
+    (test-no-complexity-violation
      "(defun foo (list)
-        (loop for x in list collect x))" 2)))
+        (loop for x in list collect x))" 10)))
 
 (deftest complexity-loop-when
-  (testing "LOOP with WHEN adds 2"
+  (testing "LOOP with WHEN adds 1"
     (test-complexity
      "(defun foo (list)
         (loop for x in list
               when (evenp x)
-                collect x))" 3)))
+                collect x))" 2)))
+
+(deftest complexity-loop-multiple-conditionals
+  (testing "LOOP with multiple conditionals"
+    (test-complexity
+     "(defun foo (list)
+        (loop for x in list
+              when (evenp x)
+                collect x
+              unless (zerop x)
+                sum x))" 3)))
 
 ;; Phase 3C: Advanced forms
 
-(deftest complexity-and-two-args
-  (testing "AND with 2 arguments adds 1"
+(deftest complexity-and
+  (testing "AND adds 1 (regardless of argument count)"
     (test-complexity
      "(defun foo (a b)
         (and a b))" 2)))
 
-(deftest complexity-and-four-args
-  (testing "AND with 4 arguments adds 3"
+(deftest complexity-and-many-args
+  (testing "AND with 4 arguments still adds 1"
     (test-complexity
      "(defun validate (a b c d)
-        (and a b c d))" 4)))
+        (and a b c d))" 2)))
 
-(deftest complexity-or-three-args
-  (testing "OR with 3 arguments adds 2"
+(deftest complexity-or
+  (testing "OR adds 1 (regardless of argument count)"
     (test-complexity
      "(defun foo (a b c)
-        (or a b c))" 3)))
+        (or a b c))" 2)))
+
+(deftest complexity-nested-and-or
+  (testing "Nested AND/OR each adds 1"
+    (test-complexity
+     "(defun foo (x y z)
+        (and x (or y z)))" 3)))
 
 (deftest complexity-ignore-errors
   (testing "IGNORE-ERRORS adds 1"
@@ -274,7 +351,7 @@
 ;; Complex example
 
 (deftest complexity-violation-example
-  (testing "Violation example from plan (complexity 11 > 10)"
+  (testing "Violation example (9 conditions + 1 else = 9 added, total 10)"
     (test-complexity
      "(defun handle-command (cmd args)
         (cond
@@ -287,4 +364,4 @@
           ((string= cmd \"destroy\") (destroy))
           ((string= cmd \"pause\") (pause-server))
           ((string= cmd \"resume\") (resume-server))
-          (t (error \"Unknown command\"))))" 11)))
+          (t (error \"Unknown command\"))))" 10)))
