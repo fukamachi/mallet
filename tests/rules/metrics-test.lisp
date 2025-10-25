@@ -365,3 +365,58 @@
           ((string= cmd \"pause\") (pause-server))
           ((string= cmd \"resume\") (resume-server))
           (t (error \"Unknown command\"))))" 10)))
+
+;; Modified variant tests
+
+(deftest complexity-case-modified-variant
+  (testing "CASE with modified variant counts as +1 total"
+    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
+                                :max 1
+                                :variant :modified))
+           (code "(defun foo (x)
+                    (case x
+                      (a 1)
+                      (b 2)
+                      (c 3)
+                      (otherwise 4)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (violations (base:check-form rule form #P"test.lisp")))
+      ;; Complexity = 1 (base) + 1 (case) = 2 with modified variant
+      (ok (= 1 (length violations)))
+      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+
+(deftest complexity-case-standard-variant
+  (testing "CASE with standard variant counts per clause"
+    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
+                                :max 1
+                                :variant :standard))
+           (code "(defun foo (x)
+                    (case x
+                      (a 1)
+                      (b 2)
+                      (c 3)
+                      (otherwise 4)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (violations (base:check-form rule form #P"test.lisp")))
+      ;; Complexity = 1 (base) + 3 (case clauses) = 4 with standard variant
+      (ok (= 1 (length violations)))
+      (ok (search "complexity of 4" (violation:violation-message (first violations)))))))
+
+(deftest complexity-typecase-modified-variant
+  (testing "TYPECASE with modified variant counts as +1 total"
+    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
+                                :max 1
+                                :variant :modified))
+           (code "(defun foo (x)
+                    (typecase x
+                      (integer 1)
+                      (string 2)
+                      (otherwise 3)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (violations (base:check-form rule form #P"test.lisp")))
+      ;; Complexity = 1 (base) + 1 (typecase) = 2 with modified variant
+      (ok (= 1 (length violations)))
+      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))

@@ -330,10 +330,13 @@ Functions should not exceed maximum line count.
 
 Functions should not exceed maximum cyclomatic complexity.
 
-**Options**: `:max` (default: 20)
+**Options**:
+- `:max` (default: 20) - Maximum allowed complexity
+- `:variant` (default: `:standard`) - Calculation variant: `:standard` or `:modified`
 
 ```lisp
 (:cyclomatic-complexity :max 20)
+(:cyclomatic-complexity :max 15 :variant :modified)
 ```
 
 ```lisp
@@ -369,7 +372,7 @@ Functions should not exceed maximum cyclomatic complexity.
   ;; = 1 (base) + 1 (if) = 2
 ```
 
-**Complexity Calculation**:
+**Complexity Calculation** (`:standard` variant, default):
 - **Base**: 1 per function
 - **Conditionals**: +1 for each `if`, `when`, `unless`
 - **COND**: +1 per clause (excluding final `t`/`otherwise` clause, like if-elseif-else)
@@ -382,6 +385,11 @@ Functions should not exceed maximum cyclomatic complexity.
 - **LOOP**: +1 per conditional keyword only (`when`, `unless`, `if`, `while`, `until`)
   - Simple loops without conditionals add no complexity
 - **Exception handling**: +1 per handler clause (`handler-case`, `restart-case`, etc.)
+
+**`:modified` variant**:
+- Same as `:standard`, except:
+- **CASE/TYPECASE**: +1 total (entire case statement counts as one decision point)
+  - Example: `(case x (a 1) (b 2) (c 3) (otherwise 4))` = +1 (not +3)
 
 Nested `flet`/`labels` functions are counted separately.
 

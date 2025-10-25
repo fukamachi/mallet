@@ -174,7 +174,12 @@
   ((max
     :initarg :max
     :initform 20
-    :accessor max-complexity))
+    :accessor max-complexity)
+   (variant
+    :initarg :variant
+    :initform :standard
+    :accessor complexity-variant
+    :documentation "Variant: :standard (count per clause) or :modified (case as +1 total)"))
   (:default-initargs
    :name :cyclomatic-complexity
    :description "Function has high cyclomatic complexity"
@@ -211,7 +216,7 @@
                      ;; Check if this is a function definition
                      (when (is-function-definition-p head)
                        (let ((complexity (calculate-complexity
-                                          current-expr visited)))
+                                          current-expr visited (complexity-variant rule))))
                          (when (and (> complexity (max-complexity rule))
                                     (base:should-create-violation-p rule))
                            (push (make-complexity-violation
@@ -234,7 +239,7 @@
                                   (base:find-actual-position func-def position-map
                                                              actual-line actual-column)
                                 (let ((complexity (calculate-complexity
-                                                   func-def visited))
+                                                   func-def visited (complexity-variant rule)))
                                       (func-name (get-inner-function-name func-def)))
                                   (when (and (> complexity (max-complexity rule))
                                              (base:should-create-violation-p rule))
@@ -261,9 +266,9 @@
 
     violations))
 
-(defun calculate-complexity (function-expr visited)
+(defun calculate-complexity (function-expr visited &optional (variant :standard))
   "Calculate cyclomatic complexity of FUNCTION-EXPR.
-   Uses modified variant (case counts as 1, not per-clause)."
+   VARIANT can be :standard (count per clause) or :modified (case as +1 total)."
   ;; Base complexity
   (let ((complexity 1))
 
@@ -275,7 +280,7 @@
 
                  (let ((head (first expr)))
                    ;; Add complexity for this form
-                   (incf complexity (form-complexity head expr))
+                   (incf complexity (form-complexity head expr variant))
 
                    ;; Recurse (but don't enter nested function definitions)
                    (unless (is-nested-function-p head)
@@ -325,9 +330,10 @@
         (t
          (cddr expr))))))
 
-(defun form-complexity (head expr)
+(defun form-complexity (head expr &optional (variant :standard))
   "Return complexity added by this form.
-   HEAD is the car of the form, EXPR is the full form."
+   HEAD is the car of the form, EXPR is the full form.
+   VARIANT is :standard (count per clause) or :modified (case as +1 total)."
   (cond
     ;; Conditionals: +1 each
     ((conditional-p head) 1)
@@ -335,8 +341,11 @@
     ;; COND: +1 per clause
     ((cond-p head) (count-cond-clauses expr))
 
-    ;; CASE/TYPECASE: +1 per clause (excluding otherwise/t)
-    ((case-p head) (count-case-clauses expr))
+    ;; CASE/TYPECASE: depends on variant
+    ((case-p head)
+     (if (eq variant :modified)
+         1  ; Modified: entire case statement = +1
+         (count-case-clauses expr)))  ; Standard: count per clause
 
     ;; Simple iteration: +0 (dotimes, dolist)
     ((simple-iteration-p head) 0)
