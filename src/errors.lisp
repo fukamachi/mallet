@@ -20,7 +20,14 @@
            #:config-not-found-path
            #:config-parse-failed
            #:config-parse-failed-path
-           #:config-parse-failed-cause))
+           #:config-parse-failed-cause
+           ;; New CLI rule option errors
+           #:unknown-rule
+           #:unknown-rule-value
+           #:invalid-rule-option
+           #:invalid-rule-option-value
+           #:invalid-group
+           #:invalid-group-value))
 (in-package #:mallet/errors)
 
 ;;; Base error conditions
@@ -124,3 +131,32 @@
                (format stream "~%Cause: ~A"
                        (config-parse-failed-cause condition)))))
   (:documentation "Signaled when a config file cannot be parsed."))
+
+;;; CLI rule option error conditions
+
+(define-condition unknown-rule (cli-error)
+  ((value :initarg :value
+          :reader unknown-rule-value))
+  (:report (lambda (condition stream)
+             (format stream "Unknown rule: ~A~%~
+                            Run 'mallet --list-rules' to see available rules."
+                     (unknown-rule-value condition))))
+  (:documentation "Signaled when an unknown rule name is specified."))
+
+(define-condition invalid-rule-option (cli-error)
+  ((value :initarg :value
+          :reader invalid-rule-option-value))
+  (:report (lambda (condition stream)
+             (format stream "Invalid rule option syntax: ~A~%~
+                            Expected format: key=value (e.g., max=15)"
+                     (invalid-rule-option-value condition))))
+  (:documentation "Signaled when a rule option has invalid syntax."))
+
+(define-condition invalid-group (cli-error)
+  ((value :initarg :value
+          :reader invalid-group-value))
+  (:report (lambda (condition stream)
+             (format stream "Invalid group: ~A~%~
+                            Expected one of: error, warning, convention, format, info, metrics"
+                     (invalid-group-value condition))))
+  (:documentation "Signaled when an invalid group name is specified."))

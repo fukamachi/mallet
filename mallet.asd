@@ -72,6 +72,7 @@
   ((:file "errors-test")
    (:file "config-test")
    (:file "config-ignore-test")
+   (:file "cli-parsing-test")
    (:file "fixer-test")
    (:file "formatter-test")
    (:file "suppression")

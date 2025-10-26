@@ -64,15 +64,86 @@
 
 ;;; CLI Implementation
 
+;;; CLI parsing helpers for rule options
+
+(defun parse-option-value (val-str)
+  "Parse option value: number, keyword, or string."
+  (check-type val-str string)
+  (cond
+    ;; Try parsing as integer
+    ((and (plusp (length val-str))
+          (every #'digit-char-p val-str))
+     (parse-integer val-str))
+    ;; Try parsing as keyword (for variant=modified)
+    ((and (plusp (length val-str))
+          (alpha-char-p (char val-str 0)))
+     (intern (string-upcase val-str) :keyword))
+    ;; Otherwise keep as string
+    (t val-str)))
+
+(defun parse-rule-options (options-str)
+  "Parse 'max=15,variant=modified' into plist (:max 15 :variant :modified)."
+  (check-type options-str string)
+  (let ((pairs (uiop:split-string options-str :separator ","))
+        (result '()))
+    (dolist (pair pairs)
+      (let ((eq-pos (position #\= pair)))
+        (unless eq-pos
+          (error 'errors:invalid-rule-option :value pair))
+        (let* ((key-str (subseq pair 0 eq-pos))
+               (val-str (subseq pair (1+ eq-pos)))
+               (key (intern (string-upcase key-str) :keyword))
+               (val (parse-option-value val-str)))
+          (setf result (list* val key result)))))
+    (nreverse result)))
+
+(defun parse-rule-name (name-str)
+  "Parse rule name string to keyword. Validates it exists."
+  (check-type name-str string)
+  (let ((keyword (intern (string-upcase name-str) :keyword)))
+    ;; Validate rule exists (check against make-rule)
+    (handler-case
+        (progn
+          (make-rule keyword)
+          keyword)
+      (error ()
+        (error 'errors:unknown-rule :value name-str)))))
+
+(defun parse-rule-spec (spec)
+  "Parse rule spec like 'cyclomatic-complexity' or 'cyclomatic-complexity:max=15,variant=modified'.
+Returns (rule-name . options-plist)."
+  (check-type spec string)
+  (let ((colon-pos (position #\: spec)))
+    (if colon-pos
+        ;; Has options: split and parse
+        (let* ((rule-name (parse-rule-name (subseq spec 0 colon-pos)))
+               (options-str (subseq spec (1+ colon-pos)))
+               (options (parse-rule-options options-str)))
+          (cons rule-name options))
+        ;; No options: just rule name
+        (cons (parse-rule-name spec) '()))))
+
+(defun parse-group-name (group-str)
+  "Parse group name and validate it's a valid severity."
+  (check-type group-str string)
+  (let ((keyword (intern (string-upcase group-str) :keyword)))
+    (unless (member keyword '(:error :warning :convention :format :info :metrics))
+      (error 'errors:invalid-group :value group-str))
+    keyword))
+
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug fix-mode files).
+Returns (values format config-path preset debug fix-mode cli-rules files).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
         (preset nil)
         (debug nil)
         (fix-mode nil)  ; nil, :fix, or :fix-dry-run
+        (enable-rules '())      ; List of (rule-name . options-plist)
+        (disable-rules '())     ; List of rule-names (keywords)
+        (enable-groups '())     ; List of group names (keywords)
+        (disable-groups '())    ; List of group names (keywords)
         (files '()))
     (loop while args do
       (let ((arg (pop args)))
@@ -113,6 +184,26 @@ Signals specific error conditions for invalid input."
            (setf fix-mode :fix))
           ((string= arg "--fix-dry-run")
            (setf fix-mode :fix-dry-run))
+          ((string= arg "--enable")
+           (let ((spec (pop args)))
+             (unless spec
+               (error 'errors:missing-option-value :option "--enable"))
+             (push (parse-rule-spec spec) enable-rules)))
+          ((string= arg "--disable")
+           (let ((rule-name-str (pop args)))
+             (unless rule-name-str
+               (error 'errors:missing-option-value :option "--disable"))
+             (push (parse-rule-name rule-name-str) disable-rules)))
+          ((string= arg "--enable-group")
+           (let ((group-str (pop args)))
+             (unless group-str
+               (error 'errors:missing-option-value :option "--enable-group"))
+             (push (parse-group-name group-str) enable-groups)))
+          ((string= arg "--disable-group")
+           (let ((group-str (pop args)))
+             (unless group-str
+               (error 'errors:missing-option-value :option "--disable-group"))
+             (push (parse-group-name group-str) disable-groups)))
           ((string= arg "--help")
            (print-help)
            (uiop:quit 0))
@@ -123,7 +214,11 @@ Signals specific error conditions for invalid input."
            (error 'errors:unknown-option :option arg))
           (t
            (push arg files)))))
-    (values format config-path preset debug fix-mode (nreverse files))))
+    (let ((cli-rules (list :enable-rules (nreverse enable-rules)
+                           :disable-rules (nreverse disable-rules)
+                           :enable-groups (nreverse enable-groups)
+                           :disable-groups (nreverse disable-groups))))
+      (values format config-path preset debug fix-mode cli-rules (nreverse files)))))
 
 (defun print-help ()
   "Print CLI usage information."
@@ -137,6 +232,13 @@ Options:
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
   --preset <name>     Use built-in preset (default or all)
   --all, -a           Alias for --preset all
+
+  --enable <rule>     Enable specific rule (e.g., --enable cyclomatic-complexity)
+  --enable <rule:opts> Enable rule with options (e.g., --enable line-length:max=120)
+  --disable <rule>    Disable specific rule (e.g., --disable trailing-whitespace)
+  --enable-group <group>  Enable all rules in severity group
+  --disable-group <group> Disable all rules in severity group
+
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
   --debug             Enable debug mode with detailed diagnostics
@@ -152,6 +254,14 @@ Presets:
   default             Only universally-accepted rules (quiet, recommended)
   all                 All rules enabled (useful for exploration)
 
+Rule Groups (by severity):
+  error               Objectively wrong code (causes runtime errors)
+  warning             Likely bugs or dangerous patterns
+  convention          Idiom suggestions (not wrong, but not idiomatic)
+  format              Consensus formatting (Emacs/SLIME standards)
+  info                Subjective preferences (style choices)
+  metrics             Code quality measurements (complexity, length)
+
 Examples:
   mallet src
   mallet src/main.lisp
@@ -161,6 +271,18 @@ Examples:
   mallet --config .mallet.lisp src/
   mallet --fix src/                   # Auto-fix violations
   mallet --fix-dry-run src/           # Preview fixes without changing files
+
+  # Enable metrics rules without config file
+  mallet --enable-group metrics src/
+
+  # Enable specific rule with custom options
+  mallet --enable cyclomatic-complexity:max=15 src/
+
+  # Mix preset with CLI overrides
+  mallet --preset default --enable-group metrics src/
+
+  # Override multiple rules
+  mallet --enable cyclomatic-complexity:max=10 --enable function-length:max=30 src/
 "))
 
 (defun expand-file-args (file-args)
@@ -215,7 +337,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (uiop:print-condition-backtrace e))
                  (uiop:quit 3))))
 
-          (multiple-value-bind (format config-path preset debug fix-mode file-args)
+          (multiple-value-bind (format config-path preset debug fix-mode cli-rules file-args)
               (parse-args args)
 
             ;; Enable debug mode if requested
@@ -230,11 +352,21 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (config:*default-preset* (or preset :default))
                    ;; Auto-discover config from CWD if not explicitly provided
                    ;; If preset is specified, it overrides :extends in config file
-                   (config (or (and config-path
-                                    (config:load-config config-path :preset-override preset))
-                               (let ((discovered (config:find-config-file (uiop:getcwd))))
-                                 (when discovered
-                                   (config:load-config discovered :preset-override preset)))))
+                   (base-config (or (and config-path
+                                         (config:load-config config-path :preset-override preset))
+                                    (let ((discovered (config:find-config-file (uiop:getcwd))))
+                                      (when discovered
+                                        (config:load-config discovered :preset-override preset)))
+                                    ;; No config file found, use preset
+                                    (config:get-built-in-config (or preset :default))))
+                   ;; Apply CLI overrides if any
+                   (config (let ((has-cli-rules (or (getf cli-rules :enable-rules)
+                                                     (getf cli-rules :disable-rules)
+                                                     (getf cli-rules :enable-groups)
+                                                     (getf cli-rules :disable-groups))))
+                             (if has-cli-rules
+                                 (config:apply-cli-overrides base-config cli-rules)
+                                 base-config)))
                    (severity-counts '())  ; Accumulated counts as plist
                    (has-errors nil)
                    (has-violations nil)

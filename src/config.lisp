@@ -17,6 +17,8 @@
            #:config-root-dir
            #:file-ignored-p
            #:*default-preset*
+           ;; CLI overrides
+           #:apply-cli-overrides
            ;; Path override structure and accessors
            #:path-override
            #:path-override-patterns
@@ -390,6 +392,96 @@ Returns T if the file matches any ignore pattern, NIL otherwise."
     (some (lambda (pattern)
             (glob:glob-path-match pattern match-path))
           ignore-patterns)))
+
+;;; CLI override merging
+
+(defun get-all-rules-by-severity (severity)
+  "Get all rule instances with the given SEVERITY from the :all preset."
+  (let ((all-config (make-all-config)))
+    (remove-if-not (lambda (rule)
+                     (eq (rules:rule-severity rule) severity))
+                   (config-rules all-config))))
+
+(defun apply-cli-overrides (config cli-rules)
+  "Apply CLI rule overrides to CONFIG. Returns new config object.
+CLI overrides have highest precedence.
+
+CLI-RULES is a plist with:
+  :enable-rules - List of (rule-name . options-plist)
+  :disable-rules - List of rule-name keywords
+  :enable-groups - List of severity keywords
+  :disable-groups - List of severity keywords"
+  (check-type config config)
+  (check-type cli-rules list)
+
+  (let* ((enable-rules (getf cli-rules :enable-rules))
+         (disable-rules (getf cli-rules :disable-rules))
+         (enable-groups (getf cli-rules :enable-groups))
+         (disable-groups (getf cli-rules :disable-groups))
+         (base-rules (config-rules config))
+         (base-disabled (config-disabled-rules config))
+         (result-rules '())
+         (result-disabled (copy-list base-disabled)))
+
+    ;; Step 1: Process each base rule against CLI overrides
+    (dolist (rule base-rules)
+      (let* ((severity (rules:rule-severity rule))
+             (rule-name (rules:rule-name rule))
+             (explicitly-enabled (assoc rule-name enable-rules))
+             (explicitly-disabled (member rule-name disable-rules))
+             (group-enabled (member severity enable-groups))
+             (group-disabled (member severity disable-groups)))
+        (cond
+          ;; Explicitly enabled: recreate with new options (highest priority)
+          (explicitly-enabled
+           (let ((options (cdr explicitly-enabled)))
+             (push (apply #'rules:make-rule rule-name options) result-rules)))
+
+          ;; Explicitly disabled: add to disabled list
+          (explicitly-disabled
+           (pushnew rule-name result-disabled))
+
+          ;; Group enabled: include rule, remove from disabled
+          (group-enabled
+           (push rule result-rules)
+           (setf result-disabled (remove rule-name result-disabled)))
+
+          ;; Group disabled: add to disabled list
+          (group-disabled
+           (pushnew rule-name result-disabled))
+
+          ;; No CLI override: keep base rule state
+          (t
+           (unless (member rule-name base-disabled)
+             (push rule result-rules))))))
+
+    ;; Step 2: Add rules that were only in enable-rules (not in base config)
+    (dolist (enable-spec enable-rules)
+      (let ((rule-name (car enable-spec)))
+        (unless (find rule-name base-rules :key #'rules:rule-name)
+          (let ((options (cdr enable-spec)))
+            (push (apply #'rules:make-rule rule-name options) result-rules)
+            ;; Remove from disabled if it was there
+            (setf result-disabled (remove rule-name result-disabled))))))
+
+    ;; Step 3: Add rules from enabled groups that aren't in base config
+    (dolist (severity enable-groups)
+      (let ((group-rules (get-all-rules-by-severity severity)))
+        (dolist (rule group-rules)
+          (let ((rule-name (rules:rule-name rule)))
+            (unless (or (find rule-name result-rules :key #'rules:rule-name)
+                        (find rule-name base-rules :key #'rules:rule-name)
+                        (assoc rule-name enable-rules))  ; Skip if explicitly enabled
+              (push rule result-rules)
+              (setf result-disabled (remove rule-name result-disabled)))))))
+
+    ;; Step 4: Create new config with overridden rules
+    (make-config
+     :rules (nreverse result-rules)
+     :disabled-rules result-disabled
+     :path-rules (config-path-rules config)
+     :ignore (config-ignore config)
+     :root-dir (config-root-dir config))))
 
 ;;; Config file discovery
 
