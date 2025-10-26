@@ -296,6 +296,10 @@ Loop variables should be used within the loop body.
 
 **Default**: disabled
 
+## METRICS
+
+Code quality metrics that measure complexity and size. These are informational and don't indicate bugs or errors.
+
 ### `:function-length`
 
 Functions should not exceed maximum line count.

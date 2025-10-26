@@ -129,7 +129,7 @@ Fix types:
    (severity
     :initarg :severity
     :reader violation-severity
-    :type (member :error :warning :convention :format :info)
+    :type (member :error :warning :convention :format :info :metrics)
     :documentation "Severity level of the violation")
    (message
     :initarg :message

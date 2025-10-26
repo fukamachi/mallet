@@ -28,7 +28,7 @@
   (:default-initargs
    :name :function-length
    :description "Function exceeds maximum length"
-   :severity :info
+   :severity :metrics
    :type :form))
 
 (defmethod base:check-form ((rule function-length-rule) form file)
@@ -438,7 +438,7 @@
   (:default-initargs
    :name :cyclomatic-complexity
    :description "Function has high cyclomatic complexity"
-   :severity :info
+   :severity :metrics
    :type :form))
 
 (defmethod base:check-form ((rule cyclomatic-complexity-rule) form file)
