@@ -39,7 +39,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
 (defclass line-length-rule (base:rule)
   ((max-length
     :initarg :max
-    :initform 80
+    :initform 100
     :reader line-length-rule-max-length
     :type (integer 1)
     :documentation "Maximum allowed line length"))

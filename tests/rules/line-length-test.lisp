@@ -8,8 +8,8 @@
 (in-package #:mallet/tests/rules/line-length)
 
 (deftest line-length-within-limit
-  (testing "Line within default limit (80 chars)"
-    (let ((text (make-string 79 :initial-element #\a))
+  (testing "Line within default limit (100 chars)"
+    (let ((text (make-string 99 :initial-element #\a))
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:line-length-rule)))
       (let ((violations (rules:check-text rule text file)))
@@ -23,8 +23,8 @@
         (ok (null violations))))))
 
 (deftest line-length-exceeds-limit
-  (testing "Line exceeding default limit (80 chars)"
-    (let ((text (make-string 81 :initial-element #\a))
+  (testing "Line exceeding default limit (100 chars)"
+    (let ((text (make-string 101 :initial-element #\a))
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:line-length-rule)))
       (let ((violations (rules:check-text rule text file)))
@@ -32,12 +32,12 @@
         (let ((v (first violations)))
           (ok (eq :line-length (violation:violation-rule v)))
           (ok (eq 1 (violation:violation-line v)))
-          (ok (ppcre:scan "exceeds.*80" (violation:violation-message v)))))))
+          (ok (ppcre:scan "exceeds.*100" (violation:violation-message v)))))))
 
   (testing "Multiple lines, one exceeding"
     (let ((text (format nil "~A~%~A~%~A"
                         (make-string 50 :initial-element #\a)
-                        (make-string 100 :initial-element #\b)
+                        (make-string 120 :initial-element #\b)
                         (make-string 50 :initial-element #\c)))
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:line-length-rule)))
@@ -48,9 +48,9 @@
 
   (testing "Multiple lines exceeding"
     (let ((text (format nil "~A~%~A~%~A"
-                        (make-string 100 :initial-element #\a)
+                        (make-string 120 :initial-element #\a)
                         (make-string 50 :initial-element #\b)
-                        (make-string 90 :initial-element #\c)))
+                        (make-string 110 :initial-element #\c)))
           (file #p"/tmp/test.lisp")
           (rule (make-instance 'rules:line-length-rule)))
       (let ((violations (rules:check-text rule text file)))

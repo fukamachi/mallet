@@ -223,10 +223,10 @@ Files must end with a newline.
 
 Lines should not exceed maximum length.
 
-**Options**: `:max` (default: 80)
+**Options**: `:max` (default: 100)
 
 ```lisp
-(:line-length :enabled t :max 100)
+(:line-length :enabled t :max 120)
 ```
 
 **Default**: disabled
