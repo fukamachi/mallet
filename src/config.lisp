@@ -209,9 +209,11 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
           (dolist (base-rule base-rules)
             (unless (member (rules:rule-name base-rule) rule-names)
               (push base-rule rules)))
-          ;; Merge disabled rules
+          ;; Merge disabled rules, but exclude rules that were explicitly enabled
           (setf disabled-rules
-                (union disabled-rules (config-disabled-rules extends)))))
+                (union disabled-rules
+                       ;; Remove enabled rules from base disabled list
+                       (set-difference (config-disabled-rules extends) rule-names)))))
 
       (make-config :rules (nreverse rules)
                    :disabled-rules disabled-rules
