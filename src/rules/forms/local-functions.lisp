@@ -311,6 +311,26 @@ Unlike variable references, this ONLY matches when the name appears in function 
                                                :fix nil)
                                 *violations*))))))))))))))
 
+(defun should-skip-form-p (head)
+  "Check if a form should be skipped entirely (no recursion into it)."
+  (or (eq head 'cl:quote)
+      (eq head 'quote)
+      (base:symbol-matches-p head "QUOTE")
+      (base:symbol-matches-p head "DEFSTRUCT")
+      (base:symbol-matches-p head "DEFCLASS")
+      (base:symbol-matches-p head "DEFPACKAGE")
+      (base:symbol-matches-p head "DEFTYPE")
+      (base:symbol-matches-p head "DEFSETF")
+      (base:symbol-matches-p head "DEFINE-MODIFY-MACRO")
+      (base:symbol-matches-p head "DEFINE-SETF-EXPANDER")))
+
+(defun quasiquote-form-p (head)
+  "Check if HEAD represents a quasiquote form."
+  (or (eq head 'eclector.reader:quasiquote)
+      (and (symbolp head)
+           (string-equal (symbol-name head) "QUASIQUOTE")
+           (string-equal (package-name (symbol-package head)) "ECLECTOR.READER"))))
+
 (defun check-expr (expr line column position-map rule)
   "Recursively check expression for unused local functions."
   (when (consp expr)
@@ -325,45 +345,12 @@ Unlike variable references, this ONLY matches when the name appears in function 
 
       ;; 2. Handle special forms for recursion
       (cond
-        ;; QUOTE - skip entirely (pure data)
-        ((or (eq head 'cl:quote)
-             (eq head 'quote)
-             (base:symbol-matches-p head "QUOTE"))
-         nil)
-
-        ;; DEFSTRUCT - skip entirely
-        ((base:symbol-matches-p head "DEFSTRUCT")
-         nil)
-
-        ;; DEFCLASS - skip entirely
-        ((base:symbol-matches-p head "DEFCLASS")
-         nil)
-
-        ;; DEFPACKAGE - skip entirely
-        ((base:symbol-matches-p head "DEFPACKAGE")
-         nil)
-
-        ;; DEFTYPE - skip entirely
-        ((base:symbol-matches-p head "DEFTYPE")
-         nil)
-
-        ;; DEFSETF - skip entirely
-        ((base:symbol-matches-p head "DEFSETF")
-         nil)
-
-        ;; DEFINE-MODIFY-MACRO - skip entirely
-        ((base:symbol-matches-p head "DEFINE-MODIFY-MACRO")
-         nil)
-
-        ;; DEFINE-SETF-EXPANDER - skip entirely
-        ((base:symbol-matches-p head "DEFINE-SETF-EXPANDER")
+        ;; Skip forms that should not be recursed into
+        ((should-skip-form-p head)
          nil)
 
         ;; QUASIQUOTE - only check unquoted parts
-        ((or (eq head 'eclector.reader:quasiquote)
-             (and (symbolp head)
-                  (string-equal (symbol-name head) "QUASIQUOTE")
-                  (string-equal (package-name (symbol-package head)) "ECLECTOR.READER")))
+        ((quasiquote-form-p head)
          (labels ((check-quasi (expr)
                     "Recursively check quasiquoted expression, only descending into unquotes."
                     (when (consp expr)

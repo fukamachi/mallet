@@ -108,10 +108,10 @@ Form-level linting rules should skip Coalton forms as they have different semant
                   (error () form))))
       (when (consp expr)
         (let* ((head (first expr))
-               (symbol-name (cond
-                              ((stringp head) (symbol-name-from-string head))
-                              ((symbolp head) (symbol-name head))
-                              (t nil))))
+               (symbol-name (typecase head
+                              (string (symbol-name-from-string head))
+                              (symbol (symbol-name head))
+                              (otherwise nil))))
           (and symbol-name
                (string-equal symbol-name "coalton-toplevel")))))))
 
@@ -210,6 +210,52 @@ This :around method checks for (declare (mallet:suppress ...)) forms and manages
         ;; No suppression state bound (e.g., in unit tests), just call method
         (call-next-method))))
 
+(defun form-can-have-declarations-p (form-head)
+  "Check if FORM-HEAD represents a form that can have declarations."
+  (let ((form-head-name (typecase form-head
+                          (string (symbol-name-from-string form-head))
+                          (symbol (symbol-name form-head)))))
+    (when form-head-name
+      (member form-head-name
+              '("LET" "LET*" "FLET" "LABELS" "LOCALLY"
+                "LAMBDA" "DEFUN" "DEFMETHOD" "DEFMACRO"
+                "WITH-OPEN-FILE" "WITH-OUTPUT-TO-STRING"
+                "WITH-INPUT-FROM-STRING" "HANDLER-BIND"
+                "HANDLER-CASE" "RESTART-BIND" "RESTART-CASE")
+              :test #'string-equal))))
+
+(defun declare-form-p (form)
+  "Check if FORM is a DECLARE form."
+  (and (consp form)
+       (or (eq (first form) 'declare)
+           (and (stringp (first form))
+                (string-equal (symbol-name-from-string (first form)) "DECLARE")))))
+
+(defun mallet-suppress-declaration-p (decl-head)
+  "Check if DECL-HEAD represents a mallet:suppress declaration."
+  (or (and (symbolp decl-head)
+           (eq (symbol-package decl-head) (find-package "MALLET"))
+           (string-equal (symbol-name decl-head) "SUPPRESS"))
+      (and (stringp decl-head)
+           (search "MALLET:suppress" decl-head :test #'char-equal))))
+
+(defun normalize-rule-to-keyword (rule)
+  "Convert RULE to a keyword, handling various input formats."
+  (typecase rule
+    (keyword
+     rule)
+    (symbol
+     (intern (symbol-name rule) :keyword))
+    (string
+     (let ((name (string-upcase (symbol-name-from-string rule))))
+       (intern (if (utils:keyword-string-p name)
+                   (subseq name 1)
+                   name)
+               :keyword)))
+    (otherwise
+     rule)))
+
+
 (defun extract-declare-suppressions (expr)
   "Extract mallet:suppress declarations from the body of EXPR.
 Returns a list of rule keywords to suppress, or NIL if no suppressions found.
@@ -224,57 +270,15 @@ Handles forms like:
   (when (and (consp expr) (consp (cdr expr)))
     (let ((form-head (first expr))
           (form-body (find-form-body expr)))
-      ;; Check if this form can have declarations
-      (when (and form-body
-                 (or (and (stringp form-head)
-                          (member (symbol-name-from-string form-head)
-                                  '("LET" "LET*" "FLET" "LABELS" "LOCALLY"
-                                    "LAMBDA" "DEFUN" "DEFMETHOD" "DEFMACRO"
-                                    "WITH-OPEN-FILE" "WITH-OUTPUT-TO-STRING"
-                                    "WITH-INPUT-FROM-STRING" "HANDLER-BIND"
-                                    "HANDLER-CASE" "RESTART-BIND" "RESTART-CASE")
-                                  :test #'string-equal))
-                     (and (symbolp form-head)
-                          (member (symbol-name form-head)
-                                  '("LET" "LET*" "FLET" "LABELS" "LOCALLY"
-                                    "LAMBDA" "DEFUN" "DEFMETHOD" "DEFMACRO"
-                                    "WITH-OPEN-FILE" "WITH-OUTPUT-TO-STRING"
-                                    "WITH-INPUT-FROM-STRING" "HANDLER-BIND"
-                                    "HANDLER-CASE" "RESTART-BIND" "RESTART-CASE")
-                                  :test #'string-equal))))
-        ;; Look for declare forms at the beginning of the body
+      (when (and form-body (form-can-have-declarations-p form-head))
         (loop for form in form-body
-              while (and (consp form)
-                         (or (eq (first form) 'declare)
-                             (and (stringp (first form))
-                                  (string-equal (symbol-name-from-string (first form))
-                                                "DECLARE"))))
+              while (declare-form-p form)
               append (loop for declaration in (rest form)
                            when (and (consp declaration)
-                                     ;; Check for mallet:suppress
-                                     (let ((decl-head (first declaration)))
-                                       (or (and (symbolp decl-head)
-                                                (eq (symbol-package decl-head)
-                                                    (find-package "MALLET"))
-                                                (string-equal (symbol-name decl-head)
-                                                              "SUPPRESS"))
-                                           (and (stringp decl-head)
-                                                (search "MALLET:suppress" decl-head
-                                                        :test #'char-equal)))))
-                             append (mapcar (lambda (rule)
-                                              (cond
-                                                ((keywordp rule) rule)
-                                                ((symbolp rule)
-                                                 (intern (symbol-name rule) :keyword))
-                                                ((stringp rule)
-                                                 ;; Strip package prefix first, then intern as keyword
-                                                 (let ((name (string-upcase (symbol-name-from-string rule))))
-                                                   (intern (if (utils:keyword-string-p name)
-                                                               (subseq name 1)
-                                                               name)
-                                                           :keyword)))
-                                                (t rule)))
+                                     (mallet-suppress-declaration-p (first declaration)))
+                             append (mapcar #'normalize-rule-to-keyword
                                             (rest declaration))))))))
+
 
 (defun find-form-body (expr)
   "Find the body of a form that may contain declarations.
@@ -282,68 +286,50 @@ Returns the body portion where declarations and code would be, or NIL if not app
   (when (consp expr)
     (let ((form-head (first expr)))
       (cond
-        ;; LET, LET* - skip bindings, return rest
+        ;; Forms where body starts after skipping one element (bindings/lambda-list)
+        ;; LET, LET*, FLET, LABELS, LAMBDA, WITH-* forms, HANDLER-BIND, RESTART-BIND
         ((or (symbol-matches-p form-head "LET")
-             (symbol-matches-p form-head "LET*"))
+             (symbol-matches-p form-head "LET*")
+             (symbol-matches-p form-head "FLET")
+             (symbol-matches-p form-head "LABELS")
+             (symbol-matches-p form-head "LAMBDA")
+             (symbol-matches-p form-head "WITH-OPEN-FILE")
+             (symbol-matches-p form-head "WITH-OUTPUT-TO-STRING")
+             (symbol-matches-p form-head "WITH-INPUT-FROM-STRING")
+             (symbol-matches-p form-head "HANDLER-BIND")
+             (symbol-matches-p form-head "RESTART-BIND"))
          (when (consp (cdr expr))
-           (cddr expr)))  ; Skip bindings
-
-        ;; FLET, LABELS - skip function definitions, return rest
-        ((or (symbol-matches-p form-head "FLET")
-             (symbol-matches-p form-head "LABELS"))
-         (when (consp (cdr expr))
-           (cddr expr)))  ; Skip function definitions
+           (cddr expr)))
 
         ;; LOCALLY - body starts immediately
         ((symbol-matches-p form-head "LOCALLY")
          (cdr expr))
 
-        ;; LAMBDA - skip lambda list, return rest
-        ((symbol-matches-p form-head "LAMBDA")
-         (when (consp (cdr expr))
-           (cddr expr)))  ; Skip lambda list
-
-        ;; DEFUN, DEFMETHOD, DEFMACRO - skip name and lambda list
+        ;; DEFUN, DEFMACRO - skip name and lambda list (2 elements)
         ((or (symbol-matches-p form-head "DEFUN")
              (symbol-matches-p form-head "DEFMACRO"))
          (when (and (consp (cdr expr)) (consp (cddr expr)))
-           (cdddr expr)))  ; Skip name and lambda list
+           (cdddr expr)))
 
+        ;; DEFMETHOD - more complex due to qualifiers
         ((symbol-matches-p form-head "DEFMETHOD")
-         ;; DEFMETHOD is more complex - may have qualifiers
          (let ((rest (cdr expr)))
            (when rest
-             ;; Skip method name
-             (setf rest (cdr rest))
+             (setf rest (cdr rest))  ; Skip method name
              ;; Skip qualifiers (symbols before lambda list)
              (loop while (and rest (not (listp (car rest))))
                    do (setf rest (cdr rest)))
-             ;; Skip lambda list
              (when (consp rest)
-               (cdr rest)))))
+               (cdr rest)))))  ; Skip lambda list
 
-        ;; Various WITH- forms
-        ((or (symbol-matches-p form-head "WITH-OPEN-FILE")
-             (symbol-matches-p form-head "WITH-OUTPUT-TO-STRING")
-             (symbol-matches-p form-head "WITH-INPUT-FROM-STRING"))
-         (when (consp (cdr expr))
-           (cddr expr)))  ; Skip binding form
-
-        ;; HANDLER-BIND, HANDLER-CASE, RESTART-BIND, RESTART-CASE
-        ((or (symbol-matches-p form-head "HANDLER-BIND")
-             (symbol-matches-p form-head "RESTART-BIND"))
-         (when (consp (cdr expr))
-           (cddr expr)))  ; Skip handler/restart bindings
-
+        ;; HANDLER-CASE, RESTART-CASE - only check protected form
         ((or (symbol-matches-p form-head "HANDLER-CASE")
              (symbol-matches-p form-head "RESTART-CASE"))
          (when (consp (cdr expr))
-           ;; For these, the protected form is second, clauses follow
-           ;; We only check the protected form for declarations
            (list (cadr expr))))
 
-        ;; Default - no known body structure
         (t nil)))))
+
 
 ;;; Suppression checking helper
 

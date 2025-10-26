@@ -259,7 +259,52 @@ Returns the character position of the unmatched opener, or NIL if balanced."
     (when (plusp depth)
       unmatched-pos)))
 
+
+(defun handle-eof-error (file stream last-end-pos text line-starts parse-errors)
+  "Handle end-of-file error by finding unmatched opener."
+  (let ((unmatched-pos (find-unmatched-opener text last-end-pos)))
+    (if unmatched-pos
+        (multiple-value-bind (line column)
+            (char-pos-to-line-column unmatched-pos line-starts)
+          (push (make-instance 'parse-error-info
+                               :message "Unmatched opening parenthesis"
+                               :file file
+                               :line line
+                               :column column)
+                parse-errors))
+        (let ((pos (file-position stream)))
+          (multiple-value-bind (line column)
+              (char-pos-to-line-column pos line-starts)
+            (push (make-instance 'parse-error-info
+                                 :message "Unexpected end of file"
+                                 :file file
+                                 :line line
+                                 :column column)
+                  parse-errors))))))
+
+(defun handle-unmatched-closer (file stream line-starts parse-errors)
+  "Handle unmatched closing parenthesis error."
+  (let ((pos (file-position stream)))
+    (multiple-value-bind (line column)
+        (char-pos-to-line-column pos line-starts)
+      (push (make-instance 'parse-error-info
+                           :message "Unmatched closing parenthesis"
+                           :file file
+                           :line line
+                           :column column)
+            parse-errors))))
+
 ;;; Main parsing function
+
+
+(defun try-skip-unknown-macro (stream)
+  "Try to skip unknown macro using standard reader."
+  (handler-case
+      (cl:read stream nil :eof)
+    (end-of-file ()
+      :stop-parsing)
+    (error ()
+      nil)))
 
 (defun parse-forms (text file)
   "Parse forms from TEXT in FILE using Eclector parse-result.
@@ -318,57 +363,20 @@ enabling accurate violation reporting."
                           forms))))))
 
         (end-of-file ()
-          ;; EOF error - find position of unmatched opening parenthesis
-          (let ((unmatched-pos (find-unmatched-opener text last-end-pos)))
-            (if unmatched-pos
-                (multiple-value-bind (line column)
-                    (char-pos-to-line-column unmatched-pos line-starts)
-                  (push (make-instance 'parse-error-info
-                                       :message "Unmatched opening parenthesis"
-                                       :file file
-                                       :line line
-                                       :column column)
-                        parse-errors))
-                ;; Fallback if we can't find the unmatched opener
-                (let ((pos (file-position stream)))
-                  (multiple-value-bind (line column)
-                      (char-pos-to-line-column pos line-starts)
-                    (push (make-instance 'parse-error-info
-                                         :message "Unexpected end of file"
-                                         :file file
-                                         :line line
-                                         :column column)
-                          parse-errors)))))
+          (handle-eof-error file stream last-end-pos text line-starts parse-errors)
           (return))
         ;; Unknown reader macros (e.g., #?"..." from cl-interpol)
         ;; We can't parse the current top-level form, so skip it entirely
         (eclector.readtable:unknown-macro-sub-character ()
-          ;; The error occurred while reading a top-level form
-          ;; Try to skip to the next complete top-level form by reading with standard reader
-          ;; which may have the reader macro defined (or will error in a different way)
-          (handler-case
-              (cl:read stream nil :eof)
-            (end-of-file ()
-              (return))
-            ;; If standard reader also fails, continue anyway
-            (error ()
-              nil)))
+          (when (eq (try-skip-unknown-macro stream) :stop-parsing)
+            (return)))
         ;; Quote without following object (from malformed reader macro)
         (eclector.reader:object-must-follow-quote ()
           ;; Skip and continue
           nil)
         ;; Unmatched closing paren
         (eclector.reader:invalid-context-for-right-parenthesis ()
-          (let ((pos (file-position stream)))
-            (multiple-value-bind (line column)
-                (char-pos-to-line-column pos line-starts)
-              (push (make-instance 'parse-error-info
-                                   :message "Unmatched closing parenthesis"
-                                   :file file
-                                   :line line
-                                   :column column)
-                    parse-errors)))
-          ;; Continue parsing to find more errors
+          (handle-unmatched-closer file stream line-starts parse-errors)
           nil)
         ;; Other reader errors we can't handle - re-signal
         (eclector.base:stream-position-reader-error ()
