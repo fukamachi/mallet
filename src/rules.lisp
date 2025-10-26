@@ -17,79 +17,77 @@
   "Create a rule instance based on NAME and OPTIONS.
 Always returns a rule object - enabled/disabled state is handled by config.
 Severity defaults are defined in each rule class's :default-initargs."
-  ;; Helper to add :severity only if explicitly provided
-  (flet ((add-severity (initargs)
-           (if severity
-               (list* :severity severity initargs)
-               initargs)))
+  (let ((initargs (append
+                   (and severity
+                        `(:severity ,severity))
+                   options)))
     ;; Create rule instance based on name
     (case name
       ;; Text rules
       (:line-length
        (apply #'make-instance 'line-length-rule
-              (add-severity (list :max (getf options :max 80)))))
+              initargs))
       (:trailing-whitespace
        (apply #'make-instance 'trailing-whitespace-rule
-              (add-severity nil)))
+              initargs))
       (:no-tabs
        (apply #'make-instance 'no-tabs-rule
-              (add-severity nil)))
+              initargs))
       (:final-newline
        (apply #'make-instance 'final-newline-rule
-              (add-severity nil)))
+              initargs))
       (:consecutive-blank-lines
        (apply #'make-instance 'consecutive-blank-lines-rule
-              (add-severity (list :max (getf options :max 2)))))
+              initargs))
 
       ;; Form rules
       (:if-without-else
        (apply #'make-instance 'if-without-else-rule
-              (add-severity nil)))
+              initargs))
       (:bare-progn-in-if
        (apply #'make-instance 'bare-progn-in-if-rule
-              (add-severity nil)))
+              initargs))
       (:missing-otherwise
        (apply #'make-instance 'missing-otherwise-rule
-              (add-severity nil)))
+              initargs))
       (:wrong-otherwise
        (apply #'make-instance 'wrong-otherwise-rule
-              (add-severity nil)))
+              initargs))
       (:unused-variables
        (apply #'make-instance 'unused-variables-rule
-              (add-severity nil)))
+              initargs))
       (:unused-loop-variables
        (apply #'make-instance 'unused-loop-variables-rule
-              (add-severity nil)))
+              initargs))
       (:unused-local-functions
        (apply #'make-instance 'unused-local-functions-rule
-              (add-severity nil)))
+              initargs))
       (:unused-local-nicknames
        (apply #'make-instance 'unused-local-nicknames-rule
-              (add-severity nil)))
+              initargs))
       (:unused-imported-symbols
        (apply #'make-instance 'unused-imported-symbols-rule
-              (add-severity nil)))
+              initargs))
       (:special-variable-naming
        (apply #'make-instance 'special-variable-naming-rule
-              (add-severity nil)))
+              initargs))
       (:constant-naming
        (apply #'make-instance 'constant-naming-rule
-              (add-severity nil)))
+              initargs))
       (:mixed-optional-and-key
        (apply #'make-instance 'mixed-optional-and-key-rule
-              (add-severity nil)))
+              initargs))
       (:asdf-component-strings
        (apply #'make-instance 'asdf-component-strings-rule
-              (add-severity nil)))
+              initargs))
 
       ;; Metric rules
       (:function-length
        (apply #'make-instance 'function-length-rule
-              (add-severity (list :max (getf options :max 50)))))
+              initargs))
       (:cyclomatic-complexity
        (apply #'make-instance 'cyclomatic-complexity-rule
-              (add-severity (list :max (getf options :max 20)
-                                  :variant (getf options :variant :standard)))))
+              initargs))
 
       (otherwise
        (error "Unknown rule name: ~A" name)))))

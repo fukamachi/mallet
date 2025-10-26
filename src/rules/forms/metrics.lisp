@@ -430,11 +430,11 @@
 (defclass cyclomatic-complexity-rule (base:rule)
   ((max
     :initarg :max
-    :initform 20
+    :initform 15
     :accessor max-complexity)
    (variant
     :initarg :variant
-    :initform :standard
+    :initform :modified
     :accessor complexity-variant
     :documentation "Variant: :standard (count per clause) or :modified (case as +1 total)"))
   (:default-initargs

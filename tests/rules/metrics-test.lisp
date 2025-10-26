@@ -132,11 +132,13 @@
 
 ;;; Cyclomatic-complexity tests
 
-(defun test-complexity (code expected-complexity &optional (max nil))
+(defun test-complexity (code expected-complexity &optional (max nil) (variant :standard))
   "Test that CODE has EXPECTED-COMPLEXITY.
-   If MAX is not provided, use (1- expected-complexity) to trigger violation."
+   If MAX is not provided, use (1- expected-complexity) to trigger violation.
+   VARIANT defaults to :standard for backward compatibility with existing tests."
   (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                              :max (or max (1- expected-complexity))))
+                              :max (or max (1- expected-complexity))
+                              :variant variant))
          (forms (parser:parse-forms code #P"test.lisp"))
          (form (first forms))
          (violations (base:check-form rule form #P"test.lisp")))
@@ -145,10 +147,12 @@
       (ok (search (format nil "complexity of ~D" expected-complexity)
                   (violation:violation-message (first violations)))))))
 
-(defun test-no-complexity-violation (code max)
-  "Test that CODE does not violate with given MAX."
+(defun test-no-complexity-violation (code max &optional (variant :standard))
+  "Test that CODE does not violate with given MAX.
+   VARIANT defaults to :standard for backward compatibility with existing tests."
   (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                              :max max))
+                              :max max
+                              :variant variant))
          (forms (parser:parse-forms code #P"test.lisp"))
          (form (first forms))
          (violations (base:check-form rule form #P"test.lisp")))

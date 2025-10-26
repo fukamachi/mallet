@@ -1,5 +1,7 @@
 # Expected violations for cyclomatic-complexity.lisp
 # With new calculation: COND counts non-else clauses, CASE counts non-otherwise clauses, AND/OR count as +1 each
-# Default max is 20, so complexity 21 violates
+# Default max is 15 (changed from 20), so complexity 19 and 21 violate
 
+64:0 line-length info
+42:0 cyclomatic-complexity metrics
 65:0 cyclomatic-complexity metrics
