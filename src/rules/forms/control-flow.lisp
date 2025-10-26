@@ -139,22 +139,10 @@ Suppressions are handled automatically by the :around method."
                          (let ((then-clause (second rest-args))
                                (else-clause (when (>= (length rest-args) 3)
                                               (third rest-args))))
-                           ;; Check if then clause is a bare progn
-                           (when (and (is-progn-p then-clause)
-                                      (base:should-create-violation-p rule))
-                             (push (make-instance 'violation:violation
-                                                  :rule :bare-progn-in-if
-                                                  :file file
-                                                  :line actual-line
-                                                  :column actual-column
-                                                  :severity (base:rule-severity rule)
-                                                  :message
-                                                  "Use 'cond' instead of 'if' with bare 'progn'"
-                                                  :fix nil)
-                                   violations))
-
-                           ;; Check if else clause is a bare progn
-                           (when (and (is-progn-p else-clause)
+                           ;; Check if either then or else clause is a bare progn
+                           ;; Report only one violation per IF form
+                           (when (and (or (is-progn-p then-clause)
+                                          (is-progn-p else-clause))
                                       (base:should-create-violation-p rule))
                              (push (make-instance 'violation:violation
                                                   :rule :bare-progn-in-if

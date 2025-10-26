@@ -80,4 +80,5 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:bare-progn-in-if-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (ok (= (length violations) 2)))))
+      ;; Should only report one violation per IF form, even if both clauses have progn
+      (ok (= (length violations) 1)))))
