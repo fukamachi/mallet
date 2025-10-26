@@ -6,7 +6,12 @@
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation))
   (:export #:function-length-rule
-           #:cyclomatic-complexity-rule))
+           #:cyclomatic-complexity-rule
+           ;; Standalone metric calculation functions
+           #:calculate-function-length
+           #:calculate-cyclomatic-complexity
+           ;; Convenience functions for REPL use
+           #:analyze-function-metrics))
 (in-package #:mallet/rules/forms/metrics)
 
 ;;; Function-length rule
@@ -15,7 +20,11 @@
   ((max-lines
     :initarg :max-lines
     :initform 50
-    :accessor max-lines))
+    :accessor max-lines)
+   (source-lines
+    :initform nil
+    :accessor rule-source-lines
+    :documentation "Parsed source lines for current file (set during check-form)"))
   (:default-initargs
    :name :function-length
    :description "Function exceeds maximum length"
@@ -27,21 +36,25 @@
   (check-type form parser:form)
   (check-type file pathname)
 
-  ;; Call recursive checker
-  (base:check-form-recursive rule
-                             (parser:form-expr form)
-                             file
-                             (parser:form-line form)
-                             (parser:form-column form)
-                             nil
-                             (parser:form-position-map form)))
+  ;; Get source from form object and parse into lines, store in rule
+  (let ((source (parser:form-source form)))
+    (setf (rule-source-lines rule) (parse-source-to-lines source))
+    ;; Call recursive checker
+    (base:check-form-recursive rule
+                               (parser:form-expr form)
+                               file
+                               (parser:form-line form)
+                               (parser:form-column form)
+                               nil
+                               (parser:form-position-map form))))
 
 (defmethod base:check-form-recursive ((rule function-length-rule) expr file line column
                                       &optional function-name position-map)
   (declare (ignore function-name))
 
   (let ((violations '())
-        (visited (make-hash-table :test 'eq)))
+        (visited (make-hash-table :test 'eq))
+        (source-lines (rule-source-lines rule)))
 
     (labels ((check-expr (current-expr fallback-line fallback-column)
                (base:with-safe-cons-expr (current-expr visited)
@@ -52,8 +65,8 @@
 
                      ;; Check if this is a function definition
                      (when (is-function-definition-p head)
-                       (let ((length (calculate-function-length
-                                      current-expr position-map
+                       (let ((length (calculate-function-length-from-source
+                                      current-expr position-map source-lines
                                       actual-line actual-column)))
                          (when (and (> length (max-lines rule))
                                     (base:should-create-violation-p rule))
@@ -77,8 +90,8 @@
                               (multiple-value-bind (func-line func-column)
                                   (base:find-actual-position func-def position-map
                                                              actual-line actual-column)
-                                (let ((length (calculate-function-length
-                                               func-def position-map
+                                (let ((length (calculate-function-length-from-source
+                                               func-def position-map source-lines
                                                func-line func-column))
                                       (func-name (get-inner-function-name func-def)))
                                   (when (and (> length (max-lines rule))
@@ -109,25 +122,175 @@
                '("DEFUN" "DEFMETHOD" "DEFMACRO" "DEFGENERIC")
                :test #'string-equal)))
 
-(defun calculate-function-length (expr position-map start-line start-column)
-  "Calculate the length of a function definition in lines.
-   V1: Simple line counting (end-line - start-line + 1)."
+(defun parse-source-to-lines (source)
+  "Parse SOURCE string into a vector of lines (1-indexed, line 0 is nil)."
+  (let ((lines (make-array 100 :adjustable t :fill-pointer 0)))
+    ;; Line 0 is nil (lines are 1-indexed)
+    (vector-push-extend nil lines)
+    (with-input-from-string (in source)
+      (loop for line = (read-line in nil nil)
+            while line
+            do (vector-push-extend line lines)))
+    lines))
+
+(defun blank-line-p (line)
+  "Check if LINE contains only whitespace."
+  (not
+   (position-if (lambda (ch)
+                  (not (member ch '(#\Space #\Tab #\Newline #\Return))))
+                line)))
+
+(defun comment-line-p (line)
+  "Check if LINE is a line comment (starts with ; after optional whitespace)."
+  (let ((trimmed (string-left-trim '(#\Space #\Tab) line)))
+    (and (> (length trimmed) 0)
+         (char= (char trimmed 0) #\;))))
+
+(defun find-block-comment-ranges (source-lines)
+  "Find all line ranges that are entirely within block comments.
+   Returns a list of (start-index . end-index) pairs (1-indexed, inclusive).
+
+   A line is considered entirely within a block comment if:
+   - It contains only #| (opening)
+   - It's between #| and |# lines
+   - It contains only |# (closing)
+
+   Does not handle nested block comments or inline block comments."
+  (let ((ranges '())
+        (in-block nil)
+        (block-start nil))
+    (loop for i from 1 below (length source-lines)
+          for line = (aref source-lines i)
+          when line
+            do (let* ((trimmed (string-trim '(#\Space #\Tab) line))
+                      (has-open (search "#|" trimmed))
+                      (has-close (search "|#" trimmed))
+                      ;; Check if line is ONLY block comment markers (with whitespace)
+                      (only-open (and has-open
+                                      (not has-close)
+                                      (string= (string-trim '(#\Space #\Tab)
+                                                            (subseq trimmed (+ has-open 2)))
+                                               "")))
+                      (only-close (and has-close
+                                       (not has-open)
+                                       (string= (string-trim '(#\Space #\Tab)
+                                                             (subseq trimmed 0 has-close))
+                                                ""))))
+                 (cond
+                   ;; Line with only opening marker - start block
+                   ((and only-open (not in-block))
+                    (setf in-block t
+                          block-start i))
+                   ;; Line with only closing marker - end block
+                   ((and only-close in-block)
+                    (push (cons block-start i) ranges)
+                    (setf in-block nil
+                          block-start nil))
+                   ;; Line inside block - continue
+                   (in-block
+                    ;; Just continue, will be included in range
+                    nil))))
+    (nreverse ranges)))
+
+(defun line-in-block-comment-p (line-index block-comment-ranges)
+  "Check if LINE-INDEX (1-indexed) is within any block comment range."
+  (some (lambda (range)
+          (<= (car range) line-index (cdr range)))
+        block-comment-ranges))
+
+(defun disabled-reader-conditional-p (line)
+  "Check if LINE starts with a disabled reader conditional.
+   Detects: #+nil, #+(or), #-(and)"
+  ;; XXX: It detects only when the features are at the beginning of the line.
+  (let ((trimmed (string-left-trim '(#\Space #\Tab) line)))
+    (or (a:starts-with-subseq "#+nil" trimmed)
+        (a:starts-with-subseq "#+(or)" trimmed)
+        (a:starts-with-subseq "#-(and)" trimmed))))
+
+(defun find-disabled-conditional-lines (source-lines)
+  "Find line indices that should be excluded due to disabled reader conditionals.
+   Returns a list of line indices (1-indexed) that include:
+   - Lines with #+nil, #+(or), #-(and)
+   - The next non-blank, non-comment line after each conditional"
+  (let ((excluded-lines '()))
+    (loop for i from 1 below (length source-lines)
+          for line = (aref source-lines i)
+          when (and line (disabled-reader-conditional-p line))
+            do ;; Exclude the conditional line itself
+               (push i excluded-lines)
+               ;; Find and exclude the next non-blank, non-comment line
+               (loop for j from (1+ i) below (length source-lines)
+                     for next-line = (aref source-lines j)
+                     when (and next-line
+                               (not (blank-line-p next-line))
+                               (not (comment-line-p next-line)))
+                       do (push j excluded-lines)
+                          (return)))
+    excluded-lines))
+
+(defun calculate-function-length-from-source (expr position-map source-lines
+                                               start-line start-column)
+  "Calculate the length of a function definition in code lines only.
+   Excludes:
+   - Line comments (;)
+   - Block comments (#| ... |#)
+   - Blank lines
+   - Docstrings
+   - Disabled reader conditionals (#+nil, #+(or), #-(and)) and their guarded forms
+
+   Note: start-line is file-relative (from position-map).
+         source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
   (declare (ignore start-column))
 
-  ;; Find end position from position-map
-  ;; The position-map stores (line . column) for the START of each expression
-  ;; We need to find the end by looking at the entire form's extent
-
-  ;; For now, use a simple heuristic: find the maximum line number
-  ;; of any sub-expression in this function
+  ;; Find end line from position-map (file-relative)
   (let ((max-line start-line))
     (maphash (lambda (k v)
                (when (and (eq-subexpr-p k expr)
                           (> (car v) max-line))
                  (setf max-line (car v))))
              position-map)
-    ;; Length = end-line - start-line + 1
-    (- max-line start-line -1)))
+
+    ;; Detect docstring position and span (file-relative)
+    ;; Docstring is right after lambda-list in defun/defmethod/defmacro
+    (let ((docstring-start-line nil)
+          (docstring-end-line nil))
+      (when (has-docstring-p expr)
+        ;; Find the docstring in position-map
+        (let ((docstring (get-docstring expr)))
+          (when (stringp docstring)
+            (maphash (lambda (k v)
+                       (when (and (stringp k)
+                                  (string= k docstring))
+                         (setf docstring-start-line (car v))
+                         ;; Calculate end line by counting newlines in docstring
+                         (let ((newline-count (count #\Newline docstring)))
+                           (setf docstring-end-line (+ docstring-start-line newline-count)))))
+                     position-map))))
+
+      ;; Find block comment ranges (form-relative indices)
+      (let ((block-comment-ranges (find-block-comment-ranges source-lines))
+            (disabled-conditional-lines (find-disabled-conditional-lines source-lines)))
+
+        ;; Count code lines only
+        ;; Convert file-relative line numbers to form-relative indices
+        (let ((code-lines 0)
+              (form-start-line start-line))  ; First line of the form in file
+          (loop for file-line from start-line to max-line
+                for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
+                for line = (and (< form-index (length source-lines))
+                                (aref source-lines form-index))
+                when line
+                  do (unless (or (blank-line-p line)
+                                 (comment-line-p line)
+                                 ;; Exclude all lines within docstring span (file-relative comparison)
+                                 (and docstring-start-line docstring-end-line
+                                      (<= docstring-start-line file-line docstring-end-line))
+                                 ;; Exclude lines within block comments (form-relative comparison)
+                                 (line-in-block-comment-p form-index block-comment-ranges)
+                                 ;; Exclude disabled reader conditional lines (form-relative)
+                                 (member form-index disabled-conditional-lines :test #'=))
+                       (incf code-lines)))
+          code-lines)))))
 
 (defun eq-subexpr-p (needle haystack)
   "Check if NEEDLE is EQ to HAYSTACK or any sub-expression in HAYSTACK."
@@ -136,6 +299,55 @@
     ((not (consp haystack)) nil)
     (t (or (eq-subexpr-p needle (car haystack))
            (eq-subexpr-p needle (cdr haystack))))))
+
+(defun has-docstring-p (expr)
+  "Check if function definition EXPR has a docstring."
+  (when (consp expr)
+    (let ((head (first expr)))
+      (cond
+        ;; defun/defmacro: (defun name lambda-list [docstring] . body)
+        ((or (base:symbol-matches-p head "DEFUN")
+             (base:symbol-matches-p head "DEFMACRO"))
+         (and (consp (cdddr expr))
+              (stringp (fourth expr))))
+
+        ;; defmethod: (defmethod name [qualifiers] lambda-list [docstring] . body)
+        ((base:symbol-matches-p head "DEFMETHOD")
+         ;; Skip past name and qualifiers to find lambda-list
+         (let ((rest (cddr expr)))
+           ;; Skip qualifiers
+           (loop while (and rest (not (consp (first rest))))
+                 do (setf rest (cdr rest)))
+           ;; Now rest starts with lambda-list, check for docstring after
+           (and (consp (cdr rest))
+                (stringp (second rest)))))
+
+        (t nil)))))
+
+(defun get-docstring (expr)
+  "Extract docstring from function definition EXPR, or nil if none."
+  (when (consp expr)
+    (let ((head (first expr)))
+      (cond
+        ;; defun/defmacro: (defun name lambda-list [docstring] . body)
+        ((or (base:symbol-matches-p head "DEFUN")
+             (base:symbol-matches-p head "DEFMACRO"))
+         (when (and (consp (cdddr expr))
+                    (stringp (fourth expr)))
+           (fourth expr)))
+
+        ;; defmethod: (defmethod name [qualifiers] lambda-list [docstring] . body)
+        ((base:symbol-matches-p head "DEFMETHOD")
+         (let ((rest (cddr expr)))
+           ;; Skip qualifiers
+           (loop while (and rest (not (consp (first rest))))
+                 do (setf rest (cdr rest)))
+           ;; Check for docstring after lambda-list
+           (when (and (consp (cdr rest))
+                      (stringp (second rest)))
+             (second rest))))
+
+        (t nil)))))
 
 (defun get-function-name (expr)
   "Extract function name from definition form."
@@ -168,6 +380,49 @@
                                   func-name length (max-lines rule))
                  :fix nil))
 
+;;; Public API for standalone metric calculation
+
+(defun calculate-function-length (source-code &key (file #P"string"))
+  "Calculate the function length in code lines for SOURCE-CODE.
+
+   SOURCE-CODE can be:
+   - A string containing a single function definition
+   - A parser:form object
+
+   Returns the number of code lines, excluding:
+   - Line comments (;)
+   - Block comments (#| ... |#)
+   - Blank lines
+   - Docstrings
+   - Disabled reader conditionals (#+nil, #+(or), #-(and))
+
+   Example:
+     (calculate-function-length \"(defun foo () (print 1) (print 2))\")
+     => 3"
+  (etypecase source-code
+    (string
+     ;; Parse the source code
+     (let* ((forms (parser:parse-forms source-code file))
+            (form (first forms)))
+       (when form
+         (let* ((expr (parser:form-expr form))
+                (position-map (parser:form-position-map form))
+                (source-lines (parse-source-to-lines source-code))
+                (start-line (parser:form-line form))
+                (start-column (parser:form-column form)))
+           (calculate-function-length-from-source
+            expr position-map source-lines start-line start-column)))))
+    (parser:form
+     ;; Already parsed
+     (let* ((expr (parser:form-expr source-code))
+            (position-map (parser:form-position-map source-code))
+            (source (parser:form-source source-code))
+            (source-lines (parse-source-to-lines source))
+            (start-line (parser:form-line source-code))
+            (start-column (parser:form-column source-code)))
+       (calculate-function-length-from-source
+        expr position-map source-lines start-line start-column)))))
+
 ;;; Cyclomatic-complexity rule
 
 (defclass cyclomatic-complexity-rule (base:rule)
@@ -198,6 +453,51 @@
                              (parser:form-column form)
                              nil
                              (parser:form-position-map form)))
+
+(defun calculate-cyclomatic-complexity (source-code &key (variant :standard) (file #P"string"))
+  "Calculate the cyclomatic complexity for SOURCE-CODE.
+
+   SOURCE-CODE can be:
+   - A string containing a single function definition
+   - A parser:form object
+   - A parsed expression (s-expression)
+
+   VARIANT can be:
+   - :standard - Count each case clause separately (default)
+   - :modified - Count entire case statement as +1
+
+   Returns the cyclomatic complexity as an integer.
+
+   Example:
+     (calculate-cyclomatic-complexity \"(defun foo (x) (if x 1 2))\")
+     => 2"
+  (let ((visited (make-hash-table :test 'eq)))
+    (etypecase source-code
+      (string
+       ;; Parse the source code
+       (let* ((forms (parser:parse-forms source-code file))
+              (form (first forms)))
+         (when form
+           (calculate-complexity (parser:form-expr form) visited variant))))
+      (parser:form
+       ;; Already parsed as form object
+       (calculate-complexity (parser:form-expr source-code) visited variant))
+      (cons
+       ;; Raw expression
+       (calculate-complexity source-code visited variant)))))
+
+(defun analyze-function-metrics (source-code &key (variant :standard) (file #P"string"))
+  "Analyze both function length and cyclomatic complexity for SOURCE-CODE.
+
+   Returns a plist with:
+   - :length - Number of code lines
+   - :complexity - Cyclomatic complexity
+
+   Example:
+     (analyze-function-metrics \"(defun foo (x) (if x (print 1) (print 2)))\")
+     => (:length 3 :complexity 2)"
+  (list :length (calculate-function-length source-code :file file)
+        :complexity (calculate-cyclomatic-complexity source-code :variant variant :file file)))
 
 (defmethod base:check-form-recursive ((rule cyclomatic-complexity-rule) expr file line column
                                       &optional function-name position-map)

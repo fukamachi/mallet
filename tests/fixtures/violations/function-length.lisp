@@ -58,7 +58,14 @@
   (print 48)
   (print 49)
   (print 50)
-  (print 51))
+  (print 51)
+  (print 52)
+  (print 53)
+  (print 54)
+  (print 55)
+  (print 56)
+  (print 57)
+  (print 58))
 
 ;; Another short function
 (defmethod process ((x integer))

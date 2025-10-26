@@ -322,7 +322,17 @@ Functions should not exceed maximum line count.
   (process data))
 ```
 
-**Counting**: Lines are counted from the first line of the function definition to the last closing parenthesis. Nested `flet`/`labels` functions are counted separately.
+**Counting**: Counts only code lines, excluding:
+- Line comments (lines starting with `;`)
+- Block comments (`#| ... |#` on separate lines)
+- Blank lines (lines containing only whitespace)
+- Docstrings
+- Disabled reader conditionals (`#+nil`, `#+(or)`, `#-(and)`) and their guarded forms
+
+Notes:
+- Inline block comments (e.g., `(foo #| comment |# bar)`) are not excluded
+- Platform-specific conditionals (e.g., `#+sbcl`, `#+ccl`) count as code
+- Nested `flet`/`labels` functions are counted separately
 
 **Default**: disabled
 
