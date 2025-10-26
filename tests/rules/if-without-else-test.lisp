@@ -31,7 +31,43 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:if-without-else-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (ok (null violations)))))
+      (ok (null violations))))
+
+  (testing "Valid: quoted list with string \"IF\" should not trigger"
+    (let* ((code "(defun conditional-p (head)
+                     (member head '(\"IF\" \"WHEN\" \"UNLESS\") :test #'string-equal))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:if-without-else-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: quoted list with symbols should not trigger"
+    (let* ((code "(defun form-types ()
+                     '(IF WHEN UNLESS))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:if-without-else-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: string literal in code should not trigger"
+    (let* ((code "(defun test ()
+                     (list \"IF\" \"WHEN\"))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:if-without-else-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: macro argument with string literals should not trigger"
+    (let* ((code "(defmacro with-quote (form)
+                     `(list ,@form))
+                   (defun test ()
+                     (with-quote (\"IF\" \"WHEN\" \"UNLESS\")))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:if-without-else-rule)))
+      ;; Check both the defmacro and defun forms
+      (dolist (form forms)
+        (let ((violations (rules:check-form rule form #p"test.lisp")))
+          (ok (null violations)))))))
 
 (deftest if-without-else-invalid
   (testing "Invalid: if without else clause"

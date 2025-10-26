@@ -57,7 +57,7 @@
         (source-lines (rule-source-lines rule)))
 
     (labels ((check-expr (current-expr fallback-line fallback-column)
-               (base:with-safe-cons-expr (current-expr visited)
+               (base:with-safe-code-expr (current-expr visited)
                  (multiple-value-bind (actual-line actual-column)
                      (base:find-actual-position current-expr position-map
                                                 fallback-line fallback-column)
@@ -507,7 +507,7 @@
         (visited (make-hash-table :test 'eq)))
 
     (labels ((check-expr (current-expr fallback-line fallback-column)
-               (base:with-safe-cons-expr (current-expr visited)
+               (base:with-safe-code-expr (current-expr visited)
                  (multiple-value-bind (actual-line actual-column)
                      (base:find-actual-position current-expr position-map
                                                 fallback-line fallback-column)

@@ -37,7 +37,7 @@
                (base:with-safe-code-expr (current-expr visited)
                  ;; Check if this form has a lambda list
                  (when (stringp (first current-expr))
-                   (let ((operator (base:symbol-name-from-string (first current-expr))))
+                   (let ((operator (first current-expr)))
                      (cond
                        ;; defun (defun name lambda-list ...)
                        ((base:symbol-matches-p operator "DEFUN")

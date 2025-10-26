@@ -47,7 +47,7 @@ Suppressions are handled automatically by the :around method."
 
     (labels ((check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for if-without-else violations."
-               (base:with-safe-cons-expr (current-expr visited)
+               (base:with-safe-code-expr (current-expr visited)
                  ;; Look up the actual position of this expression if position-map is available
                  (multiple-value-bind (actual-line actual-column)
                      (base:find-actual-position current-expr position-map fallback-line fallback-column)
@@ -126,7 +126,7 @@ Suppressions are handled automatically by the :around method."
 
              (check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for bare progn in if."
-               (base:with-safe-cons-expr (current-expr visited)
+               (base:with-safe-code-expr (current-expr visited)
                  ;; Look up the actual position of this expression if position-map is available
                  (multiple-value-bind (actual-line actual-column)
                      (base:find-actual-position current-expr position-map fallback-line fallback-column)
@@ -234,7 +234,7 @@ Suppressions are handled automatically by the :around method."
 
              (check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for missing otherwise."
-               (base:with-safe-cons-expr (current-expr visited)
+               (base:with-safe-code-expr (current-expr visited)
                  ;; Look up the actual position of this expression if position-map is available
                  (multiple-value-bind (actual-line actual-column)
                      (base:find-actual-position current-expr position-map fallback-line fallback-column)
@@ -344,7 +344,7 @@ Suppressions are handled automatically by the :around method."
 
              (check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for wrong otherwise."
-               (base:with-safe-cons-expr (current-expr visited)
+               (base:with-safe-code-expr (current-expr visited)
                  ;; Look up the actual position of this expression if position-map is available
                  (multiple-value-bind (actual-line actual-column)
                      (base:find-actual-position current-expr position-map fallback-line fallback-column)

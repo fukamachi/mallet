@@ -38,7 +38,7 @@
                (base:with-safe-code-expr (current-expr visited)
                  ;; Check if this form is a defvar/defparameter
                  (when (stringp (first current-expr))
-                   (let ((operator (base:symbol-name-from-string (first current-expr))))
+                   (let ((operator (first current-expr)))
                      (when (or (base:symbol-matches-p operator "DEFVAR")
                                (base:symbol-matches-p operator "DEFPARAMETER"))
                        ;; Found a defvar/defparameter - check naming
@@ -105,7 +105,7 @@
                (base:with-safe-code-expr (current-expr visited)
                  ;; Check if this form is a defconstant/define-constant
                  (when (stringp (first current-expr))
-                   (let ((operator (base:symbol-name-from-string (first current-expr))))
+                   (let ((operator (first current-expr)))
                      (when (or (base:symbol-matches-p operator "DEFCONSTANT")
                                (base:symbol-matches-p operator "DEFINE-CONSTANT"))
                        ;; Found a defconstant - check naming

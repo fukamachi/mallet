@@ -87,8 +87,14 @@
 
 (defun symbol-matches-p (str name)
   "Check if string-based symbol STR matches NAME (case-insensitive).
-Works with both qualified (\"PACKAGE:IF\") and unqualified (\"IF\") symbols."
+Only matches package-qualified symbols (e.g., \"PACKAGE:IF\").
+String literals without colons are not considered symbols and will not match.
+This prevents false positives from string literals like \"IF\" in code.
+
+Note: Automatically calls symbol-name-from-string on STR, so callers should pass
+the full symbol string (e.g., \"CURRENT:IF\") not the extracted name."
   (and (stringp str)
+       (find #\: str)  ; Require colon to distinguish symbols from string literals
        (string-equal (symbol-name-from-string str) name)))
 
 (defun coalton-form-p (form)

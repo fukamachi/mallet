@@ -24,10 +24,9 @@
   (when (string-equal (pathname-type file) "asd")
     (let ((expr (parser:form-expr form)))
       (when (and (consp expr)
-                 (stringp (first expr)))
-        (let ((operator (base:symbol-name-from-string (first expr))))
-          (when (base:symbol-matches-p operator "DEFSYSTEM")
-            (check-defsystem-source form file (base:rule-severity rule))))))))
+                 (stringp (first expr))
+                 (base:symbol-matches-p (first expr) "DEFSYSTEM"))
+        (check-defsystem-source form file (base:rule-severity rule))))))
 
 ;;; Helper functions
 
