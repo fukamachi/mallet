@@ -38,7 +38,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
 
 (defclass line-length-rule (base:rule)
   ((max-length
-    :initarg :max-length
+    :initarg :max
     :initform 80
     :reader line-length-rule-max-length
     :type (integer 1)
@@ -219,7 +219,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
 
 (defclass consecutive-blank-lines-rule (base:rule)
   ((max-consecutive
-    :initarg :max-consecutive
+    :initarg :max
     :initform 2
     :reader consecutive-blank-lines-rule-max
     :type (integer 1)

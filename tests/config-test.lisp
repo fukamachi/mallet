@@ -16,7 +16,7 @@
 
   (testing "Create config with rules"
     (let ((cfg (config:make-config
-                :rules (list (rules:make-rule :line-length :max-length 100)
+                :rules (list (rules:make-rule :line-length :max 100)
                              (rules:make-rule :if-without-else))
                 :disabled-rules '(:if-without-else))))
       (ok (not (null cfg)))
@@ -28,7 +28,7 @@
 (deftest parse-config
   (testing "Parse simple config with :enable"
     (let* ((sexp '(:mallet-config
-                   (:enable :line-length :max-length 120)))
+                   (:enable :line-length :max 120)))
            (cfg (config:parse-config sexp)))
       (ok (= 1 (length (config:config-rules cfg))))
       (let ((rule (first (config:config-rules cfg))))
@@ -63,7 +63,7 @@
 (deftest load-config-file
   (testing "Load config from file"
     (let ((config-content "(:mallet-config
-                              (:enable :line-length :max-length 100))"))
+                              (:enable :line-length :max 100))"))
       (with-temporary-config (config-content tmpfile)
         (let ((cfg (config:load-config tmpfile)))
           (ok (= 1 (length (config:config-rules cfg))))
@@ -106,7 +106,7 @@
   (testing "Parse config with extends"
     (let* ((sexp '(:mallet-config
                    (:extends :all)
-                   (:enable :line-length :max-length 100)))
+                   (:enable :line-length :max 100)))
            (cfg (config:parse-config sexp)))
       ;; Should inherit all rules from :all
       (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
@@ -120,7 +120,7 @@
 (deftest parse-new-syntax-enable
   (testing "Parse config with :enable syntax"
     (let* ((sexp '(:mallet-config
-                   (:enable :line-length :max-length 120)))
+                   (:enable :line-length :max 120)))
            (cfg (config:parse-config sexp)))
       (ok (= 1 (length (config:config-rules cfg))))
       (let ((rule (first (config:config-rules cfg))))
@@ -137,7 +137,7 @@
 
   (testing "Parse config with multiple :enable forms"
     (let* ((sexp '(:mallet-config
-                   (:enable :line-length :max-length 100)
+                   (:enable :line-length :max 100)
                    (:enable :unused-variables :severity :error)
                    (:enable :special-variable-naming)))
            (cfg (config:parse-config sexp)))
@@ -180,7 +180,7 @@
     (let* ((sexp '(:mallet-config
                    (:extends :default)
                    (:for-paths ("tests/**/*.lisp")
-                    (:enable :line-length :max-length 120)
+                    (:enable :line-length :max 120)
                     (:disable :unused-variables))))
            (cfg (config:parse-config sexp)))
       ;; Base config should have default rules
@@ -214,10 +214,10 @@
 
   (testing "Get rules for file with path-specific overrides"
     (let* ((sexp '(:mallet-config
-                   (:enable :line-length :max-length 80)
+                   (:enable :line-length :max 80)
                    (:enable :unused-variables)
                    (:for-paths ("tests/**/*.lisp")
-                    (:enable :line-length :max-length 120)
+                    (:enable :line-length :max 120)
                     (:disable :unused-variables))))
            (cfg (config:parse-config sexp)))
       ;; For a normal file, should get base rules
@@ -311,7 +311,7 @@
   (testing "For-paths with exact file path"
     (let* ((sexp '(:mallet-config
                    (:enable :unused-variables)
-                   (:enable :line-length :max-length 80)
+                   (:enable :line-length :max 80)
                    (:for-paths ("/src/parser.lisp")
                     (:disable :unused-variables))))
            (cfg (config:parse-config sexp)))
@@ -329,9 +329,9 @@
   (testing "For-paths with directory pattern"
     (let* ((sexp '(:mallet-config
                    (:enable :unused-variables)
-                   (:enable :line-length :max-length 80)
+                   (:enable :line-length :max 80)
                    (:for-paths ("/tests/")
-                    (:enable :line-length :max-length 120)
+                    (:enable :line-length :max 120)
                     (:disable :unused-variables))))
            (cfg (config:parse-config sexp)))
       ;; For test files, line-length should be 120 and unused-variables disabled
@@ -386,10 +386,10 @@
   (testing "For-paths with multiple rule overrides"
     (let* ((sexp '(:mallet-config
                    (:enable :unused-variables)
-                   (:enable :line-length :max-length 80)
+                   (:enable :line-length :max 80)
                    (:enable :trailing-whitespace)
                    (:for-paths ("/scripts/")
-                    (:enable :line-length :max-length 100)
+                    (:enable :line-length :max 100)
                     (:disable :unused-variables)
                     (:disable :trailing-whitespace))))
            (cfg (config:parse-config sexp)))
@@ -408,9 +408,9 @@
 
   (testing "For-paths with nested directory patterns"
     (let* ((sexp '(:mallet-config
-                   (:enable :line-length :max-length 80)
+                   (:enable :line-length :max 80)
                    (:for-paths ("/tests/fixtures/")
-                    (:enable :line-length :max-length 200))))
+                    (:enable :line-length :max 200))))
            (cfg (config:parse-config sexp)))
       ;; Files in nested fixtures should use overridden config
       (let* ((rules (config:get-rules-for-file cfg #P"/tests/fixtures/nested/deep/example.lisp"))
@@ -423,9 +423,9 @@
 
   (testing "For-paths with .asd files"
     (let* ((sexp '(:mallet-config
-                   (:enable :line-length :max-length 80)
+                   (:enable :line-length :max 80)
                    (:for-paths ("*.asd")
-                    (:enable :line-length :max-length 100))))
+                    (:enable :line-length :max 100))))
            (cfg (config:parse-config sexp)))
       ;; .asd files should use overridden config
       (let* ((rules (config:get-rules-for-file cfg #P"/mallet.asd"))
@@ -442,7 +442,7 @@
   (testing "Override :extends with preset-override parameter"
     (let* ((sexp '(:mallet-config
                    (:extends :default)
-                   (:enable :line-length :max-length 100)
+                   (:enable :line-length :max 100)
                    (:disable :trailing-whitespace)))
            ;; Override with :all preset
            (cfg (config:parse-config sexp :preset-override :all)))
@@ -459,7 +459,7 @@
 
   (testing "Preset override when no :extends in config"
     (let* ((sexp '(:mallet-config
-                   (:enable :line-length :max-length 120)
+                   (:enable :line-length :max 120)
                    (:disable :no-tabs)))
            ;; Provide preset-override even though there's no :extends
            (cfg (config:parse-config sexp :preset-override :default)))
@@ -477,7 +477,7 @@
   (testing "Load config file with preset override"
     (let ((config-content "(:mallet-config
                               (:extends :default)
-                              (:enable :line-length :max-length 100)
+                              (:enable :line-length :max 100)
                               (:disable :unused-variables))"))
       (with-temporary-config (config-content tmpfile)
         (let ((cfg (config:load-config tmpfile :preset-override :all)))
@@ -496,7 +496,7 @@
     (let* ((sexp '(:mallet-config
                    (:extends :default)
                    (:for-paths ("tests/**/*.lisp")
-                    (:enable :line-length :max-length 120)
+                    (:enable :line-length :max 120)
                     (:disable :unused-variables))))
            (cfg (config:parse-config sexp :preset-override :all)))
       ;; Should have path overrides

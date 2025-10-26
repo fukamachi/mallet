@@ -18,7 +18,7 @@
 
 (defclass function-length-rule (base:rule)
   ((max-lines
-    :initarg :max-lines
+    :initarg :max
     :initform 50
     :accessor max-lines)
    (source-lines

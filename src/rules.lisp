@@ -22,7 +22,7 @@ Always returns a rule object - enabled/disabled state is handled by config."
     (:line-length
      (make-instance 'line-length-rule
                     :severity (or severity :info)
-                    :max-length (getf options :max-length 80)))
+                    :max (getf options :max 80)))
     (:trailing-whitespace
      (make-instance 'trailing-whitespace-rule
                     :severity (or severity :format)))
@@ -35,7 +35,7 @@ Always returns a rule object - enabled/disabled state is handled by config."
     (:consecutive-blank-lines
      (make-instance 'consecutive-blank-lines-rule
                     :severity (or severity :info)
-                    :max-consecutive (getf options :max-consecutive 2)))
+                    :max (getf options :max 2)))
 
     ;; Form rules
     (:if-without-else
@@ -82,7 +82,7 @@ Always returns a rule object - enabled/disabled state is handled by config."
     (:function-length
      (make-instance 'function-length-rule
                     :severity (or severity :info)
-                    :max-lines (getf options :max-lines 50)))
+                    :max (getf options :max 50)))
     (:cyclomatic-complexity
      (make-instance 'cyclomatic-complexity-rule
                     :severity (or severity :info)

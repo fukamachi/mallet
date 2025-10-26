@@ -194,10 +194,10 @@ Files must end with a newline.
 
 Lines should not exceed maximum length.
 
-**Options**: `:max-length` (default: 80)
+**Options**: `:max` (default: 80)
 
 ```lisp
-(:line-length :enabled t :max-length 100)
+(:line-length :enabled t :max 100)
 ```
 
 **Default**: disabled
@@ -206,10 +206,10 @@ Lines should not exceed maximum length.
 
 Limit consecutive blank lines.
 
-**Options**: `:max-consecutive` (default: 2)
+**Options**: `:max` (default: 2)
 
 ```lisp
-(:consecutive-blank-lines :enabled t :max-consecutive 1)
+(:consecutive-blank-lines :enabled t :max 1)
 ```
 
 **Default**: disabled
@@ -300,10 +300,10 @@ Loop variables should be used within the loop body.
 
 Functions should not exceed maximum line count.
 
-**Options**: `:max-lines` (default: 50)
+**Options**: `:max` (default: 50)
 
 ```lisp
-(:function-length :max-lines 100)
+(:function-length :max 100)
 ```
 
 ```lisp

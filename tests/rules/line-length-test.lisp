@@ -62,14 +62,14 @@
   (testing "Custom limit 120 characters"
     (let ((text (make-string 100 :initial-element #\a))
           (file #p"/tmp/test.lisp")
-          (rule (make-instance 'rules:line-length-rule :max-length 120)))
+          (rule (make-instance 'rules:line-length-rule :max 120)))
       (let ((violations (rules:check-text rule text file)))
         (ok (null violations)))))
 
   (testing "Exceeding custom limit"
     (let ((text (make-string 121 :initial-element #\a))
           (file #p"/tmp/test.lisp")
-          (rule (make-instance 'rules:line-length-rule :max-length 120)))
+          (rule (make-instance 'rules:line-length-rule :max 120)))
       (let ((violations (rules:check-text rule text file)))
         (ok (= 1 (length violations)))
         (let ((v (first violations)))

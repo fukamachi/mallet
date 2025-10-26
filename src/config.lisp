@@ -346,9 +346,9 @@ Useful for exploration and discovering what rules exist."
             :trailing-whitespace
             :final-newline
             ;; INFO: Subjective preferences
-            (:line-length :max-length 100)
-            (:consecutive-blank-lines :max-consecutive 2)
-            (:function-length :max-lines 50)
+            (:line-length :max 100)
+            (:consecutive-blank-lines :max 2)
+            (:function-length :max 50)
             (:cyclomatic-complexity :max 20))))
     (make-config
      :rules (mapcar (lambda (spec)

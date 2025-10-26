@@ -30,7 +30,7 @@
 
 (deftest function-length-one-line
   (testing "One-line function should have length 1"
-    (let* ((rule (make-instance 'rules:function-length-rule :max-lines 0))
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
            (code "(defun foo (x) (+ x 1))")
            (forms (parser:parse-forms code #P"test.lisp"))
            (form (first forms))
@@ -40,7 +40,7 @@
 
 (deftest function-length-empty
   (testing "Empty function should have length 1"
-    (let* ((rule (make-instance 'rules:function-length-rule :max-lines 0))
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
            (code "(defun empty ())")
            (forms (parser:parse-forms code #P"test.lisp"))
            (form (first forms))
@@ -64,7 +64,7 @@
 
 (deftest function-length-long-defun
   (testing "Long function (60 lines) should violate"
-    (let* ((rule (make-instance 'rules:function-length-rule :max-lines 50))
+    (let* ((rule (make-instance 'rules:function-length-rule :max 50))
            ;; Generate a function with 60 lines
            (code (format nil "(defun long-function (x)~%~{  (print ~D)~%~})"
                          (loop for i from 1 to 59 collect i)))
@@ -76,7 +76,7 @@
 
 (deftest function-length-at-limit
   (testing "Function exactly at limit (50 lines) should not violate"
-    (let* ((rule (make-instance 'rules:function-length-rule :max-lines 50))
+    (let* ((rule (make-instance 'rules:function-length-rule :max 50))
            ;; Generate a function with exactly 50 lines
            (code (format nil "(defun at-limit (x)~%~{  (print ~D)~%~})"
                          (loop for i from 1 to 49 collect i)))
@@ -87,7 +87,7 @@
 
 (deftest function-length-defmethod
   (testing "defmethod is counted"
-    (let* ((rule (make-instance 'rules:function-length-rule :max-lines 5))
+    (let* ((rule (make-instance 'rules:function-length-rule :max 5))
            (code "(defmethod process ((x integer))
   (print x)
   (print x)
@@ -102,7 +102,7 @@
 
 (deftest function-length-nested-flet
   (testing "flet inner functions are counted separately"
-    (let* ((rule (make-instance 'rules:function-length-rule :max-lines 5))
+    (let* ((rule (make-instance 'rules:function-length-rule :max 5))
            ;; Outer function: 6 lines (VIOLATE)
            ;; Inner function: 4 lines (OK)
            (code "(defun outer (x)
@@ -120,8 +120,8 @@
       (ok (search "6 lines" (violation:violation-message (first violations)))))))
 
 (deftest function-length-custom-max
-  (testing "Custom max-lines configuration"
-    (let* ((rule (make-instance 'rules:function-length-rule :max-lines 75))
+  (testing "Custom max configuration"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 75))
            (code (format nil "(defun custom-max (x)~%~{  (print ~D)~%~})"
                          (loop for i from 1 to 70 collect i)))
            (forms (parser:parse-forms code #P"test.lisp"))

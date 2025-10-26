@@ -4,10 +4,10 @@
 
  ;; Enable rules with custom options
  (:enable :line-length
-   :max-length 100)
+   :max 100)
 
  (:enable :consecutive-blank-lines
-   :max-lines 2)
+   :max 2)
 
  ;; Enable rules without options
  (:enable :constant-naming)
@@ -17,7 +17,7 @@
 
  ;; Path-specific overrides for test files
  (:for-paths ("tests")
-   (:enable :line-length :max-length 120)
+   (:enable :line-length :max 120)
    (:disable :unused-variables))
 
  ;; Scripts and examples can be less strict

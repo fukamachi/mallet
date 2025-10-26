@@ -72,15 +72,15 @@ Create `.mallet.lisp` in your project root:
           "vendor/**/*.lisp")       ; ignore vendor directory
 
  ;; Enable rules with options
- (:enable :line-length :max-length 100)
- (:enable :consecutive-blank-lines :max-lines 2)
+ (:enable :line-length :max 100)
+ (:enable :consecutive-blank-lines :max 2)
 
  ;; Disable specific rules
  (:disable :constant-naming)
 
  ;; Path-specific overrides
  (:for-paths ("tests")
-   (:enable :line-length :max-length 120)
+   (:enable :line-length :max 120)
    (:disable :unused-variables)))
 ```
 
