@@ -369,7 +369,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                                  base-config)))
                    (severity-counts '())  ; Accumulated counts as plist
                    (has-errors nil)
-                   (has-violations nil)
+                   (has-warnings nil)
                    (first-file-with-violations t)  ; For JSON comma handling
                    (all-violations '()))  ; Collect all violations for fix mode
 
@@ -412,11 +412,14 @@ Lints files specified in ARGS and exits with appropriate status code."
 
                     ;; Track violations for exit code
                     (when violations
-                      (setf has-violations t)
                       (when (some (lambda (v)
                                     (eq (violation-severity v) :error))
                                   violations)
-                        (setf has-errors t))))))
+                        (setf has-errors t))
+                      (when (some (lambda (v)
+                                    (eq (violation-severity v) :warning))
+                                  violations)
+                        (setf has-warnings t))))))
 
               ;; Apply fixes if in fix mode
               (when fix-mode
@@ -453,9 +456,11 @@ Lints files specified in ARGS and exits with appropriate status code."
                               (length unfixed-violations))))
 
                   ;; Update exit code tracking based on unfixed violations
-                  (setf has-violations (< 0 (length unfixed-violations)))
                   (setf has-errors
                         (some (lambda (v) (eq (violation-severity v) :error))
+                              unfixed-violations))
+                  (setf has-warnings
+                        (some (lambda (v) (eq (violation-severity v) :warning))
                               unfixed-violations))))
 
               ;; Print summary/closing (only for normal mode)
@@ -472,13 +477,13 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (formatter:format-json-end))))
 
               ;; Exit with appropriate status
-              ;; Exit 2: ERROR severity (objectively wrong)
-              ;; Exit 1: Any other violations (WARNING/CONVENTION/FORMAT/INFO)
-              ;; Exit 0: No violations
+              ;; Exit 2: ERROR severity (objectively wrong code)
+              ;; Exit 1: WARNING severity (likely bugs or dangerous patterns)
+              ;; Exit 0: CONVENTION/FORMAT/INFO/METRICS (informational only)
               ;; Teams control strictness via config (enable/disable rules)
               (cond
                 (has-errors (uiop:quit 2))
-                (has-violations (uiop:quit 1))
+                (has-warnings (uiop:quit 1))
                 (t (uiop:quit 0))))))
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt

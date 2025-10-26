@@ -115,8 +115,9 @@ SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
          (convention-count (or (getf severity-counts :convention) 0))
          (format-count (or (getf severity-counts :format) 0))
          (info-count (or (getf severity-counts :info) 0))
+         (metrics-count (or (getf severity-counts :metrics) 0))
          (total-violations (+ error-count warning-count convention-count
-                              format-count info-count)))
+                              format-count info-count metrics-count)))
 
     (format stream "~%")
     (if (zerop total-violations)
@@ -135,6 +136,8 @@ SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
             (push (format nil "~A format~:P" format-count) parts))
           (when (> info-count 0)
             (push (format nil "~A info" info-count) parts))
+          (when (> metrics-count 0)
+            (push (format nil "~A metrics" metrics-count) parts))
 
           (let ((summary (format nil "✗ ~A ~A (~{~A~^, ~})"
                                  total-violations

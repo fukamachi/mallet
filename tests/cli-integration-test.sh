@@ -99,21 +99,32 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
 
         # Test that violations are detected
         test_start "Violation file '$filename' detects violations"
-        OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 | grep -c "violation" || true)
+        OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 | grep -c "problem" || true)
         if [ "$OUTPUT" -ge 1 ]; then
             test_pass
         else
             test_fail "Expected violations to be detected"
         fi
 
-        # Test exit code (should be non-zero)
-        test_start "Violation file '$filename' returns non-zero exit code"
+        # Determine expected exit code based on highest severity
+        # Exit 2: ERROR, Exit 1: WARNING, Exit 0: CONVENTION/FORMAT/INFO/METRICS
+        EXPECTED_EXIT_CODE=0
+        if [ -f "$expected_file" ]; then
+            if grep -q ' error$' "$expected_file" 2>/dev/null; then
+                EXPECTED_EXIT_CODE=2
+            elif grep -q ' warning$' "$expected_file" 2>/dev/null; then
+                EXPECTED_EXIT_CODE=1
+            fi
+        fi
+
+        # Test exit code
+        test_start "Violation file '$filename' returns exit code $EXPECTED_EXIT_CODE"
         EXIT_CODE=0
         "$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 > /dev/null || EXIT_CODE=$?
-        if [ "$EXIT_CODE" -ne 0 ]; then
+        if [ "$EXIT_CODE" -eq "$EXPECTED_EXIT_CODE" ]; then
             test_pass
         else
-            test_fail "Expected non-zero exit code, got 0"
+            test_fail "Expected exit code $EXPECTED_EXIT_CODE, got $EXIT_CODE"
         fi
 
         # If .expected file exists, verify specific violations
