@@ -131,6 +131,73 @@ Returns (rule-name . options-plist)."
       (error 'errors:invalid-group :value group-str))
     keyword))
 
+(defun handle-format-option (args)
+  "Handle --format option. Returns (values format remaining-args)."
+  (let ((fmt (pop args)))
+    (unless fmt
+      (error 'errors:missing-option-value :option "--format"))
+    (values
+     (cond
+       ((string= fmt "text") :text)
+       ((string= fmt "json") :json)
+       ((string= fmt "line") :line)
+       (t (error 'errors:invalid-format
+                 :option "--format"
+                 :value fmt
+                 :expected "text, json, or line")))
+     args)))
+
+(defun handle-config-option (args)
+  "Handle --config option. Returns (values config-path remaining-args)."
+  (let ((path (pop args)))
+    (unless path
+      (error 'errors:missing-option-value :option "--config"))
+    (values path args)))
+
+(defun handle-preset-option (args)
+  "Handle --preset option. Returns (values preset remaining-args)."
+  (let ((preset-name (pop args)))
+    (unless preset-name
+      (error 'errors:missing-option-value :option "--preset"))
+    (values
+     (cond
+       ((string= preset-name "default") :default)
+       ((string= preset-name "all") :all)
+       (t (error 'errors:invalid-preset
+                 :option "--preset"
+                 :value preset-name
+                 :expected "default or all")))
+     args)))
+
+(defun handle-enable-option (args)
+  "Handle --enable option. Returns (values rule-spec remaining-args)."
+  (let ((spec (pop args)))
+    (unless spec
+      (error 'errors:missing-option-value :option "--enable"))
+    (values (parse-rule-spec spec) args)))
+
+(defun handle-disable-option (args)
+  "Handle --disable option. Returns (values rule-name remaining-args)."
+  (let ((rule-name-str (pop args)))
+    (unless rule-name-str
+      (error 'errors:missing-option-value :option "--disable"))
+    (values (parse-rule-name rule-name-str) args)))
+
+(defun handle-enable-group-option (args)
+  "Handle --enable-group option. Returns (values group-name remaining-args)."
+  (let ((group-str (pop args)))
+    (unless group-str
+      (error 'errors:missing-option-value :option "--enable-group"))
+    (values (parse-group-name group-str) args)))
+
+(defun handle-disable-group-option (args)
+  "Handle --disable-group option. Returns (values group-name remaining-args)."
+  (let ((group-str (pop args)))
+    (unless group-str
+      (error 'errors:missing-option-value :option "--disable-group"))
+    (values (parse-group-name group-str) args)))
+
+
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
 Returns (values format config-path preset debug fix-mode cli-rules files).
@@ -139,43 +206,24 @@ Signals specific error conditions for invalid input."
         (config-path nil)
         (preset nil)
         (debug nil)
-        (fix-mode nil)  ; nil, :fix, or :fix-dry-run
-        (enable-rules '())      ; List of (rule-name . options-plist)
-        (disable-rules '())     ; List of rule-names (keywords)
-        (enable-groups '())     ; List of group names (keywords)
-        (disable-groups '())    ; List of group names (keywords)
+        (fix-mode nil)
+        (enable-rules '())
+        (disable-rules '())
+        (enable-groups '())
+        (disable-groups '())
         (files '()))
     (loop while args do
       (let ((arg (pop args)))
         (cond
           ((string= arg "--format")
-           (let ((fmt (pop args)))
-             (unless fmt
-               (error 'errors:missing-option-value :option "--format"))
-             (setf format (cond
-                            ((string= fmt "text") :text)
-                            ((string= fmt "json") :json)
-                            ((string= fmt "line") :line)
-                            (t (error 'errors:invalid-format
-                                      :option "--format"
-                                      :value fmt
-                                      :expected "text, json, or line"))))))
+           (multiple-value-setq (format args)
+             (handle-format-option args)))
           ((string= arg "--config")
-           (let ((path (pop args)))
-             (unless path
-               (error 'errors:missing-option-value :option "--config"))
-             (setf config-path path)))
+           (multiple-value-setq (config-path args)
+             (handle-config-option args)))
           ((string= arg "--preset")
-           (let ((preset-name (pop args)))
-             (unless preset-name
-               (error 'errors:missing-option-value :option "--preset"))
-             (setf preset (cond
-                            ((string= preset-name "default") :default)
-                            ((string= preset-name "all") :all)
-                            (t (error 'errors:invalid-preset
-                                      :option "--preset"
-                                      :value preset-name
-                                      :expected "default or all"))))))
+           (multiple-value-setq (preset args)
+             (handle-preset-option args)))
           ((or (string= arg "--all") (string= arg "-a"))
            (setf preset :all))
           ((string= arg "--debug")
@@ -185,25 +233,25 @@ Signals specific error conditions for invalid input."
           ((string= arg "--fix-dry-run")
            (setf fix-mode :fix-dry-run))
           ((string= arg "--enable")
-           (let ((spec (pop args)))
-             (unless spec
-               (error 'errors:missing-option-value :option "--enable"))
-             (push (parse-rule-spec spec) enable-rules)))
+           (let (rule-spec)
+             (multiple-value-setq (rule-spec args)
+               (handle-enable-option args))
+             (push rule-spec enable-rules)))
           ((string= arg "--disable")
-           (let ((rule-name-str (pop args)))
-             (unless rule-name-str
-               (error 'errors:missing-option-value :option "--disable"))
-             (push (parse-rule-name rule-name-str) disable-rules)))
+           (let (rule-name)
+             (multiple-value-setq (rule-name args)
+               (handle-disable-option args))
+             (push rule-name disable-rules)))
           ((string= arg "--enable-group")
-           (let ((group-str (pop args)))
-             (unless group-str
-               (error 'errors:missing-option-value :option "--enable-group"))
-             (push (parse-group-name group-str) enable-groups)))
+           (let (group-name)
+             (multiple-value-setq (group-name args)
+               (handle-enable-group-option args))
+             (push group-name enable-groups)))
           ((string= arg "--disable-group")
-           (let ((group-str (pop args)))
-             (unless group-str
-               (error 'errors:missing-option-value :option "--disable-group"))
-             (push (parse-group-name group-str) disable-groups)))
+           (let (group-name)
+             (multiple-value-setq (group-name args)
+               (handle-disable-group-option args))
+             (push group-name disable-groups)))
           ((string= arg "--help")
            (print-help)
            (uiop:quit 0))
@@ -219,6 +267,7 @@ Signals specific error conditions for invalid input."
                            :enable-groups (nreverse enable-groups)
                            :disable-groups (nreverse disable-groups))))
       (values format config-path preset debug fix-mode cli-rules (nreverse files)))))
+
 
 (defun print-help ()
   "Print CLI usage information."
@@ -315,6 +364,69 @@ Handles wildcards and directories, excluding common non-source directories."
              (error 'errors:file-not-found :path arg))))))
     (nreverse files)))
 
+(defun load-configuration (config-path preset)
+  "Load configuration from file or use built-in preset.
+Returns the final config with CLI preset override applied."
+  (let ((config:*default-preset* (or preset :default)))
+    (or (and config-path
+             (config:load-config config-path :preset-override preset))
+        (let ((discovered (config:find-config-file (uiop:getcwd))))
+          (when discovered
+            (config:load-config discovered :preset-override preset)))
+        (config:get-built-in-config (or preset :default)))))
+
+(defun has-cli-rules-p (cli-rules)
+  "Check if cli-rules has any actual overrides."
+  (or (getf cli-rules :enable-rules)
+      (getf cli-rules :disable-rules)
+      (getf cli-rules :enable-groups)
+      (getf cli-rules :disable-groups)))
+
+(defun track-violation-severity (violations)
+  "Check violations for errors and warnings.
+Returns (values has-errors-p has-warnings-p)."
+  (values
+   (some (lambda (v) (eq (violation-severity v) :error)) violations)
+   (some (lambda (v) (eq (violation-severity v) :warning)) violations)))
+
+(defun process-fix-mode (all-violations fix-mode format)
+  "Apply fixes to violations and output results.
+Returns (values has-errors-p has-warnings-p)."
+  (multiple-value-bind (fixed-count fixed-violations unfixed-violations)
+      (fixer:apply-fixes all-violations :dry-run (eq fix-mode :fix-dry-run))
+
+    ;; Output results (only text format supported for --fix for now)
+    (when (eq format :text)
+      ;; Group violations by file for output
+      (let ((by-file (make-hash-table :test 'equal)))
+        (dolist (v (append fixed-violations unfixed-violations))
+          (push v (gethash (violation-file v) by-file)))
+
+        ;; Output each file's violations
+        (maphash (lambda (file file-violations)
+                   (formatter:format-text-file
+                    file
+                    (nreverse file-violations)
+                    :fixed-violations fixed-violations))
+                 by-file))
+
+      ;; Print fix summary
+      (cond
+        ((zerop fixed-count)
+         (format t "~%No auto-fixable violations found.~%"))
+        ((eq fix-mode :fix-dry-run)
+         (format t "~%Would fix ~D violation~:P (dry run - no files changed).~%"
+                 fixed-count))
+        (t
+         (format t "~%Fixed ~D violation~:P.~%" fixed-count)))
+
+      (when (< 0 (length unfixed-violations))
+        (format t "~D violation~:P cannot be auto-fixed.~%"
+                (length unfixed-violations))))
+
+    ;; Return updated exit code tracking based on unfixed violations
+    (track-violation-severity unfixed-violations)))
+
 (defun main ()
   "Main entry point for the Mallet CLI.
 Lints files specified in ARGS and exits with appropriate status code."
@@ -349,29 +461,16 @@ Lints files specified in ARGS and exits with appropriate status code."
               (uiop:quit 1))
 
             (let* ((files (expand-file-args file-args))
-                   (config:*default-preset* (or preset :default))
-                   ;; Auto-discover config from CWD if not explicitly provided
-                   ;; If preset is specified, it overrides :extends in config file
-                   (base-config (or (and config-path
-                                         (config:load-config config-path :preset-override preset))
-                                    (let ((discovered (config:find-config-file (uiop:getcwd))))
-                                      (when discovered
-                                        (config:load-config discovered :preset-override preset)))
-                                    ;; No config file found, use preset
-                                    (config:get-built-in-config (or preset :default))))
+                   (base-config (load-configuration config-path preset))
                    ;; Apply CLI overrides if any
-                   (config (let ((has-cli-rules (or (getf cli-rules :enable-rules)
-                                                     (getf cli-rules :disable-rules)
-                                                     (getf cli-rules :enable-groups)
-                                                     (getf cli-rules :disable-groups))))
-                             (if has-cli-rules
-                                 (config:apply-cli-overrides base-config cli-rules)
-                                 base-config)))
-                   (severity-counts '())  ; Accumulated counts as plist
+                   (config (if (has-cli-rules-p cli-rules)
+                               (config:apply-cli-overrides base-config cli-rules)
+                               base-config))
+                   (severity-counts '())
                    (has-errors nil)
                    (has-warnings nil)
-                   (first-file-with-violations t)  ; For JSON comma handling
-                   (all-violations '()))  ; Collect all violations for fix mode
+                   (first-file-with-violations t)
+                   (all-violations '()))
 
               ;; For JSON, print opening bracket
               (when (eq format :json)
@@ -412,75 +511,27 @@ Lints files specified in ARGS and exits with appropriate status code."
 
                     ;; Track violations for exit code
                     (when violations
-                      (when (some (lambda (v)
-                                    (eq (violation-severity v) :error))
-                                  violations)
-                        (setf has-errors t))
-                      (when (some (lambda (v)
-                                    (eq (violation-severity v) :warning))
-                                  violations)
-                        (setf has-warnings t))))))
+                      (multiple-value-bind (errors warnings)
+                          (track-violation-severity violations)
+                        (when errors (setf has-errors t))
+                        (when warnings (setf has-warnings t)))))))
 
               ;; Apply fixes if in fix mode
               (when fix-mode
-                (multiple-value-bind (fixed-count fixed-violations unfixed-violations)
-                    (fixer:apply-fixes all-violations :dry-run (eq fix-mode :fix-dry-run))
-
-                  ;; Output results (only text format supported for --fix for now)
-                  (when (eq format :text)
-                    ;; Group violations by file for output
-                    (let ((by-file (make-hash-table :test 'equal)))
-                      (dolist (v (append fixed-violations unfixed-violations))
-                        (push v (gethash (violation-file v) by-file)))
-
-                      ;; Output each file's violations
-                      (maphash (lambda (file file-violations)
-                                 (formatter:format-text-file
-                                  file
-                                  (nreverse file-violations)
-                                  :fixed-violations fixed-violations))
-                               by-file))
-
-                    ;; Print fix summary
-                    (cond
-                      ((zerop fixed-count)
-                       (format t "~%No auto-fixable violations found.~%"))
-                      ((eq fix-mode :fix-dry-run)
-                       (format t "~%Would fix ~D violation~:P (dry run - no files changed).~%"
-                               fixed-count))
-                      (t
-                       (format t "~%Fixed ~D violation~:P.~%" fixed-count)))
-
-                    (when (< 0 (length unfixed-violations))
-                      (format t "~D violation~:P cannot be auto-fixed.~%"
-                              (length unfixed-violations))))
-
-                  ;; Update exit code tracking based on unfixed violations
-                  (setf has-errors
-                        (some (lambda (v) (eq (violation-severity v) :error))
-                              unfixed-violations))
-                  (setf has-warnings
-                        (some (lambda (v) (eq (violation-severity v) :warning))
-                              unfixed-violations))))
+                (multiple-value-bind (errors warnings)
+                    (process-fix-mode all-violations fix-mode format)
+                  (setf has-errors errors)
+                  (setf has-warnings warnings)))
 
               ;; Print summary/closing (only for normal mode)
               (unless fix-mode
                 (ecase format
-                  (:text
-                   ;; Print summary with accumulated counts
-                   (formatter:format-text-summary severity-counts))
-                  (:line
-                   ;; Print summary with accumulated counts (same as text)
+                  ((:text :line)
                    (formatter:format-text-summary severity-counts))
                   (:json
-                   ;; Print closing bracket
                    (formatter:format-json-end))))
 
               ;; Exit with appropriate status
-              ;; Exit 2: ERROR severity (objectively wrong code)
-              ;; Exit 1: WARNING severity (likely bugs or dangerous patterns)
-              ;; Exit 0: CONVENTION/FORMAT/INFO/METRICS (informational only)
-              ;; Teams control strictness via config (enable/disable rules)
               (cond
                 (has-errors (uiop:quit 2))
                 (has-warnings (uiop:quit 1))
@@ -490,3 +541,5 @@ Lints files specified in ARGS and exits with appropriate status code."
        #-sbcl error ()
         (format *error-output* "~&Interrupted.~%")
         (uiop:quit 130)))))
+
+

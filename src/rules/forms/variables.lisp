@@ -827,6 +827,210 @@ SEARCHABLE: For partial shadows, sub-expressions that CAN be searched"
             (string-equal (base:symbol-name-from-string v) target-name))
           vars)))
 
+(defun handle-let-shadow (expr rest-args target-name)
+  "Handle LET form shadow detection."
+  (when (utils:proper-list-of-min-length-p rest-args 2)
+    (let ((bindings (first rest-args)))
+      (when (and (a:proper-list-p bindings)
+                 (some (lambda (b) (binds-same-name-p b target-name)) bindings))
+        ;; Found shadowing - record partial-let shadow
+        (let ((init-forms (mapcar (lambda (b)
+                                    (when (consp b) (second b)))
+                                  bindings)))
+          (push (make-shadow-info
+                 :form expr
+                 :type :partial-let
+                 :searchable (remove nil init-forms))
+                *shadows*)))
+      ;; Continue searching if not shadowed
+      (when (and (a:proper-list-p bindings)
+                 (not (some (lambda (b) (binds-same-name-p b target-name)) bindings)))
+        (dolist (binding bindings)
+          (when (consp binding)
+            (find-shadows-in-expr (second binding) target-name)))
+        (dolist (form (rest rest-args))
+          (find-shadows-in-expr form target-name))))))
+
+(defun handle-let*-shadow (expr rest-args target-name)
+  "Handle LET* form shadow detection."
+  (when (utils:proper-list-of-min-length-p rest-args 2)
+    (let ((bindings (first rest-args)))
+      (when (and (a:proper-list-p bindings)
+                 (some (lambda (b) (binds-same-name-p b target-name)) bindings))
+        ;; Found shadowing
+        (let ((searchable-inits '()))
+          (loop for binding in bindings
+                do (when (consp binding)
+                     (push (second binding) searchable-inits))
+                until (binds-same-name-p binding target-name))
+          (push (make-shadow-info
+                 :form expr
+                 :type :partial-let*
+                 :searchable (nreverse searchable-inits))
+                *shadows*)))
+      ;; Continue searching if not shadowed
+      (when (and (a:proper-list-p bindings)
+                 (not (some (lambda (b) (binds-same-name-p b target-name)) bindings)))
+        (dolist (binding bindings)
+          (when (consp binding)
+            (find-shadows-in-expr (second binding) target-name)))
+        (dolist (form (rest rest-args))
+          (find-shadows-in-expr form target-name))))))
+
+(defun lambda-shadows-p (lambda-list target-name)
+  "Check if lambda-list contains a parameter matching target-name."
+  (and (a:proper-list-p lambda-list)
+       (some (lambda (param)
+               (and (stringp param)
+                    (not (utils:lambda-list-keyword-p param))
+                    (string-equal (base:symbol-name-from-string param) target-name)))
+             lambda-list)))
+
+(defun handle-lambda-shadow (expr head rest-args target-name)
+  "Handle DEFUN/LAMBDA/DEFMACRO form shadow detection."
+  (let* ((lambda-list-pos (if (string-equal (base:symbol-name-from-string head) "LAMBDA") 0 1))
+         (lambda-list (when (utils:proper-list-of-min-length-p rest-args (1+ lambda-list-pos))
+                        (nth lambda-list-pos rest-args))))
+    (when (lambda-shadows-p lambda-list target-name)
+      (push (make-shadow-info
+             :form expr
+             :type :complete
+             :searchable nil)
+            *shadows*))
+    ;; Continue searching if not shadowed
+    (unless (lambda-shadows-p lambda-list target-name)
+      (dolist (arg rest-args)
+        (find-shadows-in-expr arg target-name)))))
+
+(defun handle-destructuring-bind-shadow (expr rest-args target-name)
+  "Handle DESTRUCTURING-BIND/MULTIPLE-VALUE-BIND shadow detection."
+  (when (utils:proper-list-of-min-length-p rest-args 2)
+    (let* ((vars (first rest-args))
+           (init-form (second rest-args))
+           (all-vars (extract-bindings vars :destructuring)))
+      (when (some (lambda (v)
+                    (string-equal (base:symbol-name-from-string v) target-name))
+                  all-vars)
+        (push (make-shadow-info
+               :form expr
+               :type :partial-let
+               :searchable (list init-form))
+              *shadows*))
+      ;; Continue searching if not shadowed
+      (unless (some (lambda (v)
+                      (string-equal (base:symbol-name-from-string v) target-name))
+                    all-vars)
+        (dolist (arg rest-args)
+          (find-shadows-in-expr arg target-name))))))
+
+(defun handle-dolist-shadow (expr rest-args target-name)
+  "Handle DOLIST/DOTIMES shadow detection."
+  (when (utils:proper-list-of-min-length-p rest-args 1)
+    (let* ((spec (first rest-args))
+           (var (when (a:proper-list-p spec) (first spec)))
+           (source-form (when (utils:proper-list-of-min-length-p spec 2)
+                          (second spec))))
+      (when (and (stringp var)
+                 (string-equal (base:symbol-name-from-string var) target-name))
+        (push (make-shadow-info
+               :form expr
+               :type :partial-let
+               :searchable (if source-form (list source-form) nil))
+              *shadows*))
+      ;; Continue searching if not shadowed
+      (unless (and (stringp var)
+                   (string-equal (base:symbol-name-from-string var) target-name))
+        (dolist (arg rest-args)
+          (find-shadows-in-expr arg target-name))))))
+
+(defun handle-do-shadow (expr rest-args target-name)
+  "Handle DO/DO* shadow detection."
+  (when (utils:proper-list-of-min-length-p rest-args 2)
+    (let ((var-clauses (first rest-args)))
+      (when (and (a:proper-list-p var-clauses)
+                 (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
+        (push (make-shadow-info
+               :form expr
+               :type :complete
+               :searchable nil)
+              *shadows*))
+      ;; Continue searching if not shadowed
+      (unless (and (a:proper-list-p var-clauses)
+                   (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
+        (dolist (arg rest-args)
+          (find-shadows-in-expr arg target-name))))))
+
+(defun handle-loop-shadow (expr rest-args target-name)
+  "Handle LOOP shadow detection with AND parallelism support."
+  (when (a:proper-list-p rest-args)
+    (multiple-value-bind (loop-bindings body)
+        (loop-parser:parse-loop-clauses rest-args)
+      (declare (ignore body))
+      (let ((shadowing-binding
+              (find-if (lambda (lb)
+                         (let ((vars (extract-bindings (loop-parser:loop-binding-pattern lb) :destructuring)))
+                           (some (lambda (v)
+                                   (string-equal (base:symbol-name-from-string v) target-name))
+                                 vars)))
+                       loop-bindings)))
+        (when shadowing-binding
+          (if (loop-parser:loop-binding-is-parallel shadowing-binding)
+              ;; Parallel binding (AND)
+              (let* ((shadow-pos (position shadowing-binding loop-bindings))
+                     (group-start (or (loop for i from (1- shadow-pos) downto 0
+                                            when (not (loop-parser:loop-binding-is-parallel (nth i loop-bindings)))
+                                              return (1+ i))
+                                      0))
+                     (parallel-group (subseq loop-bindings group-start (1+ shadow-pos)))
+                     (searchable-forms (mapcan (lambda (lb) (copy-list (loop-parser:loop-binding-init-form lb)))
+                                               parallel-group)))
+                (push (make-shadow-info
+                       :form expr
+                       :type :partial-loop-and
+                       :searchable searchable-forms)
+                      *shadows*))
+              ;; Sequential binding
+              (let* ((shadow-pos (position shadowing-binding loop-bindings))
+                     (searchable-bindings (subseq loop-bindings 0 (1+ shadow-pos)))
+                     (searchable-forms (mapcan (lambda (lb) (copy-list (loop-parser:loop-binding-init-form lb)))
+                                               searchable-bindings)))
+                (push (make-shadow-info
+                       :form expr
+                       :type :partial-loop-sequential
+                       :searchable searchable-forms)
+                      *shadows*))))
+        ;; Continue searching if not shadowed
+        (unless shadowing-binding
+          (dolist (clause rest-args)
+            (find-shadows-in-expr clause target-name)))))))
+
+(defun handle-quasiquote-shadow (rest-args target-name)
+  "Handle QUASIQUOTE shadow detection - search only unquoted parts."
+  (labels ((search-quasi (expr)
+             (when (consp expr)
+               (let ((h (first expr)))
+                 (cond
+                   ((or (eq h 'eclector.reader:unquote)
+                        (and (symbolp h)
+                             (string-equal (symbol-name h) "UNQUOTE")
+                             (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
+                    (when (rest expr)
+                      (find-shadows-in-expr (second expr) target-name)))
+                   ((or (eq h 'eclector.reader:unquote-splicing)
+                        (and (symbolp h)
+                             (string-equal (symbol-name h) "UNQUOTE-SPLICING")
+                             (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
+                    (when (rest expr)
+                      (find-shadows-in-expr (second expr) target-name)))
+                   (t
+                    (when (consp (car expr))
+                      (search-quasi (car expr)))
+                    (when (consp (cdr expr))
+                      (search-quasi (cdr expr)))))))))
+    (dolist (arg rest-args)
+      (search-quasi arg))))
+
+
 (defun find-shadows-in-expr (expr target-name)
   "Recursively find all shadowing points in expr.
 Modifies *SHADOWS* special variable by pushing new shadow-info structs."
@@ -840,257 +1044,48 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
              (base:symbol-matches-p head "QUOTE"))
          nil)
 
-        ;; LET - check for shadowing in bindings
+        ;; LET
         ((utils:form-head-matches-p head "LET")
-         (when (utils:proper-list-of-min-length-p rest-args 2)
-           (let ((bindings (first rest-args)))
-             (when (and (a:proper-list-p bindings)
-                        (some (lambda (b) (binds-same-name-p b target-name)) bindings))
-               ;; Found shadowing - record partial-let shadow
-               ;; Searchable: ALL init forms (parallel bindings)
-               (let ((init-forms (mapcar (lambda (b)
-                                           (when (consp b) (second b)))
-                                         bindings)))
-                 (push (make-shadow-info
-                        :form expr
-                        :type :partial-let
-                        :searchable (remove nil init-forms))
-                       *shadows*)))
-             ;; Continue searching in non-shadowed parts or inside the shadow
-             (when (and (a:proper-list-p bindings)
-                        (not (some (lambda (b) (binds-same-name-p b target-name)) bindings)))
-               ;; No shadow here, continue recursion
-               (dolist (binding bindings)
-                 (when (consp binding)
-                   (find-shadows-in-expr (second binding) target-name)))
-               (dolist (form (rest rest-args))
-                 (find-shadows-in-expr form target-name))))))
+         (handle-let-shadow expr rest-args target-name))
 
-        ;; LET* - check for shadowing in bindings
+        ;; LET*
         ((utils:form-head-matches-p head "LET*")
-         (when (utils:proper-list-of-min-length-p rest-args 2)
-           (let ((bindings (first rest-args)))
-             (when (and (a:proper-list-p bindings)
-                        (some (lambda (b) (binds-same-name-p b target-name)) bindings))
-               ;; Found shadowing - record partial-let* shadow
-               ;; Searchable: init forms UP TO AND INCLUDING the shadowing binding
-               (let ((searchable-inits '()))
-                 (loop for binding in bindings
-                       do (when (consp binding)
-                            (push (second binding) searchable-inits))
-                       until (binds-same-name-p binding target-name))
-                 (push (make-shadow-info
-                        :form expr
-                        :type :partial-let*
-                        :searchable (nreverse searchable-inits))
-                       *shadows*)))
-             ;; Continue searching in non-shadowed parts
-             (when (and (a:proper-list-p bindings)
-                        (not (some (lambda (b) (binds-same-name-p b target-name)) bindings)))
-               (dolist (binding bindings)
-                 (when (consp binding)
-                   (find-shadows-in-expr (second binding) target-name)))
-               (dolist (form (rest rest-args))
-                 (find-shadows-in-expr form target-name))))))
+         (handle-let*-shadow expr rest-args target-name))
 
-        ;; DEFUN/LAMBDA/DEFMACRO - check parameters for shadowing
+        ;; DEFUN/LAMBDA/DEFMACRO
         ((or (utils:form-head-matches-p head "DEFUN")
              (utils:form-head-matches-p head "LAMBDA")
              (utils:form-head-matches-p head "DEFMACRO"))
-         (let* ((lambda-list-pos (if (string-equal (base:symbol-name-from-string head) "LAMBDA") 0 1))
-                (lambda-list (when (utils:proper-list-of-min-length-p rest-args (1+ lambda-list-pos))
-                               (nth lambda-list-pos rest-args))))
-           (when (and (a:proper-list-p lambda-list)
-                      (some (lambda (param)
-                              (and (stringp param)
-                                   (not (utils:lambda-list-keyword-p param))
-                                   (string-equal (base:symbol-name-from-string param) target-name)))
-                            lambda-list))
-             ;; Complete shadow - parameter shadows the variable
-             (push (make-shadow-info
-                    :form expr
-                    :type :complete
-                    :searchable nil)
-                   *shadows*))
-           ;; Continue searching in non-shadowed parts
-           (unless (and (a:proper-list-p lambda-list)
-                        (some (lambda (param)
-                                (and (stringp param)
-                                     (not (utils:lambda-list-keyword-p param))
-                                     (string-equal (base:symbol-name-from-string param) target-name)))
-                              lambda-list))
-             (dolist (arg rest-args)
-               (find-shadows-in-expr arg target-name)))))
+         (handle-lambda-shadow expr head rest-args target-name))
 
         ;; DESTRUCTURING-BIND, MULTIPLE-VALUE-BIND
         ((or (utils:form-head-matches-p head "DESTRUCTURING-BIND")
              (utils:form-head-matches-p head "MULTIPLE-VALUE-BIND"))
-         (when (utils:proper-list-of-min-length-p rest-args 2)
-           (let ((vars (first rest-args))
-                 (init-form (second rest-args)))  ; The init-form is evaluated in outer scope
-             (let ((all-vars (extract-bindings vars :destructuring)))
-               (when (some (lambda (v)
-                             (string-equal (base:symbol-name-from-string v) target-name))
-                           all-vars)
-                 ;; Partial shadow - init-form can be searched (evaluated in outer scope)
-                 ;; Body is shadowed (new bindings active)
-                 (push (make-shadow-info
-                        :form expr
-                        :type :partial-let  ; Reuse partial-let type (similar behavior)
-                        :searchable (list init-form))  ; Only init-form is searchable
-                       *shadows*)))
-             ;; Continue searching if not shadowed
-             (unless (some (lambda (v)
-                             (string-equal (base:symbol-name-from-string v) target-name))
-                           (extract-bindings vars :destructuring))
-               (dolist (arg rest-args)
-                 (find-shadows-in-expr arg target-name))))))
+         (handle-destructuring-bind-shadow expr rest-args target-name))
 
         ;; DOLIST, DOTIMES
-        ;; (dolist (var list-form [result-form]) body...)
-        ;; (dotimes (var count-form [result-form]) body...)
-        ;; The list-form/count-form is evaluated in outer scope (searchable)
-        ;; The result-form and body are evaluated with variable bound (not searchable)
         ((or (utils:form-head-matches-p head "DOLIST")
              (utils:form-head-matches-p head "DOTIMES"))
-         (when (utils:proper-list-of-min-length-p rest-args 1)
-           (let* ((spec (first rest-args))
-                  (var (when (a:proper-list-p spec) (first spec)))
-                  (source-form (when (utils:proper-list-of-min-length-p spec 2)
-                                 (second spec))))
-             (when (and (stringp var)
-                        (string-equal (base:symbol-name-from-string var) target-name))
-               ;; Partial shadow - source-form (list/count) evaluated in outer scope
-               (push (make-shadow-info
-                      :form expr
-                      :type :partial-let
-                      :searchable (if source-form (list source-form) nil))
-                     *shadows*))
-             ;; Continue searching if not shadowed
-             (unless (and (stringp var)
-                          (string-equal (base:symbol-name-from-string var) target-name))
-               (dolist (arg rest-args)
-                 (find-shadows-in-expr arg target-name))))))
+         (handle-dolist-shadow expr rest-args target-name))
 
         ;; DO
         ((utils:form-head-matches-p head "DO")
-         (when (utils:proper-list-of-min-length-p rest-args 2)
-           (let ((var-clauses (first rest-args)))
-             (when (and (a:proper-list-p var-clauses)
-                        (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
-               ;; Complete shadow
-               (push (make-shadow-info
-                      :form expr
-                      :type :complete
-                      :searchable nil)
-                     *shadows*))
-             ;; Continue searching if not shadowed
-             (unless (and (a:proper-list-p var-clauses)
-                          (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
-               (dolist (arg rest-args)
-                 (find-shadows-in-expr arg target-name))))))
+         (handle-do-shadow expr rest-args target-name))
 
         ;; DO*
         ((utils:form-head-matches-p head "DO*")
-         (when (utils:proper-list-of-min-length-p rest-args 2)
-           (let ((var-clauses (first rest-args)))
-             (when (and (a:proper-list-p var-clauses)
-                        (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
-               ;; Complete shadow
-               (push (make-shadow-info
-                      :form expr
-                      :type :complete
-                      :searchable nil)
-                     *shadows*))
-             ;; Continue searching if not shadowed
-             (unless (and (a:proper-list-p var-clauses)
-                          (some (lambda (b) (binds-same-name-p b target-name)) var-clauses))
-               (dolist (arg rest-args)
-                 (find-shadows-in-expr arg target-name))))))
+         (handle-do-shadow expr rest-args target-name))
 
-        ;; LOOP - check for FOR/AS/WITH variables with AND detection
+        ;; LOOP
         ((utils:form-head-matches-p head "LOOP")
-         (when (a:proper-list-p rest-args)
-           (multiple-value-bind (loop-bindings body)
-               (loop-parser:parse-loop-clauses rest-args)
-             (declare (ignore body))
-             ;; Check if any binding shadows our variable
-             (let ((shadowing-binding
-                     (find-if (lambda (lb)
-                                (let ((vars (extract-bindings (loop-parser:loop-binding-pattern lb) :destructuring)))
-                                  (some (lambda (v)
-                                          (string-equal (base:symbol-name-from-string v) target-name))
-                                        vars)))
-                              loop-bindings)))
-               (when shadowing-binding
-                 ;; Found shadowing - determine type based on parallelism
-                 (if (loop-parser:loop-binding-is-parallel shadowing-binding)
-                     ;; Parallel binding (connected by AND) - like LET
-                     ;; Searchable: current binding's init-form AND all previous parallel bindings in the group
-                     (let* ((shadow-pos (position shadowing-binding loop-bindings))
-                            ;; Find start of parallel group (last non-parallel binding before this one)
-                            (group-start (or (loop for i from (1- shadow-pos) downto 0
-                                                   when (not (loop-parser:loop-binding-is-parallel (nth i loop-bindings)))
-                                                     return (1+ i))
-                                             0))
-                            ;; All bindings from group start up to and including shadow
-                            (parallel-group (subseq loop-bindings group-start (1+ shadow-pos)))
-                            ;; All init-forms in the parallel group
-                            (searchable-forms (mapcan (lambda (lb) (copy-list (loop-parser:loop-binding-init-form lb)))
-                                                      parallel-group)))
-                       (push (make-shadow-info
-                              :form expr
-                              :type :partial-loop-and
-                              :searchable searchable-forms)
-                             *shadows*))
-                     ;; Sequential binding - like LET*
-                     ;; Searchable: all init-forms UP TO AND INCLUDING the shadowing binding
-                     (let* ((shadow-pos (position shadowing-binding loop-bindings))
-                            (searchable-bindings (subseq loop-bindings 0 (1+ shadow-pos)))
-                            (searchable-forms (mapcan (lambda (lb) (copy-list (loop-parser:loop-binding-init-form lb)))
-                                                      searchable-bindings)))
-                       (push (make-shadow-info
-                              :form expr
-                              :type :partial-loop-sequential
-                              :searchable searchable-forms)
-                             *shadows*))))
-               ;; Continue searching if not shadowed
-               (unless shadowing-binding
-                 (dolist (clause rest-args)
-                   (find-shadows-in-expr clause target-name)))))))
+         (handle-loop-shadow expr rest-args target-name))
 
-        ;; QUASIQUOTE - only search unquoted expressions
+        ;; QUASIQUOTE
         ((or (eq head 'eclector.reader:quasiquote)
              (and (symbolp head)
                   (string-equal (symbol-name head) "QUASIQUOTE")
                   (string-equal (package-name (symbol-package head)) "ECLECTOR.READER")))
-         ;; Search for shadows in unquoted parts
-         (labels ((search-quasi (expr)
-                    (when (consp expr)
-                      (let ((h (first expr)))
-                        (cond
-                          ;; UNQUOTE - search the expression
-                          ((or (eq h 'eclector.reader:unquote)
-                               (and (symbolp h)
-                                    (string-equal (symbol-name h) "UNQUOTE")
-                                    (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
-                           (when (rest expr)
-                             (find-shadows-in-expr (second expr) target-name)))
-                          ;; UNQUOTE-SPLICING
-                          ((or (eq h 'eclector.reader:unquote-splicing)
-                               (and (symbolp h)
-                                    (string-equal (symbol-name h) "UNQUOTE-SPLICING")
-                                    (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
-                           (when (rest expr)
-                             (find-shadows-in-expr (second expr) target-name)))
-                          ;; Recurse
-                          (t
-                           (when (consp (car expr))
-                             (search-quasi (car expr)))
-                           (when (consp (cdr expr))
-                             (search-quasi (cdr expr)))))))))
-           (dolist (arg rest-args)
-             (search-quasi arg))))
+         (handle-quasiquote-shadow rest-args target-name))
 
         ;; Default: recursively search
         (t
@@ -1098,6 +1093,7 @@ Modifies *SHADOWS* special variable by pushing new shadow-info structs."
            (find-shadows-in-expr (car expr) target-name))
          (when (consp (cdr expr))
            (find-shadows-in-expr (cdr expr) target-name)))))))
+
 
 (defun find-shadows (var-name body)
   "Find all points where VAR-NAME is shadowed in BODY.
