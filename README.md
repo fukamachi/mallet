@@ -50,9 +50,12 @@ mallet --all src
 Enable or disable rules from the command line without needing a config file:
 
 ```bash
-# Enable specific rules
+# Enable additional specific rules
 mallet --enable cyclomatic-complexity src/
 mallet --enable cyclomatic-complexity:max=15 src/
+
+# Enable only specific rules
+mallet --none --enable cyclomatic-complexity:max=15 src/
 
 # Enable multiple rules with options
 mallet --enable line-length:max=80 --enable cyclomatic-complexity:max=10 src/

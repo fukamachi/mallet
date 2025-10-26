@@ -294,7 +294,7 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
 ;;; Built-in configs
 
 (defun get-built-in-config (&optional (name *default-preset*))
-  "Get a built-in configuration by NAME (:default or :all)."
+  "Get a built-in configuration by NAME (:default, :all, or :none)."
   (check-type name keyword)
 
   (case name
@@ -302,8 +302,10 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
      (make-default-config))
     (:all
      (make-all-config))
+    (:none
+     (make-none-config))
     (otherwise
-     (error "Unknown built-in config: ~A. Available: :default, :all" name))))
+     (error "Unknown built-in config: ~A. Available: :default, :all, :none" name))))
 
 (defun make-default-config ()
   "Create the default configuration - only universally-accepted rules.
@@ -373,6 +375,13 @@ Useful for exploration and discovering what rules exist."
                           (rules:make-rule spec)))
                     all-rules)
      :disabled-rules '())))  ; All rules enabled
+
+(defun make-none-config ()
+  "Create configuration with no rules enabled.
+Useful for explicitly enabling only specific rules from scratch."
+  (make-config
+   :rules '()
+   :disabled-rules '()))
 
 ;;; Ignore patterns
 

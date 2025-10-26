@@ -98,7 +98,15 @@
       (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
         (ok (member :line-length rule-names))
         (ok (member :trailing-whitespace rule-names))
-        (ok (member :if-without-else rule-names))))))
+        (ok (member :if-without-else rule-names)))))
+
+  (testing "Load none config"
+    (let ((cfg (config:get-built-in-config :none)))
+      (ok (not (null cfg)))
+      ;; No rules should be enabled
+      (ok (null (config:config-rules cfg)))
+      ;; No rules should be disabled
+      (ok (null (config:config-disabled-rules cfg))))))
 
 ;;; Config extends tests
 
@@ -115,7 +123,20 @@
       ;; Check that line-length has the overridden max-length
       (let ((line-length-rule (find :line-length (config:config-rules cfg)
                                     :key #'rules:rule-name)))
-        (ok (= 100 (rules:line-length-rule-max-length line-length-rule)))))))
+        (ok (= 100 (rules:line-length-rule-max-length line-length-rule))))))
+
+  (testing "Parse config with extends :none"
+    (let* ((sexp '(:mallet-config
+                   (:extends :none)
+                   (:enable :unused-variables)
+                   (:enable :trailing-whitespace)))
+           (cfg (config:parse-config sexp)))
+      ;; Should only have the explicitly enabled rules
+      (ok (= 2 (length (config:config-rules cfg))))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :unused-variables rule-names))
+        (ok (member :trailing-whitespace rule-names))
+        (ok (not (member :line-length rule-names)))))))
 
 (deftest parse-new-syntax-enable
   (testing "Parse config with :enable syntax"

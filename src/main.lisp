@@ -163,10 +163,11 @@ Returns (rule-name . options-plist)."
      (cond
        ((string= preset-name "default") :default)
        ((string= preset-name "all") :all)
+       ((string= preset-name "none") :none)
        (t (error 'errors:invalid-preset
                  :option "--preset"
                  :value preset-name
-                 :expected "default or all")))
+                 :expected "default, all, or none")))
      args)))
 
 (defun handle-enable-option (args)
@@ -226,6 +227,8 @@ Signals specific error conditions for invalid input."
              (handle-preset-option args)))
           ((or (string= arg "--all") (string= arg "-a"))
            (setf preset :all))
+          ((string= arg "--none")
+           (setf preset :none))
           ((string= arg "--debug")
            (setf debug t))
           ((string= arg "--fix")
@@ -279,8 +282,9 @@ Usage: mallet [options] <file>...
 Options:
   --format <format>   Output format (text, line, or json; default: text)
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
-  --preset <name>     Use built-in preset (default or all)
+  --preset <name>     Use built-in preset (default, all, or none)
   --all, -a           Alias for --preset all
+  --none              Alias for --preset none
 
   --enable <rule>     Enable specific rule (e.g., --enable cyclomatic-complexity)
   --enable <rule:opts> Enable rule with options (e.g., --enable line-length:max=120)
@@ -302,6 +306,7 @@ Output Formats:
 Presets:
   default             Only universally-accepted rules (quiet, recommended)
   all                 All rules enabled (useful for exploration)
+  none                No rules enabled (explicitly enable specific rules)
 
 Rule Groups (by severity):
   error               Objectively wrong code (causes runtime errors)
@@ -332,6 +337,9 @@ Examples:
 
   # Override multiple rules
   mallet --enable cyclomatic-complexity:max=10 --enable function-length:max=30 src/
+
+  # Start with no rules and explicitly enable specific ones
+  mallet --none --enable unused-variables --enable trailing-whitespace src/
 "))
 
 (defun expand-file-args (file-args)
