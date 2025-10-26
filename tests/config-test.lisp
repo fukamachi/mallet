@@ -436,6 +436,82 @@
              (line-length-rule (find :line-length rules :key #'rules:rule-name)))
         (ok (= 80 (rules:line-length-rule-max-length line-length-rule)))))))
 
+;;; Preset override tests
+
+(deftest preset-override
+  (testing "Override :extends with preset-override parameter"
+    (let* ((sexp '(:mallet-config
+                   (:extends :default)
+                   (:enable :line-length :max-length 100)
+                   (:disable :trailing-whitespace)))
+           ;; Override with :all preset
+           (cfg (config:parse-config sexp :preset-override :all)))
+      ;; Should inherit rules from :all (not :default)
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; :all includes cyclomatic-complexity, :default doesn't
+        (ok (member :cyclomatic-complexity rule-names))
+        ;; Should have line-length with overridden max-length from config
+        (let ((line-length-rule (find :line-length (config:config-rules cfg)
+                                      :key #'rules:rule-name)))
+          (ok (= 100 (rules:line-length-rule-max-length line-length-rule)))))
+      ;; Should respect :disable from config file
+      (ok (member :trailing-whitespace (config:config-disabled-rules cfg)))))
+
+  (testing "Preset override when no :extends in config"
+    (let* ((sexp '(:mallet-config
+                   (:enable :line-length :max-length 120)
+                   (:disable :no-tabs)))
+           ;; Provide preset-override even though there's no :extends
+           (cfg (config:parse-config sexp :preset-override :default)))
+      ;; Should use :default as base
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; :default includes trailing-whitespace
+        (ok (member :trailing-whitespace rule-names))
+        ;; Should have line-length with custom max-length
+        (let ((line-length-rule (find :line-length (config:config-rules cfg)
+                                      :key #'rules:rule-name)))
+          (ok (= 120 (rules:line-length-rule-max-length line-length-rule)))))
+      ;; Should respect :disable from config file
+      (ok (member :no-tabs (config:config-disabled-rules cfg)))))
+
+  (testing "Load config file with preset override"
+    (let ((config-content "(:mallet-config
+                              (:extends :default)
+                              (:enable :line-length :max-length 100)
+                              (:disable :unused-variables))"))
+      (with-temporary-config (config-content tmpfile)
+        (let ((cfg (config:load-config tmpfile :preset-override :all)))
+          ;; Should use :all as base (not :default from file)
+          (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+            ;; :all includes cyclomatic-complexity
+            (ok (member :cyclomatic-complexity rule-names))
+            ;; Should have custom line-length
+            (let ((line-length-rule (find :line-length (config:config-rules cfg)
+                                          :key #'rules:rule-name)))
+              (ok (= 100 (rules:line-length-rule-max-length line-length-rule)))))
+          ;; Should respect :disable from config file
+          (ok (member :unused-variables (config:config-disabled-rules cfg)))))))
+
+  (testing "Preset override respects :for-paths from config"
+    (let* ((sexp '(:mallet-config
+                   (:extends :default)
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :line-length :max-length 120)
+                    (:disable :unused-variables))))
+           (cfg (config:parse-config sexp :preset-override :all)))
+      ;; Should have path overrides
+      (ok (= 1 (length (config:config-path-rules cfg))))
+      ;; For test files, should get path-specific rules
+      (let* ((rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :line-length rule-names))
+        (ok (not (member :unused-variables rule-names))))
+      ;; For non-test files, should get base rules from :all
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        ;; :all includes cyclomatic-complexity
+        (ok (member :cyclomatic-complexity rule-names))))))
+
 ;;; Config discovery tests
 
 (deftest find-config-file

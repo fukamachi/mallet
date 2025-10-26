@@ -133,9 +133,10 @@ Returns (values rules disabled-rules) where:
 
         (values (nreverse result-rules) result-disabled)))))
 
-(defun parse-config (sexp)
+(defun parse-config (sexp &key preset-override)
   "Parse S-expression SEXP into a config object.
-Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...), and (:for-paths ...)."
+Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...), and (:for-paths ...).
+If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file."
   (check-type sexp list)
 
   (unless (eq (first sexp) :mallet-config)
@@ -154,7 +155,8 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...),
                  (case key
                    (:extends
                     ;; Process extends to get base rules
-                    (let ((extends-value (second item)))
+                    ;; CLI preset-override takes precedence over config file :extends
+                    (let ((extends-value (or preset-override (second item))))
                       (setf extends (if (keywordp extends-value)
                                         (get-built-in-config extends-value)
                                         (load-config extends-value)))))
@@ -189,6 +191,12 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...),
                                :disabled-rules override-disabled)
                               path-rules)))))))
 
+    ;; If preset-override is provided but no :extends clause was found, use preset-override
+    (when (and preset-override (not extends))
+      (setf extends (if (keywordp preset-override)
+                        (get-built-in-config preset-override)
+                        (load-config preset-override))))
+
     ;; Create rule instances
     (let ((rules (mapcar #'create-rule-from-spec (nreverse rule-specs))))
       ;; If extends is specified, merge with base rules
@@ -210,9 +218,10 @@ Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...),
 
 ;;; Config file loading
 
-(defun load-config (path)
+(defun load-config (path &key preset-override)
   "Load configuration from file at PATH.
-Sets root-dir to the directory containing the config file."
+Sets root-dir to the directory containing the config file.
+If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file."
   (let ((pathname (etypecase path
                     (string (uiop:parse-native-namestring path))
                     (pathname path))))
@@ -221,7 +230,7 @@ Sets root-dir to the directory containing the config file."
 
     (with-open-file (in pathname :direction :input)
       (let* ((sexp (read in))
-             (config (parse-config sexp)))
+             (config (parse-config sexp :preset-override preset-override)))
         ;; Set root-dir to the directory containing the config file
         (setf (config-root-dir config) (uiop:pathname-directory-pathname pathname))
         config))))

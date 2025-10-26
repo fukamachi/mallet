@@ -229,10 +229,12 @@ Lints files specified in ARGS and exits with appropriate status code."
             (let* ((files (expand-file-args file-args))
                    (config:*default-preset* (or preset :default))
                    ;; Auto-discover config from CWD if not explicitly provided
-                   (config (or (and config-path (config:load-config config-path))
+                   ;; If preset is specified, it overrides :extends in config file
+                   (config (or (and config-path
+                                    (config:load-config config-path :preset-override preset))
                                (let ((discovered (config:find-config-file (uiop:getcwd))))
                                  (when discovered
-                                   (config:load-config discovered)))))
+                                   (config:load-config discovered :preset-override preset)))))
                    (severity-counts '())  ; Accumulated counts as plist
                    (has-errors nil)
                    (has-violations nil)
