@@ -4,6 +4,35 @@ Rules are organized by severity level. See README.md for severity meanings.
 
 **Suppressing violations**: Any rule can be suppressed using `#+mallet (declaim (mallet:suppress-next :rule-name))`. See the README for details.
 
+## Table of Contents
+
+- [ERROR](#error)
+  - [`:wrong-otherwise`](#wrong-otherwise) - `ecase`/`etypecase` with `otherwise`/`t` clause
+- [WARNING](#warning)
+  - [`:unused-variables`](#unused-variables) - Variables that are never used
+  - [`:unused-local-functions`](#unused-local-functions) - Local functions that are never called
+  - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
+  - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
+- [CONVENTION](#convention)
+  - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
+  - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
+  - [`:special-variable-naming`](#special-variable-naming) - Special variables should be named `*foo*`
+  - [`:asdf-component-strings`](#asdf-component-strings) - ASDF components should use strings
+- [FORMAT](#format)
+  - [`:no-tabs`](#no-tabs) - Use spaces instead of tab characters
+  - [`:trailing-whitespace`](#trailing-whitespace) - Lines should not have trailing whitespace
+  - [`:final-newline`](#final-newline) - Files must end with a newline
+- [INFO](#info)
+  - [`:line-length`](#line-length) - Lines should not exceed maximum length
+  - [`:consecutive-blank-lines`](#consecutive-blank-lines) - Limit consecutive blank lines
+  - [`:unused-local-nicknames`](#unused-local-nicknames) - Local nicknames should be used
+  - [`:unused-imported-symbols`](#unused-imported-symbols) - Imported symbols should be used or re-exported
+  - [`:constant-naming`](#constant-naming) - Constants should be named `+foo+`
+  - [`:unused-loop-variables`](#unused-loop-variables) - Loop variables should be used
+- [METRICS](#metrics)
+  - [`:function-length`](#function-length) - Function exceeds maximum line count
+  - [`:cyclomatic-complexity`](#cyclomatic-complexity) - Function has high cyclomatic complexity
+
 ## ERROR
 
 ### `:wrong-otherwise`
