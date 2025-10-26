@@ -636,65 +636,58 @@
         (t
          (cddr expr))))))
 
+(defun simple-form-complexity (head)
+  "Return complexity for simple forms with fixed values.
+   Returns NIL if HEAD is not a simple form."
+  (cond
+    ((conditional-p head) 1)
+    ((simple-iteration-p head) 0)
+    ((do-loop-p head) 1)
+    ((logical-operator-p head) 1)
+    ((ignore-errors-p head) 1)
+    ((alexandria-conditional-p head) 1)
+    ((alexandria-xor-p head) 1)
+    ((trivia-conditional-p head) 1)
+    (t nil)))
+
+(defun case-like-form-complexity (head expr variant)
+  "Return complexity for case-like forms (case, destructuring-case, match, string-case).
+   Returns NIL if HEAD is not a case-like form."
+  (cond
+    ((case-p head)
+     (if (eq variant :modified) 1 (count-case-clauses expr)))
+    ((alexandria-destructuring-case-p head)
+     (if (eq variant :modified) 1 (count-destructuring-case-clauses expr)))
+    ((trivia-match-p head)
+     (if (eq variant :modified) 1 (count-trivia-match-clauses expr)))
+    ((string-case-p head)
+     (if (eq variant :modified) 1 (count-string-case-clauses expr)))
+    (t nil)))
+
+
 (defun form-complexity (head expr &optional (variant :standard))
   "Return complexity added by this form.
    HEAD is the car of the form, EXPR is the full form.
    VARIANT is :standard (count per clause) or :modified (case as +1 total)."
-  (cond
-    ;; Conditionals: +1 each
-    ((conditional-p head) 1)
+  (or
+   ;; Try simple forms first
+   (simple-form-complexity head)
 
-    ;; COND: +1 per clause
-    ((cond-p head) (count-cond-clauses expr))
+   ;; Forms with clause counting
+   (cond
+     ((cond-p head) (count-cond-clauses expr))
+     ((loop-p head) (calculate-loop-complexity expr))
+     ((handler-case-p head) (count-handler-clauses expr))
+     ((handler-bind-p head) (count-handler-bind-clauses expr))
+     ((restart-case-p head) (count-restart-clauses expr))
+     ((restart-bind-p head) (count-restart-bind-clauses expr))
+     (t nil))
 
-    ;; CASE/TYPECASE: depends on variant
-    ((case-p head)
-     (if (eq variant :modified)
-         1  ; Modified: entire case statement = +1
-         (count-case-clauses expr)))  ; Standard: count per clause
+   ;; Try case-like forms
+   (case-like-form-complexity head expr variant)
 
-    ;; Simple iteration: +0 (dotimes, dolist)
-    ((simple-iteration-p head) 0)
-
-    ;; DO/DO*: +1 (has end-test condition)
-    ((do-loop-p head) 1)
-
-    ;; LOOP: +1 for loop + count internal conditionals
-    ((loop-p head) (calculate-loop-complexity expr))
-
-    ;; AND/OR: +1 for each operator (regardless of argument count)
-    ((logical-operator-p head) 1)
-
-    ;; Exception handling: +1 per handler
-    ((ignore-errors-p head) 1)
-    ((handler-case-p head) (count-handler-clauses expr))
-    ((handler-bind-p head) (count-handler-bind-clauses expr))
-    ((restart-case-p head) (count-restart-clauses expr))
-    ((restart-bind-p head) (count-restart-bind-clauses expr))
-
-    ;; Third-party macros: Alexandria
-    ((alexandria-conditional-p head) 1)  ; if-let, when-let, when-let*
-    ((alexandria-xor-p head) 1)  ; xor (like or)
-    ((alexandria-destructuring-case-p head)
-     (if (eq variant :modified)
-         1  ; Modified: entire case = +1
-         (count-destructuring-case-clauses expr)))  ; Standard: count per clause
-
-    ;; Third-party macros: Trivia
-    ((trivia-match-p head)
-     (if (eq variant :modified)
-         1  ; Modified: entire match = +1
-         (count-trivia-match-clauses expr)))  ; Standard: count per clause
-    ((trivia-conditional-p head) 1)  ; if-match, when-match, unless-match
-
-    ;; Third-party macros: string-case
-    ((string-case-p head)
-     (if (eq variant :modified)
-         1  ; Modified: entire case = +1
-         (count-string-case-clauses expr)))  ; Standard: count per clause
-
-    ;; Default: no complexity
-    (t 0)))
+   ;; Default
+   0))
 
 (defun conditional-p (head)
   "Check if HEAD is a simple conditional (if, when, unless)."

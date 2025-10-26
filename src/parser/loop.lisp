@@ -109,173 +109,153 @@ Preserves the original case from source code for better error messages."
            (strip-package-prefix (cdr form))))
     (t form)))
 
+(defun handle-and-clause (clauses i prev-clause bindings var-positions)
+  "Handle AND clause in LOOP. Returns (values new-i bindings var-positions)."
+  (cond
+    ((and prev-clause
+          (member (utils:symbol-name-from-string prev-clause)
+                  '("FOR" "AS" "WITH")
+                  :test #'string-equal)
+          (< (1+ i) (length clauses)))
+     ;; Previous was FOR/AS/WITH, this AND creates a parallel binding
+     (let ((next-elem (nth (1+ i) clauses)))
+       (when next-elem
+         ;; Mark this position as a variable binding
+         (push (1+ i) var-positions)
+         (incf i)  ; Move to variable position
+         (incf i)  ; Move past variable to start of init clause
+
+         ;; Collect the init clause
+         (let ((init-forms '()))
+           (loop while (and (< i (length clauses))
+                            (let ((next (nth i clauses)))
+                              (not (and (stringp next)
+                                        (clause-keyword-p next)))))
+                 do (push (nth i clauses) init-forms)
+                    (incf i))
+
+           ;; Create loop-binding struct with is-parallel = T
+           (push (make-loop-binding
+                  :pattern (strip-package-prefix next-elem)
+                  :init-form (strip-package-prefix (nreverse init-forms))
+                  :is-parallel t)
+                 bindings))
+         ;; Adjust i (it's already at the next keyword)
+         (decf i)))
+     (values i bindings var-positions))
+    (t
+     ;; Previous was not FOR/AS/WITH, AND is just a connector
+     (values (1+ i) bindings var-positions))))
+
+(defun handle-binding-clause (clause clauses i bindings var-positions)
+  "Handle FOR/AS/WITH clause in LOOP. Returns (values new-i bindings var-positions new-prev-clause)."
+  (when (< (1+ i) (length clauses))
+    (let ((var-or-pattern (nth (1+ i) clauses)))
+      (when var-or-pattern
+        ;; Mark this position as a variable binding
+        (push (1+ i) var-positions)
+        (incf i)  ; Move to variable position
+        (incf i)  ; Move past variable to start of init clause
+
+        ;; Collect the init clause
+        (let ((init-forms '()))
+          (loop while (and (< i (length clauses))
+                           (let ((next (nth i clauses)))
+                             (not (and (stringp next)
+                                       (clause-keyword-p next)))))
+                do (push (nth i clauses) init-forms)
+                   (incf i))
+
+          ;; Create loop-binding struct (sequential binding)
+          (push (make-loop-binding
+                 :pattern (strip-package-prefix var-or-pattern)
+                 :init-form (strip-package-prefix (nreverse init-forms))
+                 :is-parallel nil)
+                bindings))
+        ;; Adjust i (it's already at the next keyword)
+        (decf i))))
+  (values i bindings var-positions clause))
+
+(defun handle-multi-form-clause (clauses i)
+  "Handle INITIALLY/FINALLY/DO/DOING clause. Returns new-i."
+  (incf i)
+  ;; Skip all forms until next clause-starting keyword
+  (loop while (and (< i (length clauses))
+                   (let ((next (nth i clauses)))
+                     (not (and (stringp next)
+                               (clause-keyword-p next)))))
+        do (incf i))
+  (decf i)
+  i)
+
 (defun parse-loop-clauses (clauses)
   "Parse LOOP clauses and extract variable bindings with parallelism info.
-Returns (values loop-bindings body-clauses) where loop-bindings is a list of LOOP-BINDING structs.
-
-IMPORTANT: The 'body' includes ALL clauses, not just those after DO/COLLECT.
-This is because LOOP variables can be used in:
-- Subsequent FOR/WITH binding clauses (e.g., :for x ... :for y := (f x))
-- Accumulation expressions (e.g., :summing (* x y))
-- Conditional clauses (e.g., :when (predicate x))
-- Termination clauses (e.g., :until (> x 10))
-
-Parallelism detection:
-- :for x ... :for y ... - sequential, y can reference x (like LET*)
-- :for x ... :and y ... - parallel, y cannot reference x (like LET)
-
-LOOP keywords are position-dependent. For example:
-  (loop for i from 0 to for)  ; 'for' appears twice: once as keyword, once as variable
-
-Simple form-based LOOP:
-  (loop <form>) - takes a single form directly, no clauses or bindings
-  Example: (loop (let ((i 0)) (when (< 5 i) (return)) (print (incf i))))"
+Returns (values loop-bindings body-clauses)."
   ;; Guard: if clauses is not a proper list, return empty bindings
   (unless (a:proper-list-p clauses)
     (return-from parse-loop-clauses (values '() '())))
 
   ;; Check for simple form-based LOOP: (loop <form>)
-  ;; If clauses has exactly one element AND it's a cons (not a string keyword),
-  ;; then it's a simple LOOP with no bindings
   (when (and (= (length clauses) 1)
              (consp (first clauses))
              (not (stringp (first clauses))))
     (return-from parse-loop-clauses (values '() clauses)))
 
   (let ((bindings '())
-        (var-positions '())  ; Track positions of variable names to filter out
-        (prev-clause nil)    ; Track the previous clause keyword
+        (var-positions '())
+        (prev-clause nil)
         (i 0))
     ;; Collect all variable bindings and their positions
     (loop while (< i (length clauses))
           for clause = (nth i clauses)
           do (cond
-               ;; AND - creates a parallel binding ONLY when connecting FOR/AS/WITH
-               ;; Syntax: "for x = 1 and y = 2" - AND takes variable directly, no second FOR
-               ;; BUT: "collect x and collect y" - AND just connects clauses, no binding
-               ;; AND can also connect: IF, WHEN, UNLESS, DO, DOING, etc.
+               ;; AND - creates a parallel binding when connecting FOR/AS/WITH
                ((and (stringp clause)
                      (string-equal (utils:symbol-name-from-string clause) "AND"))
-                ;; Only treat as variable binding if PREVIOUS clause was FOR/AS/WITH
-                (cond
-                  ((and prev-clause
-                        (member (utils:symbol-name-from-string prev-clause)
-                                '("FOR" "AS" "WITH")
-                                :test #'string-equal)
-                        (< (1+ i) (length clauses)))
-                   ;; Previous was FOR/AS/WITH, this AND creates a parallel binding
-                   (let ((next-elem (nth (1+ i) clauses)))
-                     (when next-elem
-                       ;; Mark this position as a variable binding (to be filtered out)
-                       (push (1+ i) var-positions)
-                       (incf i)  ; Move to variable position
-                       (incf i)  ; Move past variable to start of init clause
+                (multiple-value-setq (i bindings var-positions)
+                  (handle-and-clause clauses i prev-clause bindings var-positions)))
 
-                       ;; Collect the init clause (everything until next clause-starting keyword)
-                       (let ((init-forms '()))
-                         (loop while (and (< i (length clauses))
-                                          (let ((next (nth i clauses)))
-                                            ;; Stop if we hit a clause-starting keyword
-                                            (not (and (stringp next)
-                                                      (clause-keyword-p next)))))
-                               do (push (nth i clauses) init-forms)
-                                  (incf i))
-
-                         ;; Create loop-binding struct with is-parallel = T
-                         (push (make-loop-binding
-                                :pattern (strip-package-prefix next-elem)
-                                :init-form (strip-package-prefix (nreverse init-forms))
-                                :is-parallel t)  ; AND bindings are always parallel
-                               bindings))
-                       ;; Don't increment i here, it's already at the next keyword
-                       (decf i))))
-                  (t
-                   ;; Previous was not FOR/AS/WITH, AND is just a connector
-                   ;; Don't create binding, just move past AND
-                   (incf i))))
-
-               ;; FOR/AS/WITH - binding clauses (always sequential, never parallel)
+               ;; FOR/AS/WITH - binding clauses (always sequential)
                ((and (stringp clause)
                      (binding-keyword-p clause)
                      (not (string-equal (utils:symbol-name-from-string clause) "AND")))
-                ;; Track this as the previous clause (important for AND handling)
-                (setf prev-clause clause)
-                ;; FOR/AS/WITH bindings are always sequential (is-parallel = NIL)
-                ;; Parallel bindings use AND keyword instead
-                ;; Next element is the variable or pattern
-                (when (< (1+ i) (length clauses))
-                  (let ((var-or-pattern (nth (1+ i) clauses)))
-                    (when var-or-pattern
-                      ;; Mark this position as a variable binding (to be filtered out)
-                      (push (1+ i) var-positions)
-                      (incf i)  ; Move to variable position
-                      (incf i)  ; Move past variable to start of init clause
-
-                      ;; Collect the init clause (everything until next clause-starting keyword)
-                      ;; Stop at clause keywords (FOR, DO, COLLECT, etc.) but NOT sub-keywords (FROM, TO, IN, etc.)
-                      (let ((init-forms '()))
-                        (loop while (and (< i (length clauses))
-                                         (let ((next (nth i clauses)))
-                                           ;; Stop if we hit a clause-starting keyword
-                                           (not (and (stringp next)
-                                                     (clause-keyword-p next)))))
-                              do (push (nth i clauses) init-forms)
-                                 (incf i))
-
-                        ;; Create loop-binding struct (sequential binding)
-                        (push (make-loop-binding
-                               :pattern (strip-package-prefix var-or-pattern)
-                               :init-form (strip-package-prefix (nreverse init-forms))
-                               :is-parallel nil)  ; FOR/AS/WITH are always sequential
-                              bindings))
-                      ;; Don't increment i here, it's already at the next keyword
-                      (decf i)))))
+                (multiple-value-setq (i bindings var-positions prev-clause)
+                  (handle-binding-clause clause clauses i bindings var-positions)))
 
                ;; Multi-form keywords (INITIALLY, FINALLY, DO, DOING)
-               ;; These consume multiple forms until the next clause keyword
                ((and (stringp clause)
                      (multi-form-keyword-p clause))
-                ;; Track this as the previous clause
                 (setf prev-clause clause)
-                (incf i)
-                ;; Skip all forms until next clause-starting keyword
-                (loop while (and (< i (length clauses))
-                                 (let ((next (nth i clauses)))
-                                   (not (and (stringp next)
-                                             (clause-keyword-p next)))))
-                      do (incf i))
-                (decf i))
+                (setf i (handle-multi-form-clause clauses i)))
 
-               ;; Other clause keywords - track for AND handling, then continue
+               ;; Other clause keywords
                ((and (stringp clause)
                      (clause-keyword-p clause)
-                     (not (binding-keyword-p clause)))  ; Already handled above
-                ;; Track this as the previous clause (for AND detection)
+                     (not (binding-keyword-p clause)))
                 (setf prev-clause clause))
 
                (t nil))
              (incf i))
 
     ;; Extract searchable expressions from clauses
-    ;; Return only actual expressions (cons forms), not LOOP keywords or variable names
     (let ((expressions '()))
-      ;; Collect init-forms from bindings (these are searchable)
+      ;; Collect init-forms from bindings
       (dolist (binding bindings)
         (dolist (init-form (loop-binding-init-form binding))
           (when (consp init-form)
             (push init-form expressions))))
 
-      ;; Collect expressions from other clauses (skip keywords and variable positions)
+      ;; Collect expressions from other clauses
       (loop for j from 0 below (length clauses)
             for elem = (nth j clauses)
-            unless (member j var-positions)  ; Skip variable binding positions
+            unless (member j var-positions)
               do (cond
-                   ;; Collect cons forms (function calls, etc.)
                    ((consp elem)
                     (push elem expressions))
-                   ;; Also collect non-keyword strings (variable references in COLLECT, etc.)
                    ((and (stringp elem)
                          (not (loop-keyword-p elem)))
                     (push elem expressions))))
 
       (values (nreverse bindings) (nreverse expressions)))))
+
+

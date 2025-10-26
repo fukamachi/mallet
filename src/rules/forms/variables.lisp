@@ -563,6 +563,68 @@ This indicates it's a nested lambda list rather than a simple destructuring patt
   (when (and (consp pattern) (a:proper-list-p pattern))
     (some #'utils:lambda-list-keyword-p pattern)))
 
+(defun extract-required-param (elem allow-destructuring vars)
+  "Extract variable(s) from required parameter ELEM.
+Returns updated VARS list."
+  (cond
+    ((not allow-destructuring)
+     ;; Simple variable only
+     (if (stringp elem)
+         (cons elem vars)
+         vars))
+    ((stringp elem)
+     ;; Simple string variable
+     (cons elem vars))
+    ((contains-lambda-list-keyword-p elem)
+     ;; Nested lambda list - recursively extract variables
+     (let ((extracted (extract-lambda-list-vars elem t)))
+       (append vars extracted)))
+    (t
+     ;; Simple destructuring pattern - extract all strings
+     (let ((extracted (extract-bindings (list elem) :destructuring)))
+       (append vars extracted)))))
+
+(defun extract-optional-param (elem vars)
+  "Extract variable(s) from &optional parameter ELEM.
+Returns updated VARS list."
+  (cond
+    ((stringp elem)
+     (cons elem vars))
+    ((and (consp elem) (stringp (first elem)))
+     ;; (var ...) - extract var
+     (let ((new-vars (cons (first elem) vars)))
+       ;; Extract supplied-p if present: (var default supplied-p)
+       (if (and (>= (length elem) 3) (stringp (third elem)))
+           (cons (third elem) new-vars)
+           new-vars)))
+    (t vars)))
+
+(defun extract-key-param (elem vars)
+  "Extract variable(s) from &key parameter ELEM.
+Returns updated VARS list."
+  (cond
+    ((stringp elem)
+     (cons elem vars))
+    ((and (consp elem)
+          (consp (first elem))
+          (utils:proper-list-of-exact-length-p (first elem) 2)
+          (stringp (second (first elem))))
+     ;; ((:keyword var) ...) - extract var
+     (let ((new-vars (cons (second (first elem)) vars)))
+       ;; Extract supplied-p if present
+       (if (and (>= (length elem) 3) (stringp (third elem)))
+           (cons (third elem) new-vars)
+           new-vars)))
+    ((and (consp elem) (stringp (first elem)))
+     ;; (var ...) - extract var
+     (let ((new-vars (cons (first elem) vars)))
+       ;; Extract supplied-p if present
+       (if (and (>= (length elem) 3) (stringp (third elem)))
+           (cons (third elem) new-vars)
+           new-vars)))
+    (t vars)))
+
+
 (defun extract-lambda-list-vars (lambda-list allow-destructuring)
   "Extract all variable names from a lambda list.
 ALLOW-DESTRUCTURING controls whether required parameters can be destructuring patterns.
@@ -591,34 +653,9 @@ Returns list of variable names."
                (t
                 (ecase state
                   (:required
-                   ;; Required params: simple var, destructuring pattern, or nested lambda list (if allowed)
-                   (cond
-                     ((not allow-destructuring)
-                      ;; Simple variable only
-                      (when (stringp elem)
-                        (push elem vars)))
-                     ((stringp elem)
-                      ;; Simple string variable
-                      (push elem vars))
-                     ((contains-lambda-list-keyword-p elem)
-                      ;; Nested lambda list - recursively extract variables
-                      (let ((extracted (extract-lambda-list-vars elem t)))
-                        (setf vars (append vars extracted))))
-                     (t
-                      ;; Simple destructuring pattern - extract all strings
-                      (let ((extracted (extract-bindings (list elem) :destructuring)))
-                        (setf vars (append vars extracted))))))
+                   (setf vars (extract-required-param elem allow-destructuring vars)))
                   (:optional
-                   ;; &optional param: var, (var), (var default), (var default supplied-p)
-                   (cond
-                     ((stringp elem)
-                      (push elem vars))
-                     ((and (consp elem) (stringp (first elem)))
-                      ;; (var ...) - extract var
-                      (push (first elem) vars)
-                      ;; Extract supplied-p if present: (var default supplied-p)
-                      (when (and (>= (length elem) 3) (stringp (third elem)))
-                        (push (third elem) vars)))))
+                   (setf vars (extract-optional-param elem vars)))
                   (:rest
                    ;; &rest/&body param: just a variable name
                    (when (stringp elem)
@@ -626,31 +663,13 @@ Returns list of variable names."
                    ;; After &rest, next keyword or aux
                    (setf state :required))
                   (:key
-                   ;; &key param: var, (var), (var default), (var default supplied-p),
-                   ;; ((:keyword var)), ((:keyword var) default), ((:keyword var) default supplied-p)
-                   (cond
-                     ((stringp elem)
-                      (push elem vars))
-                     ((and (consp elem)
-                           (consp (first elem))
-                           (utils:proper-list-of-exact-length-p (first elem) 2)
-                           (stringp (second (first elem))))
-                      ;; ((:keyword var) ...) - extract var
-                      (push (second (first elem)) vars)
-                      ;; Extract supplied-p if present
-                      (when (and (>= (length elem) 3) (stringp (third elem)))
-                        (push (third elem) vars)))
-                     ((and (consp elem) (stringp (first elem)))
-                      ;; (var ...) - extract var
-                      (push (first elem) vars)
-                      ;; Extract supplied-p if present
-                      (when (and (>= (length elem) 3) (stringp (third elem)))
-                        (push (third elem) vars)))))
+                   (setf vars (extract-key-param elem vars)))
                   (:aux
                    ;; &aux: handled separately like LET* bindings
                    nil))))
              (incf i))
     (nreverse vars)))
+
 
 (defun parse-lambda-list-for-aux (lambda-list)
   "Split lambda list into parts before and after &aux.
@@ -1715,6 +1734,98 @@ Each clause has the structure: (restart-name lambda-list &body body)"
             (scope:with-new-scope
                 (check-binding-form :defun-aux aux-params body line column position-map rule body))))))))
 
+(defun dispatch-binding-form-check (head expr line column position-map rule)
+  "Dispatch to specific checker for complex binding forms.
+Returns T if a binding form was checked, NIL otherwise."
+  (cond
+    ((base:symbol-matches-p head "DEFUN")
+     (check-defun-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "LAMBDA")
+     (check-lambda-bindings expr line column position-map rule)
+     t)
+    ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET"))
+     (check-let-bindings expr line column position-map rule)
+     t)
+    ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET*"))
+     (check-let*-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "DO")
+     (check-do-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "DO*")
+     (check-do*-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "DESTRUCTURING-BIND")
+     (check-destructuring-bind-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "MULTIPLE-VALUE-BIND")
+     (check-multiple-value-bind-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "HANDLER-CASE")
+     (check-handler-case-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "RESTART-CASE")
+     (check-restart-case-bindings expr line column position-map rule)
+     t)
+    ((base:symbol-matches-p head "DEFMACRO")
+     (check-defmacro-bindings expr line column position-map rule)
+     t)
+    (t nil)))
+
+(defun should-skip-form-p (head)
+  "Check if HEAD represents a form that should be skipped entirely for variable checking."
+  (or
+   ;; QUOTE - skip entirely (pure data)
+   (eq head 'cl:quote)
+   (eq head 'quote)
+   (base:symbol-matches-p head "QUOTE")
+   ;; Special definition forms with their own syntax
+   (base:symbol-matches-p head "DEFSTRUCT")
+   (base:symbol-matches-p head "DEFCLASS")
+   (base:symbol-matches-p head "DEFPACKAGE")
+   (base:symbol-matches-p head "DEFTYPE")
+   (base:symbol-matches-p head "DEFSETF")
+   (base:symbol-matches-p head "DEFINE-MODIFY-MACRO")
+   (base:symbol-matches-p head "DEFINE-SETF-EXPANDER")))
+
+(defun quasiquote-form-p (head)
+  "Check if HEAD represents a quasiquote form."
+  (or (eq head 'eclector.reader:quasiquote)
+      (and (symbolp head)
+           (string-equal (symbol-name head) "QUASIQUOTE")
+           (string-equal (package-name (symbol-package head)) "ECLECTOR.READER"))))
+
+(defun check-quasiquote-expr (rest-args line column position-map rule)
+  "Check quasiquoted expression, only descending into unquotes."
+  (labels ((check-quasi (expr)
+             "Recursively check quasiquoted expression, only descending into unquotes."
+             (when (consp expr)
+               (let ((h (first expr)))
+                 (cond
+                   ;; UNQUOTE - check the unquoted expression
+                   ((or (eq h 'eclector.reader:unquote)
+                        (and (symbolp h)
+                             (string-equal (symbol-name h) "UNQUOTE")
+                             (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
+                    (when (rest expr)
+                      (check-expr (second expr) line column position-map rule)))
+                   ;; UNQUOTE-SPLICING - check the unquoted expression
+                   ((or (eq h 'eclector.reader:unquote-splicing)
+                        (and (symbolp h)
+                             (string-equal (symbol-name h) "UNQUOTE-SPLICING")
+                             (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
+                    (when (rest expr)
+                      (check-expr (second expr) line column position-map rule)))
+                   ;; Other forms - recursively look for unquotes
+                   (t
+                    (when (and (listp expr) (a:proper-list-p expr))
+                      (dolist (subexpr expr)
+                        (check-quasi subexpr)))))))))
+    (when (and (a:proper-list-p rest-args))
+      (dolist (arg rest-args)
+        (check-quasi arg)))))
+
 (defun check-expr (expr line column position-map rule)
   "Recursively check expression for unused variables."
   (when (consp expr)
@@ -1725,103 +1836,19 @@ Each clause has the structure: (restart-name lambda-list &body body)"
       ;; Returns T if it handled the form, NIL otherwise
       (unless (check-binding-form-generic expr line column position-map rule)
         ;; 2. Dispatch to specific checkers for complex binding forms
-        (cond
-          ((base:symbol-matches-p head "DEFUN")
-           (check-defun-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "LAMBDA")
-           (check-lambda-bindings expr line column position-map rule))
-          ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET"))
-           (check-let-bindings expr line column position-map rule))
-          ((and (stringp head) (string-equal (base:symbol-name-from-string head) "LET*"))
-           (check-let*-bindings expr line column position-map rule))
-          ;; LOOP forms are checked by unused-loop-variables-rule, not unused-variables-rule
-          ;; ((base:symbol-matches-p head "LOOP")
-          ;;  (check-loop-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "DO")
-           (check-do-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "DO*")
-           (check-do*-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "DESTRUCTURING-BIND")
-           (check-destructuring-bind-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "MULTIPLE-VALUE-BIND")
-           (check-multiple-value-bind-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "HANDLER-CASE")
-           (check-handler-case-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "RESTART-CASE")
-           (check-restart-case-bindings expr line column position-map rule))
-          ((base:symbol-matches-p head "DEFMACRO")
-           (check-defmacro-bindings expr line column position-map rule))))
+        (dispatch-binding-form-check head expr line column position-map rule))
 
-      ;; 2. Handle special forms for recursion
+      ;; 3. Handle special forms for recursion
       (cond
-        ;; QUOTE - skip entirely (pure data)
-        ((or (eq head 'cl:quote)
-             (eq head 'quote)
-             (base:symbol-matches-p head "QUOTE"))
-         nil)
-
-        ;; DEFSTRUCT - skip entirely (has its own special syntax for slots)
-        ((base:symbol-matches-p head "DEFSTRUCT")
-         nil)
-
-        ;; DEFCLASS - skip entirely (slot definitions with special syntax)
-        ((base:symbol-matches-p head "DEFCLASS")
-         nil)
-
-        ;; DEFPACKAGE - skip entirely (special clause syntax)
-        ((base:symbol-matches-p head "DEFPACKAGE")
-         nil)
-
-        ;; DEFTYPE - skip entirely (has lambda list for type parameters)
-        ((base:symbol-matches-p head "DEFTYPE")
-         nil)
-
-        ;; DEFSETF - skip entirely (special lambda list forms)
-        ((base:symbol-matches-p head "DEFSETF")
-         nil)
-
-        ;; DEFINE-MODIFY-MACRO - skip entirely (special lambda list forms)
-        ((base:symbol-matches-p head "DEFINE-MODIFY-MACRO")
-         nil)
-
-        ;; DEFINE-SETF-EXPANDER - skip entirely (lambda list)
-        ((base:symbol-matches-p head "DEFINE-SETF-EXPANDER")
+        ;; Forms to skip entirely
+        ((should-skip-form-p head)
          nil)
 
         ;; QUASIQUOTE - only check unquoted parts
-        ((or (eq head 'eclector.reader:quasiquote)
-             (and (symbolp head)
-                  (string-equal (symbol-name head) "QUASIQUOTE")
-                  (string-equal (package-name (symbol-package head)) "ECLECTOR.READER")))
-         (labels ((check-quasi (expr)
-                    "Recursively check quasiquoted expression, only descending into unquotes."
-                    (when (consp expr)
-                      (let ((h (first expr)))
-                        (cond
-                          ;; UNQUOTE - check the unquoted expression
-                          ((or (eq h 'eclector.reader:unquote)
-                               (and (symbolp h)
-                                    (string-equal (symbol-name h) "UNQUOTE")
-                                    (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
-                           (when (rest expr)
-                             (check-expr (second expr) line column position-map rule)))
-                          ;; UNQUOTE-SPLICING - check the unquoted expression
-                          ((or (eq h 'eclector.reader:unquote-splicing)
-                               (and (symbolp h)
-                                    (string-equal (symbol-name h) "UNQUOTE-SPLICING")
-                                    (string-equal (package-name (symbol-package h)) "ECLECTOR.READER")))
-                           (when (rest expr)
-                             (check-expr (second expr) line column position-map rule)))
-                          ;; Other forms - recursively look for unquotes
-                          (t
-                           (when (and (listp expr) (a:proper-list-p expr))
-                             (dolist (subexpr expr)
-                               (check-quasi subexpr)))))))))
-           (when (and (a:proper-list-p rest-args))
-             (dolist (arg rest-args)
-               (check-quasi arg)))))
+        ((quasiquote-form-p head)
+         (check-quasiquote-expr rest-args line column position-map rule))
 
-        ;; 3. Default: recursively check all nested forms
+        ;; Default: recursively check all nested forms
         (t
          (when (and (a:proper-list-p rest-args))
            (dolist (subexpr rest-args)
@@ -1839,6 +1866,7 @@ Each clause has the structure: (restart-name lambda-list &body body)"
                                                     position-map)))
                    ;; Accumulate violations from nested call
                    (setf *violations* (append *violations* nested-violations))))))))))))
+
 
 ;;; Unused-variables rules
 

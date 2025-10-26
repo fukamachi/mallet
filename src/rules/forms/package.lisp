@@ -77,6 +77,60 @@
                                                               nickname package)
                                              :severity (base:rule-severity rule))))))))))
 
+(defun find-symbol-end-column (line-text start-col)
+  "Find the end column of a symbol starting at START-COL in LINE-TEXT."
+  (or (position-if (lambda (ch)
+                     (or (char= ch #\Space)
+                         (char= ch #\Tab)
+                         (char= ch #\))
+                         (char= ch #\Newline)))
+                   line-text
+                   :start start-col)
+      (length line-text)))
+
+(defun make-single-line-deletion-fix (lines violation-line end-col)
+  "Generate fix for deleting a single-line expression.
+Handles moving trailing close parens to previous line if needed."
+  (let* ((line-text (nth (1- violation-line) lines))
+         (trailing-text (subseq line-text end-col)))
+    (if (and (> (length trailing-text) 0)
+             (find #\) trailing-text)
+             (> violation-line 1))
+        ;; Has trailing close parens - move them to previous line
+        (let* ((prev-line (nth (- violation-line 2) lines))
+               (trailing-comment-pos (base:find-comment-start trailing-text))
+               (parens-only (string-trim '(#\Space #\Tab)
+                              (if trailing-comment-pos
+                                  (subseq trailing-text 0 trailing-comment-pos)
+                                  trailing-text)))
+               (prev-comment-pos (base:find-comment-start prev-line))
+               (prev-line-code (string-right-trim '(#\Space #\Tab)
+                                 (if prev-comment-pos
+                                     (subseq prev-line 0 prev-comment-pos)
+                                     prev-line)))
+               (prev-line-comment (if prev-comment-pos
+                                      (subseq prev-line prev-comment-pos)
+                                      ""))
+               (replacement (concatenate 'string
+                              prev-line-code
+                              parens-only
+                              (if (> (length prev-line-comment) 0)
+                                  (concatenate 'string "  " prev-line-comment)
+                                  "")
+                              (string #\Newline))))
+          (violation:make-violation-fix
+           :type :replace-form
+           :start-line (1- violation-line)
+           :end-line violation-line
+           :replacement-content replacement))
+        ;; No trailing close parens - delete entire line
+        (violation:make-violation-fix
+         :type :delete-range
+         :start-line violation-line
+         :start-column 0
+         :end-line (1+ violation-line)
+         :end-column 0))))
+
 (defmethod base:make-fix ((rule unused-local-nicknames-rule) text file violation)
   "Generate minimal fix for unused local nickname - remove just that line.
 Preserves comments, formatting, and structural close parens."
@@ -115,67 +169,14 @@ Preserves comments, formatting, and structural close parens."
           ((zerop used-count)
            (find-local-nicknames-clause-line-range text violation-line))
 
-          ;; Some nicknames still used: delete only this nickname
           (t
            (multiple-value-bind (end-line end-col)
                (base:find-expression-end-position text violation-line violation-col)
              (if (and end-line end-col (= violation-line end-line))
-                 ;; Expression is on single line
-                 (let* ((lines (uiop:split-string text :separator '(#\Newline)))
-                        (line-text (nth (1- violation-line) lines))
-                        (trailing-text (subseq line-text end-col)))
-                   (if (and (> (length trailing-text) 0)
-                            (find #\) trailing-text)
-                            ;; Only tidy parens if there's a previous line
-                            (> violation-line 1))
-                       ;; Has trailing close parens - move them to previous line
-                       ;; Delete from end of previous line through the current line,
-                       ;; but only preserve close parens (strip comments)
-                       (let* ((prev-line (nth (- violation-line 2) lines))
-                              ;; Find where comment starts (if any) in trailing-text
-                              ;; Use string-aware detection to avoid false positives with semicolons in strings
-                              (trailing-comment-pos (base:find-comment-start trailing-text))
-                              ;; Extract just the close parens part (before comment/whitespace)
-                              (parens-only (string-trim '(#\Space #\Tab)
-                                             (if trailing-comment-pos
-                                                 (subseq trailing-text 0 trailing-comment-pos)
-                                                 trailing-text)))
-                              ;; Find comment in previous line (if any)
-                              ;; Use string-aware detection
-                              (prev-comment-pos (base:find-comment-start prev-line))
-                              ;; Split previous line into code and comment parts
-                              ;; Trim trailing whitespace from code part
-                              (prev-line-code (string-right-trim '(#\Space #\Tab)
-                                                (if prev-comment-pos
-                                                    (subseq prev-line 0 prev-comment-pos)
-                                                    prev-line)))
-                              (prev-line-comment (if prev-comment-pos
-                                                     (subseq prev-line prev-comment-pos)
-                                                     ""))
-                              ;; New content: code + parens + comment (comment after parens)
-                              ;; (strips current line's comment)
-                              (replacement (concatenate 'string
-                                             prev-line-code
-                                             parens-only
-                                             (if (> (length prev-line-comment) 0)
-                                                 (concatenate 'string "  " prev-line-comment)
-                                                 "")
-                                             (string #\Newline))))
-                         ;; Replace both lines (prev and current) with new content
-                         ;; This moves close parens up, deletes unused nickname, strips comment
-                         (violation:make-violation-fix
-                          :type :replace-form
-                          :start-line (1- violation-line)
-                          :end-line violation-line
-                          :replacement-content replacement))
-                       ;; No trailing close parens - delete entire line including newline
-                       (violation:make-violation-fix
-                        :type :delete-range
-                        :start-line violation-line
-                        :start-column 0
-                        :end-line (1+ violation-line)
-                        :end-column 0)))
-                 ;; Multi-line or couldn't find end - fall back to line deletion
+                 (make-single-line-deletion-fix
+                  (uiop:split-string text :separator '(#\Newline))
+                  violation-line
+                  end-col)
                  (violation:make-violation-fix
                   :type :delete-lines
                   :start-line violation-line
@@ -354,69 +355,12 @@ Preserves comments, formatting, and structural close parens."
           ((= symbol-count 1)
            (find-import-from-clause-line-range text violation-line package))
 
-          ;; Multiple symbols: delete just this line, tidy up trailing parens
           (t
-           ;; Calculate symbol's end position (symbol is on single line)
-           ;; The violation's end-line/end-column are for the whole defpackage form, not the symbol
            (let* ((lines (uiop:split-string text :separator '(#\Newline)))
                   (line-text (nth (1- violation-line) lines))
-                  ;; Find end of symbol by scanning for whitespace or paren
-                  (end-col (loop for i from violation-col below (length line-text)
-                                 for ch = (char line-text i)
-                                 when (or (char= ch #\Space)
-                                          (char= ch #\Tab)
-                                          (char= ch #\))
-                                          (char= ch #\Newline))
-                                   return i
-                                 finally (return (length line-text)))))
+                  (end-col (find-symbol-end-column line-text violation-col)))
              (if end-col
-                 ;; Expression is on single line
-                 (let ((trailing-text (subseq line-text end-col)))
-                   (if (and (> (length trailing-text) 0)
-                            (find #\) trailing-text)
-                            ;; Only tidy parens if there's a previous line
-                            (> violation-line 1))
-                       ;; Has trailing close parens - move them to previous line
-                       (let* ((prev-line (nth (- violation-line 2) lines))
-                              ;; Find where comment starts (if any) in trailing-text
-                              (trailing-comment-pos (base:find-comment-start trailing-text))
-                              ;; Extract just the close parens part (before comment/whitespace)
-                              (parens-only (string-trim '(#\Space #\Tab)
-                                             (if trailing-comment-pos
-                                                 (subseq trailing-text 0 trailing-comment-pos)
-                                                 trailing-text)))
-                              ;; Find comment in previous line (if any)
-                              (prev-comment-pos (base:find-comment-start prev-line))
-                              ;; Split previous line into code and comment parts
-                              (prev-line-code (string-right-trim '(#\Space #\Tab)
-                                                (if prev-comment-pos
-                                                    (subseq prev-line 0 prev-comment-pos)
-                                                    prev-line)))
-                              (prev-line-comment (if prev-comment-pos
-                                                     (subseq prev-line prev-comment-pos)
-                                                     ""))
-                              ;; New content: code + parens + comment (comment after parens)
-                              (replacement (concatenate 'string
-                                             prev-line-code
-                                             parens-only
-                                             (if (> (length prev-line-comment) 0)
-                                                 (concatenate 'string "  " prev-line-comment)
-                                                 "")
-                                             (string #\Newline))))
-                         ;; Replace both lines (prev and current) with new content
-                         (violation:make-violation-fix
-                          :type :replace-form
-                          :start-line (1- violation-line)
-                          :end-line violation-line
-                          :replacement-content replacement))
-                       ;; No trailing close parens - delete entire line including newline
-                       (violation:make-violation-fix
-                        :type :delete-range
-                        :start-line violation-line
-                        :start-column 0
-                        :end-line (1+ violation-line)
-                        :end-column 0)))
-                 ;; Multi-line or couldn't find end - fall back to line deletion
+                 (make-single-line-deletion-fix lines violation-line end-col)
                  (violation:make-violation-fix
                   :type :delete-lines
                   :start-line violation-line
