@@ -1,8 +1,11 @@
 (:mallet-config
- (:extends :default)
+ (:extends :all)
  (:ignore "/tests/fixtures/")
  (:enable :cyclomatic-complexity)
  (:enable :consecutive-blank-lines :max 2)
+ (:disable :line-length)
+ (:disable :function-length)
+ (:disable :missing-otherwise)
  (:for-paths ("/src/parser.lisp")
   (:disable :unused-local-nicknames))
  (:for-paths ("src/main.lisp")
