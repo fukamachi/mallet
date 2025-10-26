@@ -420,3 +420,189 @@
       ;; Complexity = 1 (base) + 1 (typecase) = 2 with modified variant
       (ok (= 1 (length violations)))
       (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+
+;; Third-party macros: Alexandria
+
+(deftest complexity-alexandria-if-let
+  (testing "Alexandria IF-LET adds 1"
+    (test-complexity
+     "(defun foo (x)
+        (if-let ((y (find x list)))
+          (process y)
+          (error \"not found\")))" 2)))
+
+(deftest complexity-alexandria-when-let
+  (testing "Alexandria WHEN-LET adds 1"
+    (test-complexity
+     "(defun foo (x)
+        (when-let ((y (find x list)))
+          (process y)))" 2)))
+
+(deftest complexity-alexandria-when-let-star
+  (testing "Alexandria WHEN-LET* adds 1"
+    (test-complexity
+     "(defun foo (x)
+        (when-let* ((y (find x list))
+                    (z (lookup y)))
+          (process z)))" 2)))
+
+(deftest complexity-alexandria-xor
+  (testing "Alexandria XOR adds 1 (like OR)"
+    (test-complexity
+     "(defun foo (a b)
+        (xor a b))" 2)))
+
+(deftest complexity-alexandria-destructuring-case-standard
+  (testing "Alexandria DESTRUCTURING-CASE with standard variant counts per clause"
+    (test-complexity
+     "(defun foo (cmd)
+        (destructuring-case cmd
+          ((:start x) (start x))
+          ((:stop) (stop))
+          ((:restart x y) (restart x y))
+          (otherwise (error \"unknown\"))))" 4)))
+
+(deftest complexity-alexandria-destructuring-case-modified
+  (testing "Alexandria DESTRUCTURING-CASE with modified variant counts as +1 total"
+    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
+                                :max 1
+                                :variant :modified))
+           (code "(defun foo (cmd)
+                    (destructuring-case cmd
+                      ((:start x) (start x))
+                      ((:stop) (stop))
+                      ((:restart x y) (restart x y))
+                      (otherwise (error \"unknown\"))))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (violations (base:check-form rule form #P"test.lisp")))
+      ;; Complexity = 1 (base) + 1 (destructuring-case) = 2
+      (ok (= 1 (length violations)))
+      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+
+(deftest complexity-alexandria-destructuring-ecase
+  (testing "Alexandria DESTRUCTURING-ECASE counts all clauses"
+    (test-complexity
+     "(defun foo (cmd)
+        (destructuring-ecase cmd
+          ((:start x) (start x))
+          ((:stop) (stop))
+          ((:restart x y) (restart x y))))" 4)))
+
+;; Third-party macros: Trivia
+
+(deftest complexity-trivia-match-standard
+  (testing "Trivia MATCH with standard variant counts per clause"
+    (test-complexity
+     "(defun foo (x)
+        (match x
+          (0 'zero)
+          (1 'one)
+          (2 'two)
+          (_ 'other)))" 4)))
+
+(deftest complexity-trivia-match-modified
+  (testing "Trivia MATCH with modified variant counts as +1 total"
+    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
+                                :max 1
+                                :variant :modified))
+           (code "(defun foo (x)
+                    (match x
+                      (0 'zero)
+                      (1 'one)
+                      (2 'two)
+                      (_ 'other)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (violations (base:check-form rule form #P"test.lisp")))
+      ;; Complexity = 1 (base) + 1 (match) = 2
+      (ok (= 1 (length violations)))
+      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+
+(deftest complexity-trivia-ematch
+  (testing "Trivia EMATCH counts all clauses (no default)"
+    (test-complexity
+     "(defun foo (x)
+        (ematch x
+          (0 'zero)
+          (1 'one)
+          (2 'two)))" 4)))
+
+(deftest complexity-trivia-if-match
+  (testing "Trivia IF-MATCH adds 1"
+    (test-complexity
+     "(defun foo (x)
+        (if-match (cons a b) x
+          (list a b)
+          nil))" 2)))
+
+(deftest complexity-trivia-when-match
+  (testing "Trivia WHEN-MATCH adds 1"
+    (test-complexity
+     "(defun foo (x)
+        (when-match (cons a b) x
+          (list a b)))" 2)))
+
+(deftest complexity-trivia-unless-match
+  (testing "Trivia UNLESS-MATCH adds 1"
+    (test-complexity
+     "(defun foo (x)
+        (unless-match nil x
+          (process x)))" 2)))
+
+(deftest complexity-trivia-match-star
+  (testing "Trivia MATCH* with standard variant counts per clause"
+    (test-complexity
+     "(defun foo (x y)
+        (match* (x y)
+          ((0 0) 'origin)
+          ((0 _) 'y-axis)
+          ((_ 0) 'x-axis)
+          (_ 'elsewhere)))" 4)))
+
+(deftest complexity-trivia-multiple-value-match
+  (testing "Trivia MULTIPLE-VALUE-MATCH with standard variant counts per clause"
+    (test-complexity
+     "(defun foo (x)
+        (multiple-value-match (values-fn x)
+          ((a b) (process a b))
+          ((a) (process-one a))
+          (_ (error \"bad\"))))" 3)))
+
+(deftest complexity-trivia-multiple-value-ematch
+  (testing "Trivia MULTIPLE-VALUE-EMATCH counts all clauses"
+    (test-complexity
+     "(defun foo (x)
+        (multiple-value-ematch (values-fn x)
+          ((a b) (process a b))
+          ((a) (process-one a))))" 3)))
+
+;; Third-party macros: string-case
+
+(deftest complexity-string-case-standard
+  (testing "STRING-CASE with standard variant counts per clause"
+    (test-complexity
+     "(defun foo (cmd)
+        (string-case cmd
+          (\"start\" (start))
+          (\"stop\" (stop))
+          (\"restart\" (restart))
+          (otherwise (error \"unknown\"))))" 4)))
+
+(deftest complexity-string-case-modified
+  (testing "STRING-CASE with modified variant counts as +1 total"
+    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
+                                :max 1
+                                :variant :modified))
+           (code "(defun foo (cmd)
+                    (string-case cmd
+                      (\"start\" (start))
+                      (\"stop\" (stop))
+                      (\"restart\" (restart))
+                      (otherwise (error \"unknown\"))))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (violations (base:check-form rule form #P"test.lisp")))
+      ;; Complexity = 1 (base) + 1 (string-case) = 2
+      (ok (= 1 (length violations)))
+      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))

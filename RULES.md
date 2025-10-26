@@ -385,11 +385,18 @@ Functions should not exceed maximum cyclomatic complexity.
 - **LOOP**: +1 per conditional keyword only (`when`, `unless`, `if`, `while`, `until`)
   - Simple loops without conditionals add no complexity
 - **Exception handling**: +1 per handler clause (`handler-case`, `restart-case`, etc.)
+- **Third-party macros**:
+  - **Alexandria**: `if-let`, `when-let`, `when-let*` = +1 each; `xor` = +1 (like `or`)
+  - **Alexandria**: `destructuring-case`, `destructuring-ecase` = per clause (like `case`)
+  - **Trivia**: `match`, `ematch`, `match*`, `multiple-value-match`, `multiple-value-ematch` = per clause (like `case`)
+  - **Trivia**: `if-match`, `when-match`, `unless-match` = +1 each
+  - **string-case**: `string-case` = per clause (like `case`)
 
 **`:modified` variant**:
 - Same as `:standard`, except:
 - **CASE/TYPECASE**: +1 total (entire case statement counts as one decision point)
   - Example: `(case x (a 1) (b 2) (c 3) (otherwise 4))` = +1 (not +3)
+- **Third-party case-like macros**: Also +1 total (`destructuring-case`, `match`, `string-case`, etc.)
 
 Nested `flet`/`labels` functions are counted separately.
 

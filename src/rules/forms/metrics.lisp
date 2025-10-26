@@ -366,6 +366,27 @@
     ((restart-case-p head) (count-restart-clauses expr))
     ((restart-bind-p head) (count-restart-bind-clauses expr))
 
+    ;; Third-party macros: Alexandria
+    ((alexandria-conditional-p head) 1)  ; if-let, when-let, when-let*
+    ((alexandria-xor-p head) 1)  ; xor (like or)
+    ((alexandria-destructuring-case-p head)
+     (if (eq variant :modified)
+         1  ; Modified: entire case = +1
+         (count-destructuring-case-clauses expr)))  ; Standard: count per clause
+
+    ;; Third-party macros: Trivia
+    ((trivia-match-p head)
+     (if (eq variant :modified)
+         1  ; Modified: entire match = +1
+         (count-trivia-match-clauses expr)))  ; Standard: count per clause
+    ((trivia-conditional-p head) 1)  ; if-match, when-match, unless-match
+
+    ;; Third-party macros: string-case
+    ((string-case-p head)
+     (if (eq variant :modified)
+         1  ; Modified: entire case = +1
+         (count-string-case-clauses expr)))  ; Standard: count per clause
+
     ;; Default: no complexity
     (t 0)))
 
@@ -533,6 +554,122 @@
     (if (consp bindings)
         (count-if #'consp bindings)
         0)))
+
+;;; Third-party macro recognizers: Alexandria
+
+(defun alexandria-conditional-p (head)
+  "Check if HEAD is an Alexandria conditional macro (if-let, when-let, when-let*)."
+  (and (stringp head)
+       (member (base:symbol-name-from-string head)
+               '("IF-LET" "WHEN-LET" "WHEN-LET*")
+               :test #'string-equal)))
+
+(defun alexandria-xor-p (head)
+  "Check if HEAD is Alexandria XOR (like OR)."
+  (and (stringp head)
+       (string-equal (base:symbol-name-from-string head) "XOR")))
+
+(defun alexandria-destructuring-case-p (head)
+  "Check if HEAD is Alexandria destructuring-case or destructuring-ecase."
+  (and (stringp head)
+       (member (base:symbol-name-from-string head)
+               '("DESTRUCTURING-CASE" "DESTRUCTURING-ECASE")
+               :test #'string-equal)))
+
+(defun count-destructuring-case-clauses (expr)
+  "Count clauses in destructuring-case/destructuring-ecase.
+   Like CASE: count per clause, excluding otherwise/t for non-e variants."
+  (let* ((head (first expr))
+         (is-ecase (and (stringp head)
+                        (string-equal (base:symbol-name-from-string head) "DESTRUCTURING-ECASE")))
+         ;; (destructuring-case expr clause1 clause2 ...)
+         (clauses (cddr expr)))
+    (if (null clauses)
+        0
+        (let ((clause-count (count-if #'consp clauses)))
+          (if is-ecase
+              clause-count
+              ;; Check for otherwise/t in last clause
+              (let ((last-clause (car (last clauses))))
+                (if (and (consp last-clause)
+                         (let ((key (first last-clause)))
+                           (or (eq key t)
+                               (and (stringp key)
+                                    (let ((name (base:symbol-name-from-string key)))
+                                      (or (string-equal name "T")
+                                          (string-equal name "OTHERWISE")))))))
+                    (max 0 (1- clause-count))
+                    clause-count)))))))
+
+;;; Third-party macro recognizers: Trivia
+
+(defun trivia-match-p (head)
+  "Check if HEAD is a Trivia match macro (match, ematch, match*, multiple-value-match, multiple-value-ematch)."
+  (and (stringp head)
+       (member (base:symbol-name-from-string head)
+               '("MATCH" "EMATCH" "MATCH*" "MULTIPLE-VALUE-MATCH" "MULTIPLE-VALUE-EMATCH")
+               :test #'string-equal)))
+
+(defun trivia-conditional-p (head)
+  "Check if HEAD is a Trivia conditional macro (if-match, when-match, unless-match)."
+  (and (stringp head)
+       (member (base:symbol-name-from-string head)
+               '("IF-MATCH" "WHEN-MATCH" "UNLESS-MATCH")
+               :test #'string-equal)))
+
+(defun count-trivia-match-clauses (expr)
+  "Count clauses in Trivia match forms.
+   Like CASE: count per clause, excluding otherwise/_ for non-e variants."
+  (let* ((head (first expr))
+         (is-ematch (and (stringp head)
+                         (member (base:symbol-name-from-string head)
+                                 '("EMATCH" "MULTIPLE-VALUE-EMATCH")
+                                 :test #'string-equal)))
+         ;; match/ematch: (match expr clause1 clause2 ...)
+         ;; match*/multiple-value-match: (match* (expr1 expr2) clause1 clause2 ...)
+         (clauses (cddr expr)))
+    (if (null clauses)
+        0
+        (let ((clause-count (count-if #'consp clauses)))
+          (if is-ematch
+              clause-count
+              ;; Check for otherwise/_ pattern in last clause
+              (let ((last-clause (car (last clauses))))
+                (if (and (consp last-clause)
+                         (let ((pattern (first last-clause)))
+                           (or (eq pattern '_)
+                               (and (stringp pattern)
+                                    (let ((name (base:symbol-name-from-string pattern)))
+                                      (or (string-equal name "_")
+                                          (string-equal name "OTHERWISE")))))))
+                    (max 0 (1- clause-count))
+                    clause-count)))))))
+
+;;; Third-party macro recognizers: string-case
+
+(defun string-case-p (head)
+  "Check if HEAD is string-case:string-case."
+  (and (stringp head)
+       (string-equal (base:symbol-name-from-string head) "STRING-CASE")))
+
+(defun count-string-case-clauses (expr)
+  "Count clauses in string-case.
+   Like CASE: count per clause, excluding otherwise/t."
+  (let ((clauses (cddr expr)))  ; (string-case expr clause1 clause2 ...)
+    (if (null clauses)
+        0
+        (let ((clause-count (count-if #'consp clauses)))
+          ;; Check for otherwise/t in last clause
+          (let ((last-clause (car (last clauses))))
+            (if (and (consp last-clause)
+                     (let ((key (first last-clause)))
+                       (or (eq key t)
+                           (and (stringp key)
+                                (let ((name (base:symbol-name-from-string key)))
+                                  (or (string-equal name "T")
+                                      (string-equal name "OTHERWISE")))))))
+                (max 0 (1- clause-count))
+                clause-count))))))
 
 (defun make-complexity-violation (rule file line column complexity func-name)
   "Create a violation for cyclomatic complexity."
