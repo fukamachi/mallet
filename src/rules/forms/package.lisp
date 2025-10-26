@@ -274,10 +274,11 @@ Returns a violation-fix for :delete-lines."
          (start-line nil)
          (end-line nil))
 
-    ;; Search backward to find the :import-from clause start
+    ;; Search backward to find the :import-from clause start for the correct package
     (loop for line-num from violation-line downto 1
           for line-text = (nth (1- line-num) lines)
-          do (when (search ":import-from" line-text :test #'char-equal)
+          do (when (and (search ":import-from" line-text :test #'char-equal)
+                        (search package-name line-text :test #'char-equal))
                (setf start-line line-num)
                (return)))
 
