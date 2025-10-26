@@ -512,6 +512,88 @@
         ;; :all includes cyclomatic-complexity
         (ok (member :cyclomatic-complexity rule-names))))))
 
+;;; :for-paths inheritance tests
+
+(deftest for-paths-inherits-project-wide-config
+  (testing ":for-paths inherits project-wide :disable settings"
+    (let* ((sexp '(:mallet-config
+                   (:extends :default)
+                   (:disable :if-without-else)  ; Project-wide disable
+                   (:for-paths ("src/main.lisp")
+                    (:enable :line-length :max 100))))
+           (cfg (config:parse-config sexp)))
+      ;; For src/main.lisp, :if-without-else should be disabled (inherited from project-wide)
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (not (member :if-without-else rule-names)) "Project-wide :disable should apply to :for-paths")
+        (ok (member :line-length rule-names) ":for-paths :enable should work"))
+      ;; For other files, :if-without-else should also be disabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/other.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (not (member :if-without-else rule-names)) "Project-wide :disable should apply to all files"))))
+
+  (testing ":for-paths inherits project-wide :enable settings"
+    (let* ((sexp '(:mallet-config
+                   (:extends :default)
+                   (:enable :line-length :max 80)  ; Project-wide enable
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :line-length :max 120))))  ; Override max-length for tests
+           (cfg (config:parse-config sexp)))
+      ;; For test files, should have line-length with test-specific max
+      (let* ((rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (not (null line-length-rule)) "Should inherit :line-length from project-wide")
+        (ok (= 120 (rules:line-length-rule-max-length line-length-rule))
+            ":for-paths override should apply"))
+      ;; For other files, should have line-length with project-wide max
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (line-length-rule (find :line-length rules :key #'rules:rule-name)))
+        (ok (not (null line-length-rule)))
+        (ok (= 80 (rules:line-length-rule-max-length line-length-rule))
+            "Project-wide settings should apply"))))
+
+  (testing ":for-paths can override project-wide :disable"
+    (let* ((sexp '(:mallet-config
+                   (:extends :default)
+                   (:disable :unused-variables)  ; Project-wide disable
+                   (:for-paths ("src/critical.lisp")
+                    (:enable :unused-variables))))  ; Re-enable for critical file
+           (cfg (config:parse-config sexp)))
+      ;; For src/critical.lisp, :unused-variables should be enabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/critical.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :unused-variables rule-names)
+            ":for-paths :enable should override project-wide :disable"))
+      ;; For other files, :unused-variables should be disabled
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (not (member :unused-variables rule-names))
+            "Project-wide :disable should apply"))))
+
+  (testing "Priority: extends < project-wide < :for-paths < CLI"
+    (let* ((sexp '(:mallet-config
+                   (:extends :default)              ; :default has :unused-variables enabled
+                   (:disable :unused-variables)     ; Project-wide disables it
+                   (:enable :line-length :max 80)   ; Project-wide enables line-length
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :unused-variables)     ; Re-enable for tests
+                    (:disable :line-length))))      ; Disable line-length for tests
+           (cfg (config:parse-config sexp)))
+      ;; For test files
+      (let* ((rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (member :unused-variables rule-names)
+            ":for-paths should override project-wide :disable")
+        (ok (not (member :line-length rule-names))
+            ":for-paths should override project-wide :enable"))
+      ;; For other files
+      (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (rule-names (mapcar #'rules:rule-name rules)))
+        (ok (not (member :unused-variables rule-names))
+            "Project-wide :disable should override :extends")
+        (ok (member :line-length rule-names)
+            "Project-wide :enable should work")))))
+
 ;;; Config discovery tests
 
 (deftest find-config-file

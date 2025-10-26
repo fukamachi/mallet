@@ -177,21 +177,33 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                    (:for-paths
                     ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
                     (let* ((patterns (second item))
-                           (override-forms (cddr item))
-                           ;; Get base rules from extends or current specs
-                           (base-rules (if extends
-                                           (config-rules extends)
-                                           (mapcar #'create-rule-from-spec (reverse rule-specs))))
-                           (base-disabled (if extends
-                                              (config-disabled-rules extends)
-                                              disabled-rules)))
-                      (multiple-value-bind (override-rules override-disabled)
-                          (parse-override-rules override-forms base-rules base-disabled)
-                        (push (make-path-override
-                               :patterns patterns
-                               :rules override-rules
-                               :disabled-rules override-disabled)
-                              path-rules)))))))
+                           (override-forms (cddr item)))
+                      ;; Build base for :for-paths by merging extends + project-wide settings
+                      ;; This ensures :for-paths inherits project-wide :enable/:disable
+                      (let* ((extends-rules (if extends (config-rules extends) '()))
+                             (extends-disabled (if extends (config-disabled-rules extends) '()))
+                             ;; Merge project-wide rules with extends (same logic as main config merge)
+                             (project-wide-rule-names (mapcar #'car rule-specs))
+                             ;; Start with extends rules not overridden by project-wide
+                             (merged-base-rules
+                               (remove-if (lambda (rule)
+                                            (member (rules:rule-name rule) project-wide-rule-names))
+                                          extends-rules))
+                             ;; Add project-wide rule specs
+                             (merged-base-rules
+                               (append (mapcar #'create-rule-from-spec (reverse rule-specs))
+                                       merged-base-rules))
+                             ;; Merge disabled lists
+                             (merged-base-disabled
+                               (union disabled-rules
+                                      (set-difference extends-disabled project-wide-rule-names))))
+                        (multiple-value-bind (override-rules override-disabled)
+                            (parse-override-rules override-forms merged-base-rules merged-base-disabled)
+                          (push (make-path-override
+                                 :patterns patterns
+                                 :rules override-rules
+                                 :disabled-rules override-disabled)
+                                path-rules))))))))
 
     ;; If preset-override is provided but no :extends clause was found, use preset-override
     (when (and preset-override (not extends))
