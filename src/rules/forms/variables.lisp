@@ -1276,11 +1276,10 @@ BINDING is the binding form (e.g., \"a\", (\"a\" 10), ((\"a\" \"b\") values))."
                  ((and (stringp form)
                        (string-equal (base:symbol-name-from-string form) var-name-stripped))
                   form)
-                 ;; Cons - search both parts
+                 ;; Cons - search both parts (including dotted pairs)
                  ((consp form)
                   (or (search-binding (car form))
-                      (when (consp (cdr form))
-                        (search-binding (cdr form)))))
+                      (search-binding (cdr form))))
                  ;; Not found
                  (t nil))))
       (search-binding binding))))

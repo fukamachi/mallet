@@ -107,9 +107,11 @@
 
                        ;; Other forms: recurse normally
                        (t
-                        (dolist (subexpr (rest current-expr))
-                          (when (consp subexpr)
-                            (check-expr subexpr actual-line actual-column))))))))))
+                        ;; Only iterate if rest is a proper list (not a dotted pair)
+                        (when (a:proper-list-p (rest current-expr))
+                          (dolist (subexpr (rest current-expr))
+                            (when (consp subexpr)
+                              (check-expr subexpr actual-line actual-column)))))))))))
 
       (check-expr expr line column))
 
@@ -558,9 +560,11 @@
 
                        ;; Other forms: recurse normally
                        (t
-                        (dolist (subexpr (rest current-expr))
-                          (when (consp subexpr)
-                            (check-expr subexpr actual-line actual-column))))))))))
+                        ;; Only iterate if rest is a proper list (not a dotted pair)
+                        (when (a:proper-list-p (rest current-expr))
+                          (dolist (subexpr (rest current-expr))
+                            (when (consp subexpr)
+                              (check-expr subexpr actual-line actual-column)))))))))))
 
       (check-expr expr line column))
 
@@ -583,9 +587,11 @@
                    (incf complexity (form-complexity head expr variant))
 
                    ;; Recurse (but don't enter nested function definitions)
+                   ;; Only iterate if rest is a proper list (not a dotted pair)
                    (unless (is-nested-function-p head)
-                     (dolist (subexpr (rest expr))
-                       (walk subexpr)))))))
+                     (when (a:proper-list-p (rest expr))
+                       (dolist (subexpr (rest expr))
+                         (walk subexpr))))))))
 
       ;; Walk the function body (skip defun/defmethod/etc and name)
       (let ((body (get-function-body function-expr)))
