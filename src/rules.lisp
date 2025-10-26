@@ -15,79 +15,81 @@
 
 (defun make-rule (name &rest options &key severity &allow-other-keys)
   "Create a rule instance based on NAME and OPTIONS.
-Always returns a rule object - enabled/disabled state is handled by config."
-  ;; Create rule instance based on name
-  (case name
-    ;; Text rules
-    (:line-length
-     (make-instance 'line-length-rule
-                    :severity (or severity :info)
-                    :max (getf options :max 80)))
-    (:trailing-whitespace
-     (make-instance 'trailing-whitespace-rule
-                    :severity (or severity :format)))
-    (:no-tabs
-     (make-instance 'no-tabs-rule
-                    :severity (or severity :format)))
-    (:final-newline
-     (make-instance 'final-newline-rule
-                    :severity (or severity :format)))
-    (:consecutive-blank-lines
-     (make-instance 'consecutive-blank-lines-rule
-                    :severity (or severity :info)
-                    :max (getf options :max 2)))
+Always returns a rule object - enabled/disabled state is handled by config.
+Severity defaults are defined in each rule class's :default-initargs."
+  ;; Helper to add :severity only if explicitly provided
+  (flet ((add-severity (initargs)
+           (if severity
+               (list* :severity severity initargs)
+               initargs)))
+    ;; Create rule instance based on name
+    (case name
+      ;; Text rules
+      (:line-length
+       (apply #'make-instance 'line-length-rule
+              (add-severity (list :max (getf options :max 80)))))
+      (:trailing-whitespace
+       (apply #'make-instance 'trailing-whitespace-rule
+              (add-severity nil)))
+      (:no-tabs
+       (apply #'make-instance 'no-tabs-rule
+              (add-severity nil)))
+      (:final-newline
+       (apply #'make-instance 'final-newline-rule
+              (add-severity nil)))
+      (:consecutive-blank-lines
+       (apply #'make-instance 'consecutive-blank-lines-rule
+              (add-severity (list :max (getf options :max 2)))))
 
-    ;; Form rules
-    (:if-without-else
-     (make-instance 'if-without-else-rule
-                    :severity (or severity :convention)))
-    (:bare-progn-in-if
-     (make-instance 'bare-progn-in-if-rule
-                    :severity (or severity :convention)))
-    (:missing-otherwise
-     (make-instance 'missing-otherwise-rule
-                    :severity (or severity :warning)))
-    (:wrong-otherwise
-     (make-instance 'wrong-otherwise-rule
-                    :severity (or severity :error)))
-    (:unused-variables
-     (make-instance 'unused-variables-rule
-                    :severity (or severity :warning)))
-    (:unused-loop-variables
-     (make-instance 'unused-loop-variables-rule
-                    :severity (or severity :info)))
-    (:unused-local-functions
-     (make-instance 'unused-local-functions-rule
-                    :severity (or severity :warning)))
-    (:unused-local-nicknames
-     (make-instance 'unused-local-nicknames-rule
-                    :severity (or severity :info)))
-    (:unused-imported-symbols
-     (make-instance 'unused-imported-symbols-rule
-                    :severity (or severity :info)))
-    (:special-variable-naming
-     (make-instance 'special-variable-naming-rule
-                    :severity (or severity :convention)))
-    (:constant-naming
-     (make-instance 'constant-naming-rule
-                    :severity (or severity :info)))
-    (:mixed-optional-and-key
-     (make-instance 'mixed-optional-and-key-rule
-                    :severity (or severity :warning)))
-    (:asdf-component-strings
-     (make-instance 'asdf-component-strings-rule
-                    :severity (or severity :convention)))
+      ;; Form rules
+      (:if-without-else
+       (apply #'make-instance 'if-without-else-rule
+              (add-severity nil)))
+      (:bare-progn-in-if
+       (apply #'make-instance 'bare-progn-in-if-rule
+              (add-severity nil)))
+      (:missing-otherwise
+       (apply #'make-instance 'missing-otherwise-rule
+              (add-severity nil)))
+      (:wrong-otherwise
+       (apply #'make-instance 'wrong-otherwise-rule
+              (add-severity nil)))
+      (:unused-variables
+       (apply #'make-instance 'unused-variables-rule
+              (add-severity nil)))
+      (:unused-loop-variables
+       (apply #'make-instance 'unused-loop-variables-rule
+              (add-severity nil)))
+      (:unused-local-functions
+       (apply #'make-instance 'unused-local-functions-rule
+              (add-severity nil)))
+      (:unused-local-nicknames
+       (apply #'make-instance 'unused-local-nicknames-rule
+              (add-severity nil)))
+      (:unused-imported-symbols
+       (apply #'make-instance 'unused-imported-symbols-rule
+              (add-severity nil)))
+      (:special-variable-naming
+       (apply #'make-instance 'special-variable-naming-rule
+              (add-severity nil)))
+      (:constant-naming
+       (apply #'make-instance 'constant-naming-rule
+              (add-severity nil)))
+      (:mixed-optional-and-key
+       (apply #'make-instance 'mixed-optional-and-key-rule
+              (add-severity nil)))
+      (:asdf-component-strings
+       (apply #'make-instance 'asdf-component-strings-rule
+              (add-severity nil)))
 
-    ;; Metric rules
-    (:function-length
-     (make-instance 'function-length-rule
-                    :severity (or severity :info)
-                    :max (getf options :max 50)))
-    (:cyclomatic-complexity
-     (make-instance 'cyclomatic-complexity-rule
-                    :severity (or severity :info)
-                    :max (getf options :max 20)
-                    :variant (getf options :variant :standard)))
+      ;; Metric rules
+      (:function-length
+       (apply #'make-instance 'function-length-rule
+              (add-severity (list :max (getf options :max 50)))))
+      (:cyclomatic-complexity
+       (apply #'make-instance 'cyclomatic-complexity-rule
+              (add-severity (list :max (getf options :max 20)
+                                  :variant (getf options :variant :standard)))))
 
-    (otherwise
-     (error "Unknown rule name: ~A" name))))
+      (otherwise
+       (error "Unknown rule name: ~A" name)))))
