@@ -364,15 +364,18 @@ Handles wildcards and directories, excluding common non-source directories."
              (error 'errors:file-not-found :path arg))))))
     (nreverse files)))
 
-(defun load-configuration (config-path preset)
+(defun load-configuration (config-path preset start-directory)
   "Load configuration from file or use built-in preset.
+START-DIRECTORY is used for config discovery when config-path is not specified.
+If START-DIRECTORY is nil, only explicit config-path or built-in preset is used.
 Returns the final config with CLI preset override applied."
   (let ((config:*default-preset* (or preset :default)))
     (or (and config-path
              (config:load-config config-path :preset-override preset))
-        (let ((discovered (config:find-config-file (uiop:getcwd))))
-          (when discovered
-            (config:load-config discovered :preset-override preset)))
+        (and start-directory
+             (let ((discovered (config:find-config-file start-directory)))
+               (when discovered
+                 (config:load-config discovered :preset-override preset))))
         (config:get-built-in-config (or preset :default)))))
 
 (defun has-cli-rules-p (cli-rules)
@@ -461,7 +464,10 @@ Lints files specified in ARGS and exits with appropriate status code."
               (uiop:quit 1))
 
             (let* ((files (expand-file-args file-args))
-                   (base-config (load-configuration config-path preset))
+                   ;; Discover config from first file's directory
+                   (start-directory (when files
+                                      (uiop:pathname-directory-pathname (first files))))
+                   (base-config (load-configuration config-path preset start-directory))
                    ;; Apply CLI overrides if any
                    (config (if (has-cli-rules-p cli-rules)
                                (config:apply-cli-overrides base-config cli-rules)
