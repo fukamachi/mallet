@@ -108,9 +108,12 @@ Returns (values line column) relative to start of SOURCE, or (values 0 0) if not
                 (column 0))
             (loop for i from 0 below pos
                   for char = (char source i)
-                  do (if (char= char #\Newline)
-                         (progn (incf line) (setf column 0))
-                         (incf column)))
+                  do (cond
+                       ((char= char #\Newline)
+                        (incf line)
+                        (setf column 0))
+                       (t
+                        (incf column))))
             (return-from find-symbol-in-source (values line column))))))
     ;; Not found - return 0, 0
     (values 0 0)))

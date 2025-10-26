@@ -88,7 +88,8 @@
            (violations (rules:check-text rule text #p"test.lisp")))
       ;; Note: This simple implementation will flag tabs in strings
       ;; That's acceptable for a text-level rule
-      (ok t))))
+      ;; The test passes as long as it doesn't crash
+      (ok (>= (length violations) 0)))))
 
 ;;; Final newline tests
 

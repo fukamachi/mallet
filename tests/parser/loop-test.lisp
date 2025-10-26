@@ -111,20 +111,6 @@
           (ok (consp (first pattern)))
           (ok (string-equal (second pattern) "C")))))))
 
-(deftest keyword-vs-variable-distinction
-  (testing "LOOP keyword as variable reference"
-    ;; This is the tricky case: 'for' appears as both keyword and variable
-    (let ((clauses (parse-loop-from-code "(let ((for 10)) (loop for i from 0 to for collect i))")))
-      ;; We're parsing the LOOP, not the LET, so we need to extract nested LOOP
-      ;; For now, just test that we correctly parse 'to for' where second 'for' is a variable
-      ;; This is a simplified test - full implementation would need more work
-      (ok t "Simplified test - full keyword/variable distinction needs more context")))
-
-  (testing "Multiple keywords as variables"
-    (let ((clauses (parse-loop-from-code "(let ((from 5) (to 10)) (loop for i from from to to collect i))")))
-      ;; Similar to above - this tests our ability to parse when keywords appear in value position
-      (ok t "Simplified test - context-dependent parsing"))))
-
 (deftest complex-iteration-clauses
   (testing "FROM/TO iteration"
     (let ((clauses (parse-loop-from-code "(loop for i from 0 to 10 collect i)")))
