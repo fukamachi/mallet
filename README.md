@@ -32,6 +32,8 @@ mv mallet ~/.local/bin/mallet  # or /usr/local/bin/mallet, ~/bin/mallet, etc.
 
 ## Usage
 
+### Basic Linting
+
 ```bash
 # Lint files
 mallet src/main.lisp
@@ -40,16 +42,50 @@ mallet src  # recursively lints .lisp and .asd files
 
 # Enable all rules
 mallet -a src
+mallet --all src
+```
 
+### CLI Rule Configuration
+
+Enable or disable rules from the command line without needing a config file:
+
+```bash
+# Enable specific rules
+mallet --enable cyclomatic-complexity src/
+mallet --enable cyclomatic-complexity:max=15 src/
+
+# Enable multiple rules with options
+mallet --enable line-length:max=80 --enable cyclomatic-complexity:max=10 src/
+
+# Disable specific rules (override config/preset)
+mallet --disable unused-variables tests/
+
+# Enable/disable rule groups (by severity)
+mallet --enable-group metrics src/        # Enable all metrics rules
+mallet --disable-group warning tests/     # Disable all warning-level rules
+
+# Mix and match
+mallet --all --disable-group info src/    # All rules except info-level
+```
+
+**Rule groups** (by severity level):
+- `error` - Code that is objectively wrong
+- `warning` - Code that is likely wrong or dangerous
+- `convention` - Idiom suggestions
+- `format` - Consensus formatting rules
+- `info` - Subjective preferences
+- `metrics` - Code quality measurements
+
+### Auto-Fix
+
+Mallet can automatically fix many common violations:
+
+```bash
 # Auto-fix violations
 mallet --fix src/                 # Fix and write changes
 mallet --fix-dry-run src/         # Preview fixes without changing files
 mallet -a --fix src/              # Fix with all rules enabled
 ```
-
-### Auto-Fix
-
-Mallet can automatically fix many common violations:
 
 **Fixable rules:**
 - `:trailing-whitespace` - Remove trailing whitespace from lines
@@ -96,6 +132,16 @@ Use `:for-paths` to apply different rules to specific directories or files:
 - Glob patterns: `"src/**/*.lisp"` → matches pattern exactly
 
 Mallet auto-discovers `.mallet.lisp` by walking up from the current directory.
+
+**Configuration precedence:**
+
+CLI options override config files, which override presets:
+
+```
+CLI options (--enable, --disable) > .mallet.lisp > Presets (:default, :all)
+```
+
+Example: `mallet --enable line-length:max=80 src/` overrides any `:line-length` settings in `.mallet.lisp`.
 
 ## Suppressing Violations
 
