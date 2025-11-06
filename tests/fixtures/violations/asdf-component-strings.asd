@@ -34,3 +34,7 @@
                "cl-ppcre")
   :components ((:file #:main)
                (:file "utils")))
+
+;; Bad: keywords in dependencies (also not idiomatic)
+(defsystem "keyword-deps"
+  :depends-on (:alexandria :cl-ppcre))

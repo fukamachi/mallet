@@ -16,7 +16,8 @@
    :name :asdf-component-strings
    :description "ASDF components, systems, and dependencies should use strings not symbols"
    :severity :convention
-   :type :form))
+   :type :form
+   :file-types '(:asd)))
 
 (defmethod base:check-form ((rule asdf-component-strings-rule) form file)
   "Check that defsystem uses strings for names."
