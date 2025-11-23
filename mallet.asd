@@ -96,6 +96,7 @@
      (:file "missing-otherwise-test")
      (:file "wrong-otherwise-test")
      (:file "unused-variables-test")
+     (:file "needless-let-star-test")
      (:file "unused-local-nicknames-test")
      (:file "unused-imported-symbols-test")
      (:file "text-formatting-test")

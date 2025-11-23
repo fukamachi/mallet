@@ -354,6 +354,7 @@ Useful for exploration and discovering what rules exist."
             :unused-imported-symbols
             :constant-naming
             :unused-loop-variables
+            :needless-let*
             ;; CONVENTION: Style/idiom suggestions
             :if-without-else
             :bare-progn-in-if

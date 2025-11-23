@@ -1,0 +1,6 @@
+# Expected violations for needless-let-star.lisp
+# Format: line:column rule-name severity
+
+4:0 needless-let* info
+8:0 needless-let* info
+19:2 needless-let* info

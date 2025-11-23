@@ -53,6 +53,9 @@ Severity defaults are defined in each rule class's :default-initargs."
       (:wrong-otherwise
        (apply #'make-instance 'wrong-otherwise-rule
               initargs))
+      (:needless-let*
+       (apply #'make-instance 'needless-let*-rule
+              initargs))
       (:unused-variables
        (apply #'make-instance 'unused-variables-rule
               initargs))

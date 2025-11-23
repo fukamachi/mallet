@@ -8,7 +8,8 @@
    (#:violation #:mallet/violation)
    (#:scope #:mallet/utils/scope)
    (#:utils #:mallet/utils))
-  (:export #:unused-variables-rule
+  (:export #:needless-let*-rule
+           #:unused-variables-rule
            #:unused-loop-variables-rule))
 (in-package #:mallet/rules/forms/variables)
 
@@ -1862,6 +1863,109 @@ Returns T if a binding form was checked, NIL otherwise."
                                                     position-map)))
                    ;; Accumulate violations from nested call
                    (setf *violations* (append *violations* nested-violations))))))))))))
+
+
+;;; Needless LET* rule
+
+(defun let*-analyzable-binding-p (binding)
+  "Check if BINDING is a simple LET* binding with a string variable."
+  (or (stringp binding)
+      (and (consp binding)
+           (stringp (first binding)))))
+
+(defun let*-binding-init-form (binding)
+  "Extract init form from LET* BINDING if present.
+Returns NIL when no init form exists."
+  (when (and (consp binding)
+             (consp (cdr binding)))
+    (second binding)))
+
+(defun let*-binding-depends-on-bindings-p (binding previous-bindings)
+  "Check if BINDING's init form references any variables in PREVIOUS-BINDINGS."
+  (let ((init-form (let*-binding-init-form binding)))
+    (when init-form
+      (loop for previous-binding in previous-bindings
+            for vars = (extract-bindings previous-binding)
+            thereis (some (lambda (prev-var)
+                            (find-references prev-var (list init-form)))
+                          vars)))))
+
+(defun needless-let*-bindings-p (bindings)
+  "Return T when LET* BINDINGS are independent (no sequential dependencies).
+Returns NIL for empty bindings, unknown binding shapes, or when dependencies exist."
+  (when (and (listp bindings)
+             (a:proper-list-p bindings))
+    (let ((seen '())
+          (count 0))
+      (dolist (binding bindings)
+        (incf count)
+        (unless (let*-analyzable-binding-p binding)
+          (return-from needless-let*-bindings-p nil))
+        (when (let*-binding-depends-on-bindings-p binding seen)
+          (return-from needless-let*-bindings-p nil))
+        (push binding seen))
+      (when (> count 0) t))))
+
+(defclass needless-let*-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :needless-let*
+   :description "Use 'let' instead of 'let*' when bindings don't depend on each other"
+   :severity :info
+   :type :form)
+  (:documentation "Rule to detect LET* forms whose bindings are independent."))
+
+(defmethod base:check-form ((rule needless-let*-rule) form file)
+  "Check for LET* forms that can be rewritten as LET."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  (base:check-form-recursive rule
+                             (parser:form-expr form)
+                             file
+                             (parser:form-line form)
+                             (parser:form-column form)
+                             nil
+                             (parser:form-position-map form)))
+
+(defmethod base:check-form-recursive ((rule needless-let*-rule) expr file line column
+                                      &optional function-name position-map)
+  (declare (ignore function-name))
+
+  (let ((violations '())
+        (visited (make-hash-table :test 'eq)))
+
+    (labels ((check-expr (current-expr fallback-line fallback-column)
+               (base:with-safe-code-expr (current-expr visited)
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map fallback-line fallback-column)
+                   (let ((head (first current-expr))
+                         (rest-args (rest current-expr)))
+                     (when (base:symbol-matches-p head "LET*")
+                       (let ((bindings (first rest-args)))
+                         (when (and (needless-let*-bindings-p bindings)
+                                    (base:should-create-violation-p rule))
+                           (push (make-instance 'violation:violation
+                                                :rule :needless-let*
+                                                :file file
+                                                :line actual-line
+                                                :column actual-column
+                                                :severity (base:rule-severity rule)
+                                                :message "Use 'let' instead of 'let*' when bindings don't depend on each other"
+                                                :fix nil)
+                                 violations))))
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule head file
+                                                                      actual-line actual-column
+                                                                      position-map))
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule rest-args file
+                                                                      actual-line actual-column
+                                                                      position-map)))))))
+
+      (check-expr expr line column))
+
+    violations))
 
 
 ;;; Unused-variables rules

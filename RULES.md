@@ -29,6 +29,7 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:unused-imported-symbols`](#unused-imported-symbols) - Imported symbols should be used or re-exported
   - [`:constant-naming`](#constant-naming) - Constants should be named `+foo+`
   - [`:unused-loop-variables`](#unused-loop-variables) - Loop variables should be used
+  - [`:needless-let*`](#needless-let*) - Use `let` when bindings are independent
 - [METRICS](#metrics)
   - [`:function-length`](#function-length) - Function exceeds maximum line count
   - [`:cyclomatic-complexity`](#cyclomatic-complexity) - Function has high cyclomatic complexity
@@ -324,6 +325,24 @@ Loop variables should be used within the loop body.
 ```
 
 **Default**: disabled
+
+### `:needless-let*`
+
+Use `let` instead of `let*` when bindings don't depend on each other (including single-binding `let*`).
+
+```lisp
+;; Bad: bindings are independent
+(let* ((x (foo))
+       (y (bar)))
+  (list x y))
+
+;; Good: use let for independent bindings
+(let ((x (foo))
+      (y (bar)))
+  (list x y))
+```
+
+**Default**: disabled (`:info` severity; included in `:all` preset)
 
 ## METRICS
 
