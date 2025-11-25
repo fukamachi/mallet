@@ -40,6 +40,11 @@ Format follows Lem convention:
   - (N &body): skip N args, then &body
   - (N &lambda &body): skip N args, lambda list, then &body")
 
+(defvar *clause-element-types* (make-hash-table :test 'equal)
+  "Registry of clause first-element types for clause-based macros.
+Key: uppercase macro name string.
+Value: :expression or :literal (future: :binding).")
+
 (defun register-macro-signature (name signature)
   "Register a macro signature following Lem's convention.
 Examples:
@@ -48,9 +53,21 @@ Examples:
   (register-macro-signature \"progn\" '(&rest &body)) - all args are body"
   (setf (gethash (string-upcase name) *known-macro-signatures*) signature))
 
+(defun register-clause-element-type (name type)
+  "Register the clause first-element TYPE (:expression or :literal) for macro NAME."
+  (setf (gethash (string-upcase (string (base:symbol-name-from-string name))) *clause-element-types*)
+        type))
+
+(defun get-clause-element-type (name)
+  "Look up the clause first-element type for macro NAME."
+  (gethash (string-upcase (string (base:symbol-name-from-string name))) *clause-element-types*))
+
 (defun parse-macro-signature (signature)
-  "Parse Lem-style macro signature to extract body start position.
-Returns position where &body begins (0-indexed after macro name), or NIL if no body."
+  "Parse Lem-style macro signature to extract body information.
+Returns:
+  - Integer position where &body begins (0-indexed after macro name)
+  - (:clauses position) for clause-based macros with &rest clause bodies
+  - NIL if no body is present."
   (etypecase signature
     (integer signature)  ; Simple case: integer means body starts at that position
     (list
@@ -58,10 +75,12 @@ Returns position where &body begins (0-indexed after macro name), or NIL if no b
      (let ((pos 0))
        (dolist (elem signature)
          (cond
-           ((or (eq elem '&body)
-                (and (eq elem '&rest)
-                     (member '&body signature)))
-            ;; Found &body - return current position
+           ;; Clause-based macro: &rest followed by &body
+           ((and (eq elem '&rest)
+                 (member '&body signature))
+            (return-from parse-macro-signature (list :clauses pos)))
+           ;; Direct &body - simple body position
+           ((eq elem '&body)
             (return-from parse-macro-signature pos))
            ((eq elem '&lambda)
             ;; Lambda list - skip it and continue
@@ -317,7 +336,7 @@ Returns signature (integer or list) indicating where &body starts.
 Handles nested structures:
   (test &body body) -> 1
   (&body body) -> 0
-  (&rest (clause &body body)) -> (&rest &body) for nested clause bodies"
+  (&rest (clause &body body)) -> (pos &rest &body) for nested clause bodies"
   (loop for elem in lambda-list
         for pos from 0
         for next-elem = (when (< (1+ pos) (length lambda-list))
@@ -337,8 +356,8 @@ Handles nested structures:
                            (and (param-p nested-elem)
                                 (string-equal (param-name nested-elem) "&BODY")))
                          next-elem))
-              ;; Return (&rest &body) to indicate nested clause bodies
-              (return '(&rest &body))))
+              ;; Return (pos &rest &body) to indicate nested clause bodies
+              (return (list pos '&rest '&body))))
         finally (return nil)))
 
 (defun register-macros-from-lambda-lists (macro-specs)
@@ -387,8 +406,10 @@ Examples:
    (cond (&rest (test &body body)) :bindings nil)
    (case (keyform &rest (keys &body body)) :bindings nil)
    (ecase (keyform &rest (keys &body body)) :bindings nil)
+   (ccase (keyform &rest (keys &body body)) :bindings nil)
    (typecase (keyform &rest (type &body body)) :bindings nil)
    (etypecase (keyform &rest (type &body body)) :bindings nil)
+   (ctypecase (keyform &rest (type &body body)) :bindings nil)
 
    ;; Logical operators - all forms are evaluated
    (and (&body forms) :bindings nil)
@@ -463,6 +484,18 @@ Examples:
    ;; MULTIPLE-VALUE-BIND has bindings - handled specially in check-multiple-value-bind-bindings
    ;; TODO: Add unified registration once we refactor MULTIPLE-VALUE-BIND
    ))
+
+;; Clause element type registry for clause-based macros
+(dolist (entry '(("COND" . :expression)
+                 ("CASE" . :literal)
+                 ("ECASE" . :literal)
+                 ("CCASE" . :literal)
+                 ("TYPECASE" . :literal)
+                 ("ETYPECASE" . :literal)
+                 ("CTYPECASE" . :literal)
+                 ("HANDLER-CASE" . :literal)
+                 ("RESTART-CASE" . :literal)))
+  (register-clause-element-type (car entry) (cdr entry)))
 
 (defun special-variable-p (name)
   "Check if NAME follows special variable convention (*name*)."
@@ -1161,6 +1194,22 @@ These forms restore :known-body context even when inside unknown macros."
                             (or (special-operator-p symbol)
                                 (macro-function symbol))))))))
 
+             (search-clause (clause clause-type)
+               "Search CLAUSE respecting its first element type."
+               (when (consp clause)
+                 (let ((first-elem (first clause))
+                       (body-forms (rest clause)))
+                   (or
+                    (case clause-type
+                      (:expression
+                       ;; Expression position should check CAR even if it matches a CL function
+                       (let ((*parsing-context* :unknown))
+                         (search-expr first-elem nil)))
+                      (:literal nil)
+                      (otherwise nil))
+                    (let ((*parsing-context* :known-body))
+                      (some (lambda (form) (search-expr form nil)) body-forms))))))
+
              (search-expr (expr &optional in-function-position)
                "Recursively search for references to var-name in expr.
 IN-FUNCTION-POSITION is true if we're looking at the first element of a form (function call position)."
@@ -1239,22 +1288,38 @@ IN-FUNCTION-POSITION is true if we're looking at the first element of a form (fu
                           ;; Known special operator/macro - restore :known-body context
                           ((known-special-operator-p (first expr))
                            ;; Check if it has a specific body position signature
-                           (let ((body-pos (known-macro-body-position (first expr))))
-                             (if body-pos
-                                 ;; Has signature - use it to determine context for each position
-                                 (let* ((all-args (rest expr))
-                                        (args (subseq all-args 0 (min body-pos (length all-args))))
-                                        (body-forms (when (> (length all-args) body-pos)
-                                                      (subseq all-args body-pos))))
-                                   ;; Search macro arguments with :unknown context
-                                   ;; Search body forms with :known-body context
-                                   (or (let ((*parsing-context* :unknown))
-                                         (some (lambda (arg) (search-expr arg nil)) args))
-                                       (let ((*parsing-context* :known-body))
-                                         (some (lambda (form) (search-expr form nil)) body-forms))))
-                                 ;; No signature - just restore :known-body context for all args
-                                 (let ((*parsing-context* :known-body))
-                                   (some (lambda (arg) (search-expr arg nil)) (cdr expr))))))
+                           (let ((body-info (known-macro-body-position (first expr))))
+                             (cond
+                               ;; Clause-based macro
+                               ((and (consp body-info) (eq (first body-info) :clauses))
+                                (let* ((clause-pos (second body-info))
+                                       (macro-name (first expr))
+                                       (clause-type (or (get-clause-element-type macro-name) :expression))
+                                       (all-args (rest expr))
+                                       (args (subseq all-args 0 (min clause-pos (length all-args))))
+                                       (clauses (when (< clause-pos (length all-args))
+                                                  (nthcdr clause-pos all-args))))
+                                  (or (let ((*parsing-context* :unknown))
+                                        (some (lambda (arg) (search-expr arg nil)) args))
+                                      (some (lambda (clause)
+                                              (search-clause clause clause-type))
+                                            clauses))))
+                               ;; Simple body position
+                               ((integerp body-info)
+                                (let* ((all-args (rest expr))
+                                       (args (subseq all-args 0 (min body-info (length all-args))))
+                                       (body-forms (when (> (length all-args) body-info)
+                                                     (subseq all-args body-info))))
+                                  ;; Search macro arguments with :unknown context
+                                  ;; Search body forms with :known-body context
+                                  (or (let ((*parsing-context* :unknown))
+                                        (some (lambda (arg) (search-expr arg nil)) args))
+                                      (let ((*parsing-context* :known-body))
+                                        (some (lambda (form) (search-expr form nil)) body-forms)))))
+                               ;; No signature - just restore :known-body context for all args
+                               (t
+                                (let ((*parsing-context* :known-body))
+                                  (some (lambda (arg) (search-expr arg nil)) (cdr expr)))))))
 
                           ;; Unknown form OR in unknown context - be conservative
                           (t

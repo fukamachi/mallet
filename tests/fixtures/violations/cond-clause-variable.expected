@@ -1,0 +1,2 @@
+# Only the case-key-not-reference function should have a violation
+18:9 unused-variables warning

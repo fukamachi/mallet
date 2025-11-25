@@ -4,6 +4,7 @@
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
+   (#:vars #:mallet/rules/forms/variables)
    (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/rules/unused-variables)
 
@@ -1948,3 +1949,42 @@
       (ok (every (lambda (v)
                    (eq (violation:violation-rule v) :unused-variables))
                  violations)))))
+
+(deftest macro-signature-clause-detection
+  (testing "parse-macro-signature identifies clause-based macros"
+    (ok (eql 1 (vars::parse-macro-signature '(1 &body))))
+    (ok (equal '(:clauses 0) (vars::parse-macro-signature '(&rest &body))))
+    (ok (equal '(:clauses 1) (vars::parse-macro-signature '(1 &rest &body))))))
+
+(deftest clause-element-type-registry
+  (testing "Clause-based macros have registered first-element types"
+    (ok (eq :expression (vars::get-clause-element-type "COND")))
+    (ok (eq :literal (vars::get-clause-element-type "CASE")))
+    (ok (eq :literal (vars::get-clause-element-type "TYPECASE")))
+    (ok (eq :literal (vars::get-clause-element-type "HANDLER-CASE"))))
+  (testing "Unknown macros default to NIL"
+    (ok (null (vars::get-clause-element-type "UNKNOWN-MACRO")))))
+
+(deftest clause-based-macro-usage
+  (testing "Variables used in cond test position are treated as references"
+    (let* ((code "(defun test ()
+                     (let ((count 5))
+                       (cond (count 'yes)
+                             (t 'no))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Variable named like CL function should be counted as used in cond test")))
+  (testing "Case keys are treated as literals, not variable references"
+    (let* ((code "(defun test ()
+                     (let ((x 1))
+                       (case 'foo
+                         (x 'matched-x)
+                         (t 'other))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'x' is unused"
+                  (violation:violation-message (first violations)))))))
