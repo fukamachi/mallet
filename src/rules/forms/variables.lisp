@@ -562,9 +562,14 @@ CONTEXT determines interpretation of ambiguous 2-element lists:
           (some (lambda (elem) (not (stringp elem))) (rest binding-form)))
      ;; Extract only variable(s) from first element, skip init forms
      (extract-from-pattern (first binding-form)))
-    ;; Pure destructuring pattern: all elements are strings (variables)
-    ;; or contains lambda-list keywords, or nested patterns
-    ;; Examples: (a b c), (a &key b c), ((a b) c), (a . b)
+    ;; Lambda list with keywords - use proper lambda list extraction
+    ;; Examples: (&key x y), (&optional (x 1)), (a &key (b "default"))
+    ;; This handles default values correctly (won't extract "default" as a variable)
+    ((and (consp binding-form)
+          (contains-lambda-list-keyword-p binding-form))
+     (extract-lambda-list-vars binding-form t))
+    ;; Pure destructuring pattern: all elements are variables or nested patterns
+    ;; Examples: (a b c), ((a b) c), (a . b)
     ((consp binding-form)
      (extract-from-pattern binding-form))
     ;; Anything else is not a valid binding form

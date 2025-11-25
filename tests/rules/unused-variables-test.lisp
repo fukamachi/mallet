@@ -1988,3 +1988,55 @@
       (ok (= (length violations) 1))
       (ok (search "Variable 'x' is unused"
                   (violation:violation-message (first violations)))))))
+
+(deftest key-parameter-with-default-values
+  (testing "Valid: &key parameter with empty string default should not report it as variable"
+    ;; Bug fix: (new-text "") was extracting "" as a variable name
+    (let* ((code "(destructuring-bind (&key start end (new-text \"\"))
+                     edit-range
+                   (values start end new-text))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Empty string default should not be treated as a variable")))
+
+  (testing "Valid: &key parameter with string default"
+    (let* ((code "(destructuring-bind (&key (name \"default\"))
+                     data
+                   name)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "String default value should not be treated as a variable")))
+
+  (testing "Valid: &key parameter with quoted symbol default"
+    (let* ((code "(destructuring-bind (&key (mode 'default))
+                     data
+                   mode)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "Quoted symbol default should not be treated as a variable")))
+
+  (testing "Valid: &optional parameter with string default"
+    (let* ((code "(defun foo (&optional (x \"default\"))
+                   x)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)
+          "String default in &optional should not be treated as a variable")))
+
+  (testing "Invalid: unused &key parameter is still detected"
+    (let* ((code "(destructuring-bind (&key start end (new-text \"\"))
+                     edit-range
+                   (values start end))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (search "Variable 'new-text' is unused"
+                  (violation:violation-message (first violations)))))))
