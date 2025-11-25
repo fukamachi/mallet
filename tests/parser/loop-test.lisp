@@ -248,6 +248,21 @@
                      body)
             "SUM value should be in body")))))
 
+(deftest variable-named-like-keyword
+  (testing "Variable named 'end' after MAXIMIZE (not the END keyword)"
+    ;; Bug: 'end' was being filtered out as a loop keyword,
+    ;; causing false positive for unused-loop-variables
+    (let ((clauses (parse-loop-from-code "(loop for (nil . end) in queued-dirty maximize end)")))
+      (multiple-value-bind (bindings body)
+          (loop-parser:parse-loop-clauses clauses)
+        (ok (= (length bindings) 1))
+        ;; The variable 'end' should be in the body expressions
+        (ok (find-if (lambda (expr)
+                       (and (stringp expr)
+                            (string-equal (utils:symbol-name-from-string expr) "END")))
+                     body)
+            "Variable 'end' should be in body (not filtered as keyword)")))))
+
 (deftest edge-cases
   (testing "Empty LOOP (no bindings)"
     (let ((clauses (parse-loop-from-code "(loop collect 1)")))

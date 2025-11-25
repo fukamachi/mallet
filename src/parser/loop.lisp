@@ -238,12 +238,21 @@ Returns (values loop-bindings body-clauses)."
              (incf i))
 
     ;; Extract searchable expressions from clauses
-    (let ((expressions '()))
+    (let ((expressions '())
+          (expr-positions '()))
       ;; Collect init-forms from bindings
       (dolist (binding bindings)
         (dolist (init-form (loop-binding-init-form binding))
           (when (consp init-form)
             (push init-form expressions))))
+
+      ;; First pass: identify positions that are expression contexts
+      ;; (positions following accumulation keywords like MAXIMIZE, COLLECT, etc.)
+      (loop for j from 0 below (1- (length clauses))
+            for elem = (nth j clauses)
+            when (and (stringp elem)
+                      (accumulation-keyword-p elem))
+              do (push (1+ j) expr-positions))
 
       ;; Collect expressions from other clauses
       (loop for j from 0 below (length clauses)
@@ -252,8 +261,12 @@ Returns (values loop-bindings body-clauses)."
               do (cond
                    ((consp elem)
                     (push elem expressions))
+                   ;; Include strings if they're either:
+                   ;; 1. In an expression position (after accumulation keyword), OR
+                   ;; 2. Not a loop keyword
                    ((and (stringp elem)
-                         (not (loop-keyword-p elem)))
+                         (or (member j expr-positions)
+                             (not (loop-keyword-p elem))))
                     (push elem expressions))))
 
       (values (nreverse bindings) (nreverse expressions)))))
