@@ -65,6 +65,8 @@
            (violations (rules:check-text rule text #p"test.lisp")))
       (ok (= 1 (length violations)))
       (ok (= 2 (violation:violation-line (first violations))))
+      ;; Tab is at position 0 (start of line)
+      (ok (= 0 (violation:violation-column (first violations))))
       (ok (search "tab character"
                   (violation:violation-message (first violations))
                   :test #'char-equal))))
@@ -74,7 +76,9 @@
            (rule (make-instance 'rules:no-tabs-rule))
            (violations (rules:check-text rule text #p"test.lisp")))
       (ok (= 1 (length violations)))
-      (ok (= 1 (violation:violation-line (first violations))))))
+      (ok (= 1 (violation:violation-line (first violations))))
+      ;; Tab is at position 10 (after "(defun foo")
+      (ok (= 10 (violation:violation-column (first violations))))))
 
   (testing "Invalid: multiple tabs"
     (let* ((text (format nil "(defun foo ()~%~C(+ 1 2)~%~C(+ 3 4))" #\Tab #\Tab))

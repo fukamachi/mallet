@@ -160,16 +160,17 @@ Returns the line content as a string, or NIL if line doesn't exist."
             for line = (read-line stream nil nil)
             while line
             do ;; Check if line contains tab character
-               (when (find #\Tab line)
-                 (push (make-instance 'violation:violation
-                                      :rule :no-tabs
-                                      :file file
-                                      :line line-number
-                                      :column 0
-                                      :severity (base:rule-severity rule)
-                                      :message "Tab character found (use spaces instead)"
-                                      :fix nil)
-                       violations))))
+               (let ((tab-pos (position #\Tab line)))
+                 (when tab-pos
+                   (push (make-instance 'violation:violation
+                                        :rule :no-tabs
+                                        :file file
+                                        :line line-number
+                                        :column tab-pos
+                                        :severity (base:rule-severity rule)
+                                        :message "Tab character found (use spaces instead)"
+                                        :fix nil)
+                         violations)))))
 
     (nreverse violations)))
 
