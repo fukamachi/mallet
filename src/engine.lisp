@@ -85,6 +85,15 @@ If ignored-p is T, the file was ignored and violations will be NIL."
         (setf violations
               (nconc violations (rules:check-text rule text file)))))
 
+    ;; Run token-level rules
+    (when (some (lambda (r) (eq (rules:rule-type r) :token)) rules)
+      (let ((tokens (parser:tokenize text file)))
+        (dolist (rule rules)
+          (when (and (eq (rules:rule-type rule) :token)
+                     (should-run-rule-on-file-p rule file-type))
+            (setf violations
+                  (nconc violations (rules:check-tokens rule tokens file)))))))
+
     ;; Run form-level rules
     (when (some (lambda (r) (eq (rules:rule-type r) :form)) rules)
       (suppression:ensure-mallet-package-exists)

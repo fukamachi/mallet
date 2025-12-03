@@ -4,4 +4,6 @@
 4:8 special-variable-naming convention
 10:14 special-variable-naming convention
 16:13 constant-naming info
+16:22 bare-float-literal info
+19:24 bare-float-literal info
 22:28 constant-naming info
