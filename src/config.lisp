@@ -350,6 +350,7 @@ Useful for exploration and discovering what rules exist."
             :missing-otherwise
             :mixed-optional-and-key
             ;; INFO: Code quality suggestions
+            :bare-float-literal
             :unused-local-nicknames
             :unused-imported-symbols
             :constant-naming

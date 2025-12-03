@@ -2,6 +2,7 @@
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
+   (#:ppcre #:cl-ppcre)
    (#:utils #:mallet/utils))
   (:export #:analyze-text
            ;; Token

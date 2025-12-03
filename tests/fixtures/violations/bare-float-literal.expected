@@ -1,0 +1,12 @@
+# Expected violations for bare-float-literal.lisp
+# Rule detects float literals without explicit type markers (f, d, s, l)
+
+4:31 bare-float-literal info
+5:31 bare-float-literal info
+6:31 bare-float-literal info
+9:27 bare-float-literal info
+10:27 bare-float-literal info
+11:27 bare-float-literal info
+26:11 bare-float-literal info
+27:11 bare-float-literal info
+29:13 bare-float-literal info

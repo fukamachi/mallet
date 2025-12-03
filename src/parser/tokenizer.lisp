@@ -1,5 +1,17 @@
 (in-package #:mallet/parser)
 
+;; Regex pattern for Common Lisp numeric tokens
+;; Based on CLHS 2.3.1 syntax for integers, ratios, and floats
+;; Note: Does not handle #x, #o, #b radix prefixes (not needed for float detection)
+(defparameter *number-pattern*
+  (ppcre:create-scanner
+   "^[+-]?(?:[0-9]+/[0-9]+|[0-9]+\\.[0-9]*(?:[eEdDfFsSlL][+-]?[0-9]+)?|[0-9]*\\.[0-9]+(?:[eEdDfFsSlL][+-]?[0-9]+)?|[0-9]+[eEdDfFsSlL][+-]?[0-9]+|[0-9]+\\.?)$")
+  "Compiled regex for detecting numeric tokens.
+Matches:
+  - Integers: 123, +45, -67, 123. (trailing dot = decimal integer)
+  - Ratios: 1/2, +3/4, -5/6
+  - Floats: 1.0, .5, 1e10, 1.0e10, 1.0d0, .5f0")
+
 (defun make-token (type value file line column raw)
   "Create a token object."
   (make-instance 'token
@@ -120,13 +132,9 @@ Returns a list of TOKEN objects."
                               (constituent-char-p (char text pos)))
                    do (incf pos))
              (let* ((raw (subseq text start-pos pos))
-                    (type
-                      (if (every (lambda (c)
-                                   (or (digit-char-p c)
-                                       (member c '(#\+ #\- #\. #\e #\d #\f))))
-                                 raw)
-                          :number
-                          :symbol)))
+                    (type (if (ppcre:scan *number-pattern* raw)
+                              :number
+                              :symbol)))
                (push (make-token type raw file line start-column raw) tokens)
                (incf column (length raw)))))
 

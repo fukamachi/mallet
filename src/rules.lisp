@@ -2,6 +2,7 @@
   (:use #:cl)
   (:use-reexport #:mallet/rules/base
                  #:mallet/rules/text
+                 #:mallet/rules/tokens/bare-float-literal
                  #:mallet/rules/forms/control-flow
                  #:mallet/rules/forms/variables
                  #:mallet/rules/forms/local-functions
@@ -38,6 +39,11 @@ Severity defaults are defined in each rule class's :default-initargs."
               initargs))
       (:consecutive-blank-lines
        (apply #'make-instance 'consecutive-blank-lines-rule
+              initargs))
+
+      ;; Token rules
+      (:bare-float-literal
+       (apply #'make-instance 'bare-float-literal-rule
               initargs))
 
       ;; Form rules

@@ -4,6 +4,7 @@
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
   :license "MIT"
   :depends-on ("alexandria"
+               "cl-ppcre"
                "eclector"
                "trivial-glob")
   :in-order-to ((test-op (test-op "mallet/tests")))
@@ -40,6 +41,10 @@
     :components
     ((:file "base")
      (:file "text")
+     (:module "tokens"
+      :pathname "tokens"
+      :components
+      ((:file "bare-float-literal")))
      (:module "forms"
       :pathname "forms"
       :components
@@ -105,6 +110,7 @@
      (:file "asdf")
      (:file "special-forms-test")
      (:file "with-macros-test")
-     (:file "metrics-test"))))
+     (:file "metrics-test")
+     (:file "bare-float-literal-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
