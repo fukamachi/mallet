@@ -329,6 +329,7 @@ Style preferences are disabled to keep output clean."
             :line-length
             :consecutive-blank-lines
             :bare-progn-in-if
+            :interned-package-symbol
             :missing-otherwise
             :constant-naming
             :special-variable-naming
@@ -358,6 +359,7 @@ Useful for exploration and discovering what rules exist."
             ;; CONVENTION: Style/idiom suggestions
             :if-without-else
             :bare-progn-in-if
+            :interned-package-symbol
             :special-variable-naming
             :asdf-component-strings
             ;; FORMAT: Consensus formatting (Emacs/SLIME standards)

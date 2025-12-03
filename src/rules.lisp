@@ -65,6 +65,9 @@ Severity defaults are defined in each rule class's :default-initargs."
       (:unused-local-functions
        (apply #'make-instance 'unused-local-functions-rule
               initargs))
+      (:interned-package-symbol
+       (apply #'make-instance 'interned-package-symbol-rule
+              initargs))
       (:unused-local-nicknames
        (apply #'make-instance 'unused-local-nicknames-rule
               initargs))

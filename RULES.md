@@ -16,6 +16,7 @@ Rules are organized by severity level. See README.md for severity meanings.
 - [CONVENTION](#convention)
   - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
   - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
+  - [`:interned-package-symbol`](#interned-package-symbol) - Use uninterned symbols in package definitions
   - [`:special-variable-naming`](#special-variable-naming) - Special variables should be named `*foo*`
   - [`:asdf-component-strings`](#asdf-component-strings) - ASDF components should use strings
 - [FORMAT](#format)
@@ -163,6 +164,44 @@ Use `cond` instead of `if` with bare `progn`.
    (do-one)
    (do-two)))
 ```
+
+**Default**: disabled
+
+### `:interned-package-symbol`
+
+Use uninterned symbols (`#:symbol`) in package definitions instead of keywords (`:symbol`) or bare symbols (`symbol`).
+
+```lisp
+;; Bad: keywords
+(defpackage :myapp
+  (:use :cl)
+  (:export :main))
+(in-package :myapp)
+
+;; Bad: bare symbols
+(defpackage myapp
+  (:use cl)
+  (:export main))
+(in-package myapp)
+
+;; Good: uninterned symbols
+(defpackage #:myapp
+  (:use #:cl)
+  (:export #:main))
+(in-package #:myapp)
+
+;; Good: string designators (also acceptable)
+(defpackage "MYAPP"
+  (:use "CL")
+  (:export "MAIN"))
+```
+
+**Rationale**:
+- Keywords (`:symbol`) unnecessarily intern symbols in the KEYWORD package
+- Bare symbols (`symbol`) intern in the current package at read time, which can cause unexpected issues
+- Uninterned symbols make package definitions self-contained and independent of load order
+
+**Checked clauses**: Package name, `:use`, `:export`, `:shadow`, `:intern`, `:nicknames`, `:import-from`, `:shadowing-import-from`, `:local-nicknames`, and UIOP-specific clauses (`:mix`, `:reexport`, `:use-reexport`, `:unintern`, `:recycle`).
 
 **Default**: disabled
 

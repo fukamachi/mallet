@@ -1,0 +1,12 @@
+# Expected violations for interned-package-symbol.lisp
+3:12 interned-package-symbol convention
+4:8 interned-package-symbol convention
+5:11 interned-package-symbol convention
+5:16 interned-package-symbol convention
+6:12 interned-package-symbol convention
+8:12 interned-package-symbol convention
+9:8 interned-package-symbol convention
+10:11 interned-package-symbol convention
+11:12 interned-package-symbol convention
+14:8 interned-package-symbol convention
+15:12 interned-package-symbol convention

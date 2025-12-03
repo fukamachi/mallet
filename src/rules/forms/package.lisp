@@ -4,11 +4,10 @@
    (#:base #:mallet/rules/base)
    (#:violation #:mallet/violation)
    (#:parser #:mallet/parser))
-  (:export #:unused-local-nicknames-rule
+  (:export #:interned-package-symbol-rule
+           #:unused-local-nicknames-rule
            #:unused-imported-symbols-rule))
 (in-package #:mallet/rules/forms/package)
-
-;;; Unused Local Nicknames Rule
 
 (defun defpackage-form-p (expr)
   "Check if EXPR is a defpackage or uiop:define-package form."
@@ -16,6 +15,221 @@
        (stringp (first expr))
        (or (base:symbol-matches-p (first expr) "DEFPACKAGE")
            (base:symbol-matches-p (first expr) "DEFINE-PACKAGE"))))
+
+(defun in-package-form-p (expr)
+  "Check if EXPR is an in-package form."
+  (and (consp expr)
+       (stringp (first expr))
+       (base:symbol-matches-p (first expr) "IN-PACKAGE")))
+
+;;; Interned Package Symbol Rule
+
+(defclass interned-package-symbol-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :interned-package-symbol
+   :description "Use uninterned symbols (#:symbol) in package definitions"
+   :severity :convention
+   :type :form))
+
+(defun extract-symbol-source-at (source-text line column)
+  "Extract symbol source starting at LINE and COLUMN (0-based column)."
+  (let ((lines (uiop:split-string source-text :separator '(#\Newline))))
+    (when (and (plusp line) (<= line (length lines)))
+      (let ((line-text (nth (1- line) lines)))
+        (when (< column (length line-text))
+          (let ((result '())
+                (state nil)
+                (escaped nil))
+            (loop for idx from column below (length line-text)
+                  for ch = (char line-text idx)
+                  do (cond
+                       (escaped
+                        (push ch result)
+                        (setf escaped nil))
+                       ((char= ch #\\)
+                        (push ch result)
+                        (setf escaped t))
+                       ;; Delimiters when not inside quoted symbol/string
+                       ((and (null state)
+                             (find ch '(#\Space #\Tab #\) #\( #\;) :test #'char=))
+                        (return (and result (coerce (nreverse result) 'string))))
+                       ;; String literal - read until closing quote
+                       ((and (null state) (char= ch #\"))
+                        (push ch result)
+                        (setf state :string))
+                       ((and (eq state :string) (char= ch #\"))
+                        (push ch result)
+                        (return (coerce (nreverse result) 'string)))
+                       ;; Escaped symbol with pipes - read until closing pipe
+                       ((and (null state) (char= ch #\|))
+                        (push ch result)
+                        (setf state :pipe))
+                       ((and (eq state :pipe) (char= ch #\|))
+                        (push ch result)
+                        (return (coerce (nreverse result) 'string)))
+                       (t
+                        (push ch result))))
+            (when result
+              (coerce (nreverse result) 'string))))))))
+
+(defun get-source-text-for-expr (expr position-map source-text)
+  "Extract original source text for EXPR using POSITION-MAP and SOURCE-TEXT."
+  (when (and position-map source-text)
+    (let ((pos (gethash expr position-map)))
+      (when pos
+        (extract-symbol-source-at source-text (car pos) (cdr pos))))))
+
+(defun classify-symbol-type (symbol-expr source-text)
+  "Classify SYMBOL-EXPR using parsed value and SOURCE-TEXT.
+Returns one of :keyword, :qualified, :uninterned, :bare, :string-literal, or :unknown."
+  (cond
+    ;; Keywords are detectable from parsed form (start with :)
+    ((and (stringp symbol-expr)
+          (plusp (length symbol-expr))
+          (char= (char symbol-expr 0) #\:))
+     (if (position #\: symbol-expr :start 1)
+         :qualified
+         :keyword))
+    ;; Bare symbols in current package (parser adds CURRENT: prefix)
+    ((and (stringp symbol-expr)
+          (>= (length symbol-expr) 8)
+          (string= "CURRENT:" symbol-expr :end2 8))
+     :bare)
+    ;; Qualified symbols (pkg:foo) - has : not at start and not CURRENT:
+    ((and (stringp symbol-expr)
+          (position #\: symbol-expr :start 1))
+     :qualified)
+    ;; Need source text for remaining cases (e.g., uninterned symbols)
+    ((or (null source-text) (zerop (length source-text)))
+     :unknown)
+    ;; String package designator
+    ((char= (char source-text 0) #\")
+     :string-literal)
+    ;; Uninterned symbol
+    ((and (>= (length source-text) 2)
+          (string= "#:" source-text :end2 2))
+     :uninterned)
+    ;; Quoted symbols count as bare
+    ((char= (char source-text 0) #\')
+     :bare)
+    ;; Default: bare symbol
+    (t :bare)))
+
+(defun symbol-type-description (symbol-type)
+  "Human-readable description for SYMBOL-TYPE."
+  (case symbol-type
+    (:keyword "keyword")
+    (:qualified "qualified")
+    (:bare "bare symbol")
+    (otherwise "unknown")))
+
+(defun check-symbol-interned (symbol-expr context position-map source-text form file rule)
+  "Check a single SYMBOL-EXPR in CONTEXT, returning violations if interned."
+  (let* ((expr-source (get-source-text-for-expr symbol-expr position-map source-text))
+         (symbol-type (classify-symbol-type symbol-expr expr-source)))
+    (case symbol-type
+      ((:uninterned :string-literal)
+       nil)
+      ((:keyword :qualified :bare)
+       (multiple-value-bind (line column)
+           (if position-map
+               (parser:find-position symbol-expr position-map
+                                     (parser:form-line form)
+                                     (parser:form-column form))
+               (values (parser:form-line form) (parser:form-column form)))
+         (list (make-instance 'violation:violation
+                              :rule (base:rule-name rule)
+                              :file file
+                              :line line
+                              :column column
+                              :end-line (parser:form-end-line form)
+                              :end-column (parser:form-end-column form)
+                              :message (format nil "Use uninterned symbol #:~A instead of ~A (~A) in ~A"
+                                               (string-upcase (base:symbol-name-from-string symbol-expr))
+                                               (or expr-source symbol-expr)
+                                               (symbol-type-description symbol-type)
+                                               context)
+                              :severity (base:rule-severity rule)))))
+      (otherwise
+       nil))))
+
+(defun check-clause-symbols (clause position-map source-text form file rule)
+  "Check symbols within a DEFPACKAGE clause."
+  (when (and (consp clause) (stringp (first clause)))
+    (let ((keyword (first clause)))
+      (cond
+        ((string-equal keyword ":use")
+         (loop for pkg in (rest clause)
+               append (check-symbol-interned pkg ":use clause" position-map source-text form file rule)))
+        ((string-equal keyword ":export")
+         (loop for sym in (rest clause)
+               append (check-symbol-interned sym ":export clause" position-map source-text form file rule)))
+        ((string-equal keyword ":shadow")
+         (loop for sym in (rest clause)
+               append (check-symbol-interned sym ":shadow clause" position-map source-text form file rule)))
+        ((string-equal keyword ":intern")
+         (loop for sym in (rest clause)
+               append (check-symbol-interned sym ":intern clause" position-map source-text form file rule)))
+        ((string-equal keyword ":nicknames")
+         (loop for sym in (rest clause)
+               append (check-symbol-interned sym ":nicknames clause" position-map source-text form file rule)))
+        ((or (string-equal keyword ":import-from")
+             (string-equal keyword ":shadowing-import-from"))
+         (let ((package (second clause))
+               (symbols (cddr clause))
+               (context (format nil "~A clause" keyword)))
+           (append (check-symbol-interned package context position-map source-text form file rule)
+                   (loop for sym in symbols
+                         append (check-symbol-interned sym context position-map source-text form file rule)))))
+        ((string-equal keyword ":local-nicknames")
+         (loop for pair in (rest clause)
+               append (when (and (consp pair) (= (length pair) 2))
+                        (append (check-symbol-interned (first pair) ":local-nicknames clause"
+                                                       position-map source-text form file rule)
+                                (check-symbol-interned (second pair) ":local-nicknames clause"
+                                                       position-map source-text form file rule)))))
+        ;; UIOP-specific clauses
+        ((member keyword '(":mix" ":reexport" ":use-reexport" ":unintern" ":recycle")
+                 :test #'string-equal)
+         (let ((context (format nil "~A clause" keyword)))
+           (loop for sym in (rest clause)
+                 append (check-symbol-interned sym context position-map source-text form file rule))))
+        ;; Explicit skips
+        ((or (string-equal keyword ":documentation")
+             (string-equal keyword ":size"))
+         nil)
+        (t
+         nil)))))
+
+(defun check-defpackage-form (expr form file rule source-text position-map)
+  "Check DEFPACKAGE or DEFINE-PACKAGE EXPR for interned symbols."
+  (let ((violations (check-symbol-interned (second expr) "defpackage"
+                                           position-map source-text form file rule)))
+    (dolist (clause (cddr expr))
+      (setf violations
+            (nconc violations
+                   (check-clause-symbols clause position-map source-text form file rule))))
+    violations))
+
+(defmethod base:check-form ((rule interned-package-symbol-rule) form file)
+  "Detect interned symbols in package definitions."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  (let* ((expr (parser:form-expr form)))
+    (cond
+      ((defpackage-form-p expr)
+       (let ((source-text (uiop:read-file-string file)))
+         (check-defpackage-form expr form file rule source-text (parser:form-position-map form))))
+      ((in-package-form-p expr)
+       (let* ((source-text (uiop:read-file-string file))
+              (position-map (parser:form-position-map form)))
+         (check-symbol-interned (second expr) "in-package"
+                                position-map source-text form file rule)))
+      (t nil))))
+
+;;; Unused Local Nicknames Rule
 
 (defclass unused-local-nicknames-rule (base:rule)
   ()
