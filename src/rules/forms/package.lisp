@@ -280,16 +280,19 @@ Returns one of :keyword, :qualified, :uninterned, :bare, :string-literal, or :un
                                                           (parser:form-line form)
                                                           (parser:form-column form))
                                     (values (parser:form-line form) (parser:form-column form)))
-                              (make-instance 'violation:violation
-                                             :rule (base:rule-name rule)
-                                             :file file
-                                             :line line
-                                             :column column
-                                             :end-line (parser:form-end-line form)
-                                             :end-column (parser:form-end-column form)
-                                             :message (format nil "Local nickname '~A' (for ~A) is unused"
-                                                              nickname package)
-                                             :severity (base:rule-severity rule))))))))))
+                              ;; Calculate end position for the specific nickname pair
+                              (multiple-value-bind (end-line end-column)
+                                  (find-list-end-position text line column)
+                                (make-instance 'violation:violation
+                                               :rule (base:rule-name rule)
+                                               :file file
+                                               :line line
+                                               :column column
+                                               :end-line (or end-line line)
+                                               :end-column (or end-column (1+ column))
+                                               :message (format nil "Local nickname '~A' (for ~A) is unused"
+                                                                nickname package)
+                                               :severity (base:rule-severity rule)))))))))))
 
 (defun find-symbol-end-column (line-text start-col)
   "Find the end column of a symbol starting at START-COL in LINE-TEXT."
@@ -301,6 +304,42 @@ Returns one of :keyword, :qualified, :uninterned, :bare, :string-literal, or :un
                    line-text
                    :start start-col)
       (length line-text)))
+
+(defun find-symbol-end-position (text line column)
+  "Find the end position of a symbol starting at LINE/COLUMN in TEXT.
+LINE is 1-indexed. Returns (values end-line end-column) where end-column
+is the column after the last character of the symbol."
+  (let* ((lines (uiop:split-string text :separator '(#\Newline)))
+         (line-text (when (and (<= 1 line) (<= line (length lines)))
+                      (nth (1- line) lines))))
+    (when (and line-text (<= column (length line-text)))
+      (let ((end-col (find-symbol-end-column line-text column)))
+        (values line end-col)))))
+
+(defun find-list-end-position (text line column)
+  "Find the end position of a list starting at LINE/COLUMN in TEXT.
+LINE is 1-indexed. The position should point to an opening paren.
+Returns (values end-line end-column) where end-column is the column
+after the closing paren."
+  (let* ((lines (uiop:split-string text :separator '(#\Newline)))
+         (num-lines (length lines))
+         (paren-depth 0)
+         (started nil))
+    (loop for current-line from line to num-lines
+          for line-text = (nth (1- current-line) lines)
+          for start-col = (if (= current-line line) column 0)
+          do (loop for col from start-col below (length line-text)
+                   for ch = (char line-text col)
+                   do (cond
+                        ((char= ch #\()
+                         (incf paren-depth)
+                         (setf started t))
+                        ((char= ch #\))
+                         (decf paren-depth)
+                         (when (and started (zerop paren-depth))
+                           (return-from find-list-end-position
+                             (values current-line (1+ col)))))))
+          finally (return (values nil nil)))))
 
 (defun make-single-line-deletion-fix (lines violation-line end-col)
   "Generate fix for deleting a single-line expression.
@@ -314,24 +353,24 @@ Handles moving trailing close parens to previous line if needed."
         (let* ((prev-line (nth (- violation-line 2) lines))
                (trailing-comment-pos (base:find-comment-start trailing-text))
                (parens-only (string-trim '(#\Space #\Tab)
-                              (if trailing-comment-pos
-                                  (subseq trailing-text 0 trailing-comment-pos)
-                                  trailing-text)))
+                                         (if trailing-comment-pos
+                                             (subseq trailing-text 0 trailing-comment-pos)
+                                             trailing-text)))
                (prev-comment-pos (base:find-comment-start prev-line))
                (prev-line-code (string-right-trim '(#\Space #\Tab)
-                                 (if prev-comment-pos
-                                     (subseq prev-line 0 prev-comment-pos)
-                                     prev-line)))
+                                                  (if prev-comment-pos
+                                                      (subseq prev-line 0 prev-comment-pos)
+                                                      prev-line)))
                (prev-line-comment (if prev-comment-pos
                                       (subseq prev-line prev-comment-pos)
                                       ""))
                (replacement (concatenate 'string
-                              prev-line-code
-                              parens-only
-                              (if (> (length prev-line-comment) 0)
-                                  (concatenate 'string "  " prev-line-comment)
-                                  "")
-                              (string #\Newline))))
+                                         prev-line-code
+                                         parens-only
+                                         (if (> (length prev-line-comment) 0)
+                                             (concatenate 'string "  " prev-line-comment)
+                                             "")
+                                         (string #\Newline))))
           (violation:make-violation-fix
            :type :replace-form
            :start-line (1- violation-line)
@@ -348,7 +387,6 @@ Handles moving trailing close parens to previous line if needed."
 (defmethod base:make-fix ((rule unused-local-nicknames-rule) text file violation)
   "Generate minimal fix for unused local nickname - remove just that line.
 Preserves comments, formatting, and structural close parens."
-  (declare (ignore file))
   (check-type text string)
 
   ;; Extract the unused nickname from the violation message
@@ -456,17 +494,20 @@ Preserves comments, formatting, and structural close parens."
                                                     (parser:form-line form)
                                                     (parser:form-column form))
                               (values (parser:form-line form) (parser:form-column form)))
-                        (push (make-instance 'violation:violation
-                                             :rule (base:rule-name rule)
-                                             :file file
-                                             :line line
-                                             :column column
-                                             :end-line (parser:form-end-line form)
-                                             :end-column (parser:form-end-column form)
-                                             :message (format nil "Imported symbol '~A' from ~A is unused"
-                                                              (base:symbol-name-from-string sym) pkg)
-                                             :severity (base:rule-severity rule))
-                              violations)))))))
+                        ;; Calculate end position for the specific symbol
+                        (multiple-value-bind (end-line end-column)
+                            (find-symbol-end-position text line column)
+                          (push (make-instance 'violation:violation
+                                               :rule (base:rule-name rule)
+                                               :file file
+                                               :line line
+                                               :column column
+                                               :end-line (or end-line line)
+                                               :end-column (or end-column (1+ column))
+                                               :message (format nil "Imported symbol '~A' from ~A is unused"
+                                                                (base:symbol-name-from-string sym) pkg)
+                                               :severity (base:rule-severity rule))
+                                violations))))))))
             (nreverse violations)))))))
 
 (defun count-imported-symbols-in-clause (defpackage-expr package-name)
@@ -528,7 +569,6 @@ Returns a violation-fix for :delete-lines."
 (defmethod base:make-fix ((rule unused-imported-symbols-rule) text file violation)
   "Generate minimal fix for unused imported symbol - remove just that line.
 Preserves comments, formatting, and structural close parens."
-  (declare (ignore file))
   (check-type text string)
 
   ;; Extract the unused symbol and package from the violation message
