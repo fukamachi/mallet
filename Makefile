@@ -1,4 +1,8 @@
-.PHONY: all help test test-unit test-cli bundle build clean
+.PHONY: all help test test-unit test-cli bundle build clean docker-build docker-publish
+
+VERSION ?= latest
+IMAGE_NAME ?= fukamachi/mallet
+LOCAL_IMAGE_NAME ?= mallet
 
 all: build
 
@@ -14,6 +18,10 @@ help:
 	@echo "  make test          - Run all tests (unit + CLI integration)"
 	@echo "  make test-unit     - Run unit tests only"
 	@echo "  make test-cli      - Run CLI integration tests only"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build  - Build the mallet Docker image"
+	@echo "  make docker-publish- Push the mallet Docker image"
 	@echo ""
 	@echo "Other:"
 	@echo "  make clean         - Clean compilation cache"
@@ -39,6 +47,13 @@ bundle:
 build:
 	@sbcl --noinform --non-interactive \
 		--load init.lisp --eval "(asdf:make :mallet)"
+
+docker-build:
+	docker build -t $(LOCAL_IMAGE_NAME):$(VERSION) .
+
+docker-publish: docker-build
+	docker tag $(LOCAL_IMAGE_NAME):$(VERSION) $(IMAGE_NAME):$(VERSION)
+	docker push $(IMAGE_NAME):$(VERSION)
 
 clean:
 	@echo "Cleaning compilation cache and build artifacts..."
