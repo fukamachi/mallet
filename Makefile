@@ -21,7 +21,7 @@ help:
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build  - Build the mallet Docker image"
-	@echo "  make docker-publish- Push the mallet Docker image"
+	@echo "  make docker-publish - Push the mallet Docker image"
 	@echo ""
 	@echo "Other:"
 	@echo "  make clean         - Clean compilation cache"
