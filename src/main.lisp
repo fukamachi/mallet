@@ -201,12 +201,13 @@ Returns (rule-name . options-plist)."
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug fix-mode cli-rules files).
+Returns (values format config-path preset debug no-color fix-mode cli-rules files).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
         (preset nil)
         (debug nil)
+        (no-color nil)
         (fix-mode nil)
         (enable-rules '())
         (disable-rules '())
@@ -231,6 +232,8 @@ Signals specific error conditions for invalid input."
            (setf preset :none))
           ((string= arg "--debug")
            (setf debug t))
+          ((string= arg "--no-color")
+           (setf no-color t))
           ((string= arg "--fix")
            (setf fix-mode :fix))
           ((string= arg "--fix-dry-run")
@@ -269,7 +272,7 @@ Signals specific error conditions for invalid input."
                            :disable-rules (nreverse disable-rules)
                            :enable-groups (nreverse enable-groups)
                            :disable-groups (nreverse disable-groups))))
-      (values format config-path preset debug fix-mode cli-rules (nreverse files)))))
+      (values format config-path preset debug no-color fix-mode cli-rules (nreverse files)))))
 
 
 (defun print-help ()
@@ -294,6 +297,7 @@ Options:
 
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
+  --no-color          Disable ANSI color codes in output
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
@@ -460,11 +464,15 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (uiop:print-condition-backtrace e))
                  (uiop:quit 3))))
 
-          (multiple-value-bind (format config-path preset debug fix-mode cli-rules file-args)
+          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules file-args)
               (parse-args args)
 
             ;; Enable debug mode if requested
             (setf *debug-mode* debug)
+
+            ;; Disable colors if requested
+            (when no-color
+              (setf formatter:*no-color* t))
 
             ;; Validate we have files to lint
             (when (null file-args)
