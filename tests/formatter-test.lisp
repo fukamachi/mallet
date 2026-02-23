@@ -99,6 +99,14 @@
       (ok (search "[FIXED]" output))
       (ok (not (search "format:" output))))))
 
+(deftest no-color-test
+  (testing "use-colors-p returns nil when *no-color* is true"
+    (let ((formatter:*no-color* t))
+      (ok (null (formatter:use-colors-p *standard-output*)))))
+
+  (testing "*no-color* defaults to nil"
+    (ok (null formatter:*no-color*))))
+
 (deftest format-text-file-test
   (testing "format-text-file groups violations by file"
     (let* ((file (pathname "/path/to/file.lisp"))

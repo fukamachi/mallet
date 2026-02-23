@@ -7,7 +7,9 @@
            #:format-line-file
            #:format-text-summary
            #:format-json-start
-           #:format-json-end))
+           #:format-json-end
+           #:*no-color*
+           #:use-colors-p))
 (in-package #:mallet/formatter)
 
 ;;; ANSI color codes
@@ -17,6 +19,9 @@
 (defparameter *color-yellow* (format nil "~C[33m" #\Escape))
 (defparameter *color-gray* (format nil "~C[90m" #\Escape))
 (defparameter *color-green* (format nil "~C[32m" #\Escape))
+
+(defvar *no-color* nil
+  "When T, disable all ANSI color output regardless of terminal type.")
 
 ;;; Path utilities
 
@@ -42,8 +47,9 @@ If FILE cannot be made relative, returns the namestring as-is."
         (namestring file-path))))
 
 (defun use-colors-p (stream)
-  "Check if we should use colors for STREAM (only if it's a TTY)."
-  (and (member stream (list *standard-output* *error-output*))
+  "Check if we should use colors for STREAM (only if it's a TTY and *no-color* is nil)."
+  (and (not *no-color*)
+       (member stream (list *standard-output* *error-output*))
        (interactive-stream-p stream)))
 
 (defun colorize (text color stream)
