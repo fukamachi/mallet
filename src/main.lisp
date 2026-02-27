@@ -201,7 +201,7 @@ Returns (rule-name . options-plist)."
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug no-color fix-mode cli-rules files).
+Returns (values format config-path preset debug no-color fix-mode cli-rules strict files).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
@@ -209,6 +209,7 @@ Signals specific error conditions for invalid input."
         (debug nil)
         (no-color nil)
         (fix-mode nil)
+        (strict nil)
         (enable-rules '())
         (disable-rules '())
         (enable-groups '())
@@ -238,6 +239,8 @@ Signals specific error conditions for invalid input."
            (setf fix-mode :fix))
           ((string= arg "--fix-dry-run")
            (setf fix-mode :fix-dry-run))
+          ((string= arg "--strict")
+           (setf strict t))
           ((string= arg "--enable")
            (let (rule-spec)
              (multiple-value-setq (rule-spec args)
@@ -272,7 +275,7 @@ Signals specific error conditions for invalid input."
                            :disable-rules (nreverse disable-rules)
                            :enable-groups (nreverse enable-groups)
                            :disable-groups (nreverse disable-groups))))
-      (values format config-path preset debug no-color fix-mode cli-rules (nreverse files)))))
+      (values format config-path preset debug no-color fix-mode cli-rules strict (nreverse files)))))
 
 
 (defun print-help ()
@@ -298,6 +301,7 @@ Options:
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
   --no-color          Disable ANSI color codes in output
+  --strict            Exit non-zero for any violation (including format/info/metrics)
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
@@ -398,11 +402,12 @@ Returns the final config with CLI preset override applied."
       (getf cli-rules :disable-groups)))
 
 (defun track-violation-severity (violations)
-  "Check violations for errors and warnings.
-Returns (values has-errors-p has-warnings-p)."
+  "Check violations for errors, warnings, and any violations.
+Returns (values has-errors-p has-warnings-p has-any-p)."
   (values
    (some (lambda (v) (eq (violation-severity v) :error)) violations)
-   (some (lambda (v) (eq (violation-severity v) :warning)) violations)))
+   (some (lambda (v) (eq (violation-severity v) :warning)) violations)
+   (not (null violations))))
 
 (defun process-fix-mode (all-violations fix-mode format)
   "Apply fixes to violations and output results.
@@ -464,7 +469,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (uiop:print-condition-backtrace e))
                  (uiop:quit 3))))
 
-          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules file-args)
+          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules strict file-args)
               (parse-args args)
 
             ;; Enable debug mode if requested
@@ -491,6 +496,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (severity-counts '())
                    (has-errors nil)
                    (has-warnings nil)
+                   (has-any-violations nil)
                    (first-file-with-violations t)
                    (all-violations '()))
 
@@ -533,17 +539,19 @@ Lints files specified in ARGS and exits with appropriate status code."
 
                     ;; Track violations for exit code
                     (when violations
-                      (multiple-value-bind (errors warnings)
+                      (multiple-value-bind (errors warnings any)
                           (track-violation-severity violations)
                         (when errors (setf has-errors t))
-                        (when warnings (setf has-warnings t)))))))
+                        (when warnings (setf has-warnings t))
+                        (when any (setf has-any-violations t)))))))
 
               ;; Apply fixes if in fix mode
               (when fix-mode
-                (multiple-value-bind (errors warnings)
+                (multiple-value-bind (errors warnings any)
                     (process-fix-mode all-violations fix-mode format)
                   (setf has-errors errors)
-                  (setf has-warnings warnings)))
+                  (setf has-warnings warnings)
+                  (setf has-any-violations any)))
 
               ;; Print summary/closing (only for normal mode)
               (unless fix-mode
@@ -557,6 +565,7 @@ Lints files specified in ARGS and exits with appropriate status code."
               (cond
                 (has-errors (uiop:quit 2))
                 (has-warnings (uiop:quit 1))
+                ((and strict has-any-violations) (uiop:quit 1))
                 (t (uiop:quit 0))))))
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt

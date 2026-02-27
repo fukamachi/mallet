@@ -1,2 +1,4 @@
 /.qlot/
 /mallet
+.cache/
+.claude/sessions/
