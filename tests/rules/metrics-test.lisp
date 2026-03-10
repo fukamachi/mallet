@@ -728,6 +728,112 @@
       (ok (= 4 (getf result :comment-lines)))
       (ok (= 4 (getf result :code-lines))))))
 
+;;; Comment-ratio rule tests
+
+(defun test-comment-ratio-violation (code &key (max 0.3d0) (min-lines 3) include-docstrings)
+  "Test CODE with comment-ratio-rule and return violations."
+  (let* ((rule (make-instance 'rules:comment-ratio-rule
+                              :max max
+                              :min-lines min-lines
+                              :include-docstrings include-docstrings))
+         (forms (parser:parse-forms code #P"test.lisp"))
+         (form (first forms)))
+    (base:check-form rule form #P"test.lisp")))
+
+(deftest comment-ratio-rule-violation
+  (testing "Function exceeding max ratio produces violation"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun foo (x)
+  ;; comment 1
+  ;; comment 2
+  ;; comment 3
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                       :max 0.2d0)))
+      (ok (= 1 (length violations)))
+      (ok (search "foo" (violation:violation-message (first violations))))
+      (ok (search "comment ratio" (violation:violation-message (first violations)))))))
+
+(deftest comment-ratio-rule-no-violation
+  (testing "Function under max ratio produces no violation"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun foo (x)
+  ;; one comment
+  (print x)
+  (+ x 1)
+  (* x 2)
+  (- x 3))"
+                       :max 0.3d0)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-rule-min-lines-skip
+  (testing "Function below min-lines is skipped"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun tiny (x) (+ x 1))"
+                       :max 0.0d0
+                       :min-lines 3)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-rule-message-format
+  (testing "Violation message has expected format"
+    (let* ((violations (test-comment-ratio-violation
+                        "(defun bar (x)
+  ;; comment 1
+  ;; comment 2
+  ;; comment 3
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                        :max 0.1d0))
+           (msg (violation:violation-message (first violations))))
+      (ok (search "bar" msg))
+      (ok (search "max: 0.10" msg))
+      (ok (search "3 comment lines out of 7 non-blank lines" msg)))))
+
+(deftest comment-ratio-rule-flet-inner
+  (testing "flet inner functions checked independently"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun outer (x)
+  (flet ((inner (y)
+           ;; lots of comments
+           ;; more comments
+           ;; even more
+           (print y)))
+    (inner x)))"
+                       :max 0.3d0
+                       :min-lines 1)))
+      ;; inner function has 3 comments out of 4 non-blank = 0.75 > 0.3
+      ;; outer function also checked
+      (ok (<= 1 (length violations)))
+      ;; At least one violation mentions inner function behavior
+      (ok (some (lambda (v) (search "inner" (violation:violation-message v)))
+                violations)))))
+
+(deftest comment-ratio-rule-include-docstrings
+  (testing "include-docstrings option affects violation"
+    ;; Without include-docstrings: 0 comment lines, no violation
+    (let ((violations-without (test-comment-ratio-violation
+                               "(defun foo (x)
+  \"A docstring.\"
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                               :max 0.0d0
+                               :include-docstrings nil)))
+      (ok (null violations-without)))
+    ;; With include-docstrings: 1 comment line out of 5 non-blank = 0.2 > 0.0
+    (let ((violations-with (test-comment-ratio-violation
+                            "(defun foo (x)
+  \"A docstring.\"
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                            :max 0.0d0
+                            :include-docstrings t
+                            :min-lines 1)))
+      (ok (= 1 (length violations-with))))))
+
 (deftest complexity-string-case-modified
   (testing "STRING-CASE with modified variant counts as +1 total"
     (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule

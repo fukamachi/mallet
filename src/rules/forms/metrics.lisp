@@ -7,6 +7,7 @@
    (#:violation #:mallet/violation))
   (:export #:function-length-rule
            #:cyclomatic-complexity-rule
+           #:comment-ratio-rule
            ;; Standalone metric calculation functions
            #:calculate-function-length
            #:calculate-cyclomatic-complexity
@@ -317,7 +318,7 @@
    Comment lines include: line comments (;), block comments (#| ... |#),
    and optionally docstring lines when INCLUDE-DOCSTRINGS is true.
    Returns a plist (:ratio float :comment-lines integer :code-lines integer)
-   or NIL if code-lines is below MIN-LINES threshold.
+   or NIL if total non-blank lines (comment + code) is below MIN-LINES threshold.
 
    Note: start-line is file-relative (from position-map).
          source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
@@ -355,8 +356,8 @@
                      (t
                       (incf code-lines)))))
 
-      ;; Return nil if below min-lines threshold
-      (when (< code-lines min-lines)
+      ;; Return nil if below min-lines threshold (total non-blank lines: comment + code)
+      (when (< (+ comment-lines code-lines) min-lines)
         (return-from calculate-comment-ratio-from-source nil))
 
       ;; Calculate ratio
@@ -454,6 +455,138 @@
                  :message (format nil "Function '~A' is ~D lines (max: ~D)"
                                   func-name length (max-lines rule))
                  :fix nil))
+
+;;; Comment-ratio rule
+
+(defclass comment-ratio-rule (base:rule)
+  ((max-ratio
+    :initarg :max
+    :initform 0.3d0
+    :accessor max-ratio)
+   (min-lines
+    :initarg :min-lines
+    :initform 3
+    :accessor rule-min-lines)
+   (include-docstrings
+    :initarg :include-docstrings
+    :initform nil
+    :accessor rule-include-docstrings)
+   (source-lines
+    :initform nil
+    :accessor rule-source-lines-for-ratio
+    :documentation "Parsed source lines for current file (set during check-form)"))
+  (:default-initargs
+   :name :comment-ratio
+   :description "Function has high comment ratio"
+   :severity :metrics
+   :type :form))
+
+(defmethod base:check-form ((rule comment-ratio-rule) form file)
+  "Check comment ratio."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  (let ((source (parser:form-source form)))
+    (setf (rule-source-lines-for-ratio rule) (parse-source-to-lines source))
+    (base:check-form-recursive rule
+                               (parser:form-expr form)
+                               file
+                               (parser:form-line form)
+                               (parser:form-column form)
+                               nil
+                               (parser:form-position-map form))))
+
+(defmethod base:check-form-recursive ((rule comment-ratio-rule) expr file line column
+                                      &optional function-name position-map)
+  (declare (ignore function-name))
+
+  (let ((violations '())
+        (visited (make-hash-table :test 'eq))
+        (source-lines (rule-source-lines-for-ratio rule)))
+
+    (labels ((check-expr (current-expr fallback-line fallback-column)
+               (base:with-safe-code-expr (current-expr visited)
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map
+                                                fallback-line fallback-column)
+                   (let ((head (first current-expr)))
+
+                     ;; Check if this is a function definition.
+                     ;; Note: for outer defun/defmethod forms that contain flet/labels,
+                     ;; the ratio is computed over the entire form (including inner function
+                     ;; lines). Inner functions are also checked independently below.
+                     ;; This mirrors function-length-rule's established behaviour.
+                     (when (is-function-definition-p head)
+                       (let ((result (calculate-comment-ratio-from-source
+                                      current-expr position-map source-lines
+                                      actual-line actual-column
+                                      :include-docstrings (rule-include-docstrings rule)
+                                      :min-lines (rule-min-lines rule))))
+                         (when (and result
+                                    (> (getf result :ratio) (max-ratio rule))
+                                    (base:should-create-violation-p rule))
+                           (push (make-comment-ratio-violation
+                                  rule file actual-line actual-column
+                                  result (get-function-name current-expr))
+                                 violations))))
+
+                     ;; Recurse into nested forms
+                     (cond
+                       ;; flet/labels: check both inner functions and body
+                       ((or (base:symbol-matches-p head "FLET")
+                            (base:symbol-matches-p head "LABELS"))
+                        (when (and (consp (rest current-expr))
+                                   (a:proper-list-p (second current-expr)))
+                          ;; Check each inner function definition
+                          (dolist (func-def (second current-expr))
+                            (when (consp func-def)
+                              (multiple-value-bind (func-line func-column)
+                                  (base:find-actual-position func-def position-map
+                                                             actual-line actual-column)
+                                (let ((result (calculate-comment-ratio-from-source
+                                               func-def position-map source-lines
+                                               func-line func-column
+                                               :include-docstrings (rule-include-docstrings rule)
+                                               :min-lines (rule-min-lines rule)))
+                                      (func-name (get-inner-function-name func-def)))
+                                  (when (and result
+                                             (> (getf result :ratio) (max-ratio rule))
+                                             (base:should-create-violation-p rule))
+                                    (push (make-comment-ratio-violation
+                                           rule file func-line func-column
+                                           result func-name)
+                                          violations))))))
+                          ;; Check body forms
+                          (dolist (body-form (cddr current-expr))
+                            (when (consp body-form)
+                              (check-expr body-form actual-line actual-column)))))
+
+                       ;; Other forms: recurse normally
+                       (t
+                        (when (a:proper-list-p (rest current-expr))
+                          (dolist (subexpr (rest current-expr))
+                            (when (consp subexpr)
+                              (check-expr subexpr actual-line actual-column)))))))))))
+
+      (check-expr expr line column))
+
+    violations))
+
+(defun make-comment-ratio-violation (rule file line column result func-name)
+  "Create a violation for comment ratio."
+  (let ((ratio (getf result :ratio))
+        (comment-lines (getf result :comment-lines))
+        (code-lines (getf result :code-lines)))
+    (make-instance 'violation:violation
+                   :rule :comment-ratio
+                   :file file
+                   :line line
+                   :column column
+                   :severity (base:rule-severity rule)
+                   :message (format nil "Function '~A' has comment ratio of ~,2F (max: ~,2F, ~D comment lines out of ~D non-blank lines)"
+                                    func-name ratio (max-ratio rule)
+                                    comment-lines (+ comment-lines code-lines))
+                   :fix nil)))
 
 ;;; Public API for standalone metric calculation
 
