@@ -93,4 +93,13 @@
     (let ((violations (check-no-package-use
                        "(uiop:define-package #:foo (:use #:alexandria))")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :no-package-use)))))
+      (ok (eq (violation:violation-rule (first violations)) :no-package-use))))
+
+  (testing "violation location points to the :use clause line and column"
+    (let ((violations (check-no-package-use
+                       "(defpackage #:foo
+  (:use #:alexandria))")))
+      (ok (= (length violations) 1))
+      ;; :use clause is on line 2, column 8 (0-based offset within the line)
+      (ok (= 2 (violation:violation-line (first violations))))
+      (ok (equal #p"test.lisp" (violation:violation-file (first violations)))))))
