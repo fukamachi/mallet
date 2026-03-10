@@ -137,6 +137,8 @@ Resolution order:
 4. If SYMBOL-STRING has no package prefix, check import-from mappings only; NIL if not imported."
   (unless (stringp symbol-string)
     (return-from resolve-intern-usage nil))
+  (unless context
+    (return-from resolve-intern-usage nil))
   (let* ((name    (string-upcase (utils:symbol-name-from-string symbol-string)))
          (prefix  (extract-package-from-symbol-string symbol-string)))
     (if prefix
@@ -192,11 +194,22 @@ alexandria:symbolicate, alexandria:format-symbol, and alexandria:make-keyword.")
 
 (defun intern-callee-p (expr context)
   "Return the display name if EXPR is a prohibited intern function reference, NIL otherwise.
-Handles: bare symbol string, #'func (FUNCTION form), 'func (QUOTE form)."
+Handles: bare symbol string, already-interned CL symbol, #'func (FUNCTION form),
+'func (QUOTE form)."
   (cond
     ;; Bare symbol: "COMMON-LISP:intern"
     ((stringp expr)
      (resolve-intern-usage expr context))
+    ;; Already-interned Lisp symbol head (e.g. CL:INTERN as a symbol object).
+    ;; Build a "PKG:name" string from the symbol's package and name, then check.
+    ((symbolp expr)
+     (let* ((pkg (symbol-package expr))
+            (pkg-name (if pkg (package-name pkg) nil))
+            (sym-name (symbol-name expr))
+            (sym-string (if pkg-name
+                            (concatenate 'string pkg-name ":" sym-name)
+                            sym-name)))
+       (resolve-intern-usage sym-string context)))
     ;; #'func → (FUNCTION "PKG:func") where FUNCTION may be interned CL symbol
     ((and (consp expr)
           (form-head-name-matches-p (first expr) "FUNCTION")
@@ -282,8 +295,10 @@ Handles: bare symbol string, #'func (FUNCTION form), 'func (QUOTE form)."
 
                        (t
                         ;; Direct call: (intern ...) / (a:symbolicate ...) etc.
-                        (let ((display (and (stringp head)
-                                            (resolve-intern-usage head context))))
+                        ;; Use intern-callee-p so that already-interned CL symbol heads
+                        ;; (e.g. the symbol CL:INTERN rather than the string "CL:INTERN")
+                        ;; are also detected, not just string heads.
+                        (let ((display (intern-callee-p head context)))
                           (when (and display (base:should-create-violation-p rule))
                             (push (make-intern-violation actual-line actual-column display)
                                   violations)))

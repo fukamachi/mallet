@@ -442,3 +442,58 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
                       (defun safe () (intern \"FOO\"))")
       (let ((violations (check-intern-file tmpfile)))
         (ok (null violations))))))
+
+;;; U-1: resolve-intern-usage nil-context guard
+
+(deftest resolve-intern-usage-nil-context
+  (testing "resolve-intern-usage with nil context returns nil without error"
+    (ok (null (intern-usage:resolve-intern-usage "COMMON-LISP:intern" nil))))
+
+  (testing "resolve-intern-usage with nil context and unqualified name returns nil"
+    (ok (null (intern-usage:resolve-intern-usage "intern" nil))))
+
+  (testing "resolve-intern-usage with nil context and nil string returns nil"
+    (ok (null (intern-usage:resolve-intern-usage nil nil)))))
+
+;;; U-3: direct-call branch handles already-interned CL symbol heads
+;;;
+;;; The parser normally produces string heads, but reader-macro processing can
+;;; yield real interned CL symbol objects as form heads.  We test this by
+;;; building expressions manually with interned symbol heads and checking via
+;;; the rule.
+
+(defun check-intern-with-symbol-head (head args)
+  "Check a synthetic form (HEAD . ARGS) where HEAD is a Lisp symbol (not a string),
+using an empty-context fake file.  Returns violations."
+  (let* ((rule (make-instance 'rules:intern-usage-rule))
+         ;; Build a synthetic parser:form with an expr whose head is a real symbol
+         (expr (cons head args))
+         (form (make-instance 'parser:form
+                              :expr expr
+                              :line 1
+                              :column 0
+                              :end-line 1
+                              :end-column 10
+                              :source ""
+                              :position-map (make-hash-table)
+                              :file #p"test.lisp")))
+    (rules:check-form rule form #p"test.lisp")))
+
+(deftest intern-usage-symbol-head
+  (testing "Symbol head cl:intern is flagged"
+    (let ((violations (check-intern-with-symbol-head 'cl:intern '("FOO"))))
+      (ok (= (length violations) 1))
+      (ok (search "cl:intern" (violation:violation-message (first violations))))))
+
+  (testing "Symbol head cl:unintern is flagged"
+    (let ((violations (check-intern-with-symbol-head 'cl:unintern '(foo))))
+      (ok (= (length violations) 1))
+      (ok (search "cl:unintern" (violation:violation-message (first violations))))))
+
+  (testing "Symbol head cl:string is not flagged"
+    (let ((violations (check-intern-with-symbol-head 'cl:string '(x))))
+      (ok (null violations))))
+
+  (testing "Symbol head from unrelated package is not flagged"
+    (let ((violations (check-intern-with-symbol-head 'intern-usage:resolve-intern-usage '(x nil))))
+      (ok (null violations)))))
