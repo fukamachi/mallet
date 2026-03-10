@@ -652,7 +652,10 @@ Emits one violation per :use clause listing all non-exempt packages found."
                           unless (member pkg-name *exempt-packages* :test #'string=)
                             collect pkg)))
               (when non-exempt
-                ;; Position at the first non-exempt package in the clause
+                ;; Position at the first non-exempt package in the clause.
+                ;; first-pkg is the original expression object from the parsed AST
+                ;; (not a derived string), so the gethash identity lookup in
+                ;; find-position is valid — same pattern as unused-local-nicknames-rule.
                 (let ((first-pkg (first non-exempt)))
                   (multiple-value-bind (line column)
                       (if (and position-map first-pkg)

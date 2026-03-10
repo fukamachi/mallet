@@ -3,6 +3,7 @@
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
+   (#:config #:mallet/config)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/rules/no-package-use)
@@ -50,6 +51,14 @@
     (ok (null (check-no-package-use
                "(uiop:define-package #:foo (:use #:cl))")))))
 
+;;; Registration
+
+(deftest no-package-use-registration
+  (testing "Rule is included in default config"
+    (let* ((cfg (config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+      (ok (member :no-package-use rule-names)))))
+
 ;;; Invalid cases — violations expected
 
 (deftest no-package-use-violations
@@ -72,8 +81,8 @@
                        "(defpackage #:foo (:use #:cl #:alexandria))")))
       (ok (= (length violations) 1))
       (ok (search "ALEXANDRIA" (string-upcase (violation:violation-message (first violations)))))
-      ;; CL should not appear in the violation message as a problem
-      (ok (not (search "CL," (string-upcase (violation:violation-message (first violations))))))))
+      ;; CL should not appear in the violation message as a blamed package
+      (ok (not (search "CL" (string-upcase (violation:violation-message (first violations))))))))
 
   (testing "Two :use clauses with non-exempt packages emit TWO violations"
     (let ((violations (check-no-package-use
