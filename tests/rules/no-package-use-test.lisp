@@ -81,8 +81,9 @@
                        "(defpackage #:foo (:use #:cl #:alexandria))")))
       (ok (= (length violations) 1))
       (ok (search "ALEXANDRIA" (string-upcase (violation:violation-message (first violations)))))
-      ;; CL should not appear in the violation message as a blamed package
-      (ok (not (search "CL" (string-upcase (violation:violation-message (first violations))))))))
+      ;; Exact message check: CL is exempt so only ALEXANDRIA should be named
+      (ok (equal (violation:violation-message (first violations))
+                 "Avoid :use of alexandria; prefer :import-from or :local-nicknames"))))
 
   (testing "Two :use clauses with non-exempt packages emit TWO violations"
     (let ((violations (check-no-package-use
