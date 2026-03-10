@@ -2,6 +2,7 @@
   (:use #:cl #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules/forms/metrics)
+   (#:all-rules #:mallet/rules)
    (#:base #:mallet/rules/base)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
@@ -833,6 +834,13 @@
                             :include-docstrings t
                             :min-lines 1)))
       (ok (= 1 (length violations-with))))))
+
+(deftest comment-ratio-rule-via-make-rule
+  (testing "comment-ratio rule can be created via make-rule factory"
+    (let ((rule (all-rules:make-rule :comment-ratio :max 0.2d0 :min-lines 5)))
+      (ok (typep rule 'rules:comment-ratio-rule))
+      (ok (= 0.2d0 (rules::max-ratio rule)))
+      (ok (= 5 (rules::rule-min-lines rule))))))
 
 (deftest complexity-string-case-modified
   (testing "STRING-CASE with modified variant counts as +1 total"

@@ -100,6 +100,9 @@ Severity defaults are defined in each rule class's :default-initargs."
       (:cyclomatic-complexity
        (apply #'make-instance 'cyclomatic-complexity-rule
               initargs))
+      (:comment-ratio
+       (apply #'make-instance 'comment-ratio-rule
+              initargs))
 
       (otherwise
        (error "Unknown rule name: ~A" name)))))

@@ -321,6 +321,12 @@
    Returns a plist (:ratio float :comment-lines integer :code-lines integer)
    or NIL if total non-blank lines (comment + code) is below MIN-LINES threshold.
 
+   Note on MIN-LINES: the threshold applies to (comment-lines + code-lines).
+   Docstring lines are excluded from this count when INCLUDE-DOCSTRINGS is nil
+   (the default). A function with 2 code lines and 1 docstring line has a total
+   of 2, which is below the default MIN-LINES of 3, so NIL is returned.
+   Set MIN-LINES accordingly, or set INCLUDE-DOCSTRINGS t to count docstrings.
+
    Note: start-line is file-relative (from position-map).
          source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
   (declare (ignore start-column))
@@ -500,6 +506,10 @@
 (defmethod base:check-form-recursive ((rule comment-ratio-rule) expr file line column
                                       &optional function-name position-map)
   (declare (ignore function-name))
+
+  (unless (rule-source-lines-for-ratio rule)
+    (error "comment-ratio-rule: source-lines not initialized. ~
+            Call check-form instead of check-form-recursive directly."))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq))

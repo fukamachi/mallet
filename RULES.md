@@ -510,7 +510,7 @@ Functions should not have too many comments relative to code. Useful for catchin
 
 **Options**:
 - `:max` (default: 0.3) - Maximum allowed comment ratio (0.0–1.0)
-- `:min-lines` (default: 3) - Minimum non-blank lines before the rule applies (avoids noise on tiny functions)
+- `:min-lines` (default: 3) - Minimum qualifying lines before the rule applies (avoids noise on tiny functions). Counts comment and code lines only; docstring lines are excluded from this count unless `:include-docstrings t` is set.
 - `:include-docstrings` (default: `nil`) - Whether to count docstring lines as comments
 
 ```lisp
@@ -543,7 +543,7 @@ Where:
 - **blank lines**: excluded from both numerator and denominator
 
 Notes:
-- Functions with fewer non-blank lines than `:min-lines` are skipped
+- Functions with fewer qualifying lines (comment + code) than `:min-lines` are skipped. Docstring lines are not counted toward the threshold unless `:include-docstrings t` is set.
 - Nested `flet`/`labels` functions are counted separately
 
 **Default**: disabled
