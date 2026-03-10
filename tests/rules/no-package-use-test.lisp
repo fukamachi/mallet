@@ -102,4 +102,5 @@
       (ok (= (length violations) 1))
       ;; :use clause is on line 2, column 8 (0-based offset within the line)
       (ok (= 2 (violation:violation-line (first violations))))
+      (ok (= 8 (violation:violation-column (first violations))))
       (ok (equal #p"test.lisp" (violation:violation-file (first violations)))))))
