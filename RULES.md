@@ -37,6 +37,7 @@ Rules are organized by severity level. See README.md for severity meanings.
 - [METRICS](#metrics)
   - [`:function-length`](#function-length) - Function exceeds maximum line count
   - [`:cyclomatic-complexity`](#cyclomatic-complexity) - Function has high cyclomatic complexity
+  - [`:comment-ratio`](#comment-ratio) - Function has too many comments relative to code
 
 ## ERROR
 
@@ -569,5 +570,49 @@ Functions should not exceed maximum cyclomatic complexity.
 - **Third-party case-like macros**: Also +1 total (`destructuring-case`, `match`, `string-case`, etc.)
 
 Nested `flet`/`labels` functions are counted separately.
+
+**Default**: disabled
+
+### `:comment-ratio`
+
+Functions should not have too many comments relative to code. Useful for catching AI-generated code patterns where functions are padded with excessive inline commentary.
+
+**Options**:
+- `:max` (default: 0.3) - Maximum allowed comment ratio (0.0–1.0)
+- `:min-lines` (default: 3) - Minimum qualifying lines before the rule applies (avoids noise on tiny functions). Counts comment and code lines only; docstring lines are excluded from this count unless `:include-docstrings t` is set.
+- `:include-docstrings` (default: `nil`) - Whether to count docstring lines as comments
+
+```lisp
+(:comment-ratio :max 0.3)
+(:comment-ratio :max 0.2 :min-lines 5)
+(:comment-ratio :max 0.3 :include-docstrings t)
+```
+
+```lisp
+;; Bad: comment ratio of 0.71 (5 comment lines out of 7 non-blank lines)
+(defun process (x)
+  ;; Check the input
+  ;; Validate x first
+  ;; Make sure x is positive
+  ;; Now do the computation
+  ;; Return the result
+  (abs x))
+
+;; Good: comment ratio of 0.33 (1 comment line out of 3 non-blank lines)
+(defun process (x)
+  ;; Ensure positive result
+  (abs x))
+```
+
+**Ratio formula**: `comment-lines / (comment-lines + code-lines)`
+
+Where:
+- **comment-lines**: line comments (`;`), block comment lines (`#| ... |#`), and optionally docstring lines when `:include-docstrings t`
+- **code-lines**: all other non-blank, non-docstring lines (docstring lines are excluded by default; set `:include-docstrings t` to count them as comment-lines instead)
+- **blank lines**: excluded from both numerator and denominator
+
+Notes:
+- Functions with fewer qualifying lines (comment + code) than `:min-lines` are skipped. Docstring lines are not counted toward the threshold unless `:include-docstrings t` is set.
+- Nested `flet`/`labels` functions are counted separately
 
 **Default**: disabled
