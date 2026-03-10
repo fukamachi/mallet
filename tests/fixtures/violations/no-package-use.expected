@@ -1,0 +1,4 @@
+# Expected violations for no-package-use.lisp
+# Format: line:column rule-name severity
+
+5:13 no-package-use warning

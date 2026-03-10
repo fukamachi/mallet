@@ -6,7 +6,8 @@
    (#:parser #:mallet/parser))
   (:export #:interned-package-symbol-rule
            #:unused-local-nicknames-rule
-           #:unused-imported-symbols-rule))
+           #:unused-imported-symbols-rule
+           #:no-package-use-rule))
 (in-package #:mallet/rules/forms/package)
 
 (defun defpackage-form-p (expr)
@@ -619,6 +620,61 @@ Preserves comments, formatting, and structural close parens."
                   :type :delete-lines
                   :start-line violation-line
                   :end-line violation-line)))))))))
+
+;;; No Package Use Rule
+
+(defclass no-package-use-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :no-package-use
+   :description "Using :use in defpackage imports all exported symbols, making it hard to tell which symbols are actually used and risking symbol conflicts when the used package exports new symbols."
+   :severity :warning
+   :type :form))
+
+(defparameter *exempt-packages*
+  '("CL" "COMMON-LISP" "COALTON" "COALTON-PRELUDE")
+  "Package names that are exempt from the no-package-use rule.")
+
+(defmethod base:check-form ((rule no-package-use-rule) form file)
+  "Detect :use of non-exempt packages in defpackage forms.
+Emits one violation per :use clause listing all non-exempt packages found."
+  (let ((expr (parser:form-expr form)))
+    (when (defpackage-form-p expr)
+      (let ((position-map (parser:form-position-map form))
+            (violations '()))
+        (dolist (clause (cddr expr))
+          (when (and (consp clause)
+                     (stringp (first clause))
+                     (string-equal (first clause) ":use"))
+            (let ((non-exempt
+                    (loop for pkg in (rest clause)
+                          for pkg-name = (string-upcase (base:symbol-name-from-string pkg))
+                          unless (member pkg-name *exempt-packages* :test #'string=)
+                            collect pkg)))
+              (when non-exempt
+                ;; Position at the first non-exempt package in the clause.
+                ;; first-pkg is the original expression object from the parsed AST
+                ;; (not a derived string), so the gethash identity lookup in
+                ;; find-position is valid — same pattern as unused-local-nicknames-rule.
+                (let ((first-pkg (first non-exempt)))
+                  (multiple-value-bind (line column)
+                      (if (and position-map first-pkg)
+                          (parser:find-position first-pkg position-map
+                                                (parser:form-line form)
+                                                (parser:form-column form))
+                          (values (parser:form-line form) (parser:form-column form)))
+                    (push (make-instance 'violation:violation
+                                         :rule (base:rule-name rule)
+                                         :file file
+                                         :line line
+                                         :column column
+                                         :end-line line
+                                         :end-column (1+ column)
+                                         :message (format nil "Avoid :use of ~{~A~^, ~}; prefer :import-from or :local-nicknames"
+                                                          (mapcar #'base:symbol-name-from-string non-exempt))
+                                         :severity (base:rule-severity rule))
+                          violations)))))))
+        (nreverse violations)))))
 
 ;;; Helper Functions
 

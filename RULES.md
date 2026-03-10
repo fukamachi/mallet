@@ -15,6 +15,7 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
   - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
   - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
+  - [`:no-package-use`](#no-package-use) - Use of `:use` in `defpackage` or `uiop:define-package`
 - [CONVENTION](#convention)
   - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
   - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
@@ -175,6 +176,27 @@ Detected functions:
 - `eval-when` bodies are only checked when `:execute` is in the situation list (i.e., the body runs at load/execute time); `eval-when (:compile-toplevel)` bodies are skipped
 
 **Default**: disabled (`:warning` severity; included in `:all` preset)
+
+### `:no-package-use`
+
+Avoid using `:use` in `cl:defpackage` or `uiop:define-package`. The `:use` option imports all exported symbols from the named package into the current package namespace, which makes it hard to tell which symbols are actually used and creates compatibility risks: if the used package later exports a new symbol that conflicts with one in your package, it will raise an error.
+
+The packages `#:cl`, `#:common-lisp`, `#:coalton`, and `#:coalton-prelude` are exempt from this rule as they are conventional base packages.
+
+```lisp
+;; Bad
+(defpackage #:my-package
+  (:use #:cl #:alexandria)   ; imports all of alexandria's exports
+  (:export #:my-function))
+
+;; Good: import only what you need
+(defpackage #:my-package
+  (:use #:cl)
+  (:import-from #:alexandria #:when-let #:if-let)
+  (:export #:my-function))
+```
+
+**Default**: enabled
 
 ## CONVENTION
 
