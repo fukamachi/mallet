@@ -520,25 +520,26 @@ Functions should not have too many comments relative to code. Useful for catchin
 ```
 
 ```lisp
-;; Bad: comment ratio of 0.60 (3 comment lines out of 5 non-blank lines)
-(defun process-data (data)
-  ;; Check if data is valid
-  ;; We need to validate before processing
-  ;; Make sure it's not nil
-  (when data
-    (transform data)))
+;; Bad: comment ratio of 0.71 (5 comment lines out of 7 non-blank lines)
+(defun process (x)
+  ;; Check the input
+  ;; Validate x first
+  ;; Make sure x is positive
+  ;; Now do the computation
+  ;; Return the result
+  (abs x))
 
-;; Good: minimal, purposeful commenting
-(defun process-data (data)
-  (when data
-    (transform data)))
+;; Good: comment ratio of 0.33 (1 comment line out of 3 non-blank lines)
+(defun process (x)
+  ;; Ensure positive result
+  (abs x))
 ```
 
 **Ratio formula**: `comment-lines / (comment-lines + code-lines)`
 
 Where:
 - **comment-lines**: line comments (`;`), block comment lines (`#| ... |#`), and optionally docstring lines when `:include-docstrings t`
-- **code-lines**: all other non-blank lines, excluding the function definition line itself (`defun`, `defmethod`, `defmacro`)
+- **code-lines**: all other non-blank lines
 - **blank lines**: excluded from both numerator and denominator
 
 Notes:
