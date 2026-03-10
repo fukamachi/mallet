@@ -34,6 +34,7 @@ Rules are organized by severity level. See README.md for severity meanings.
 - [METRICS](#metrics)
   - [`:function-length`](#function-length) - Function exceeds maximum line count
   - [`:cyclomatic-complexity`](#cyclomatic-complexity) - Function has high cyclomatic complexity
+  - [`:comment-ratio`](#comment-ratio) - Function has too many comments relative to code
 
 ## ERROR
 
@@ -500,5 +501,48 @@ Functions should not exceed maximum cyclomatic complexity.
 - **Third-party case-like macros**: Also +1 total (`destructuring-case`, `match`, `string-case`, etc.)
 
 Nested `flet`/`labels` functions are counted separately.
+
+**Default**: disabled
+
+### `:comment-ratio`
+
+Functions should not have too many comments relative to code. Useful for catching AI-generated code patterns where functions are padded with excessive inline commentary.
+
+**Options**:
+- `:max` (default: 0.3) - Maximum allowed comment ratio (0.0–1.0)
+- `:min-lines` (default: 3) - Minimum non-blank lines before the rule applies (avoids noise on tiny functions)
+- `:include-docstrings` (default: `nil`) - Whether to count docstring lines as comments
+
+```lisp
+(:comment-ratio :max 0.3)
+(:comment-ratio :max 0.2 :min-lines 5)
+(:comment-ratio :max 0.3 :include-docstrings t)
+```
+
+```lisp
+;; Bad: comment ratio of 0.60 (3 comment lines out of 5 non-blank lines)
+(defun process-data (data)
+  ;; Check if data is valid
+  ;; We need to validate before processing
+  ;; Make sure it's not nil
+  (when data
+    (transform data)))
+
+;; Good: minimal, purposeful commenting
+(defun process-data (data)
+  (when data
+    (transform data)))
+```
+
+**Ratio formula**: `comment-lines / (comment-lines + code-lines)`
+
+Where:
+- **comment-lines**: line comments (`;`), block comment lines (`#| ... |#`), and optionally docstring lines when `:include-docstrings t`
+- **code-lines**: all other non-blank lines, excluding the function definition line itself (`defun`, `defmethod`, `defmacro`)
+- **blank lines**: excluded from both numerator and denominator
+
+Notes:
+- Functions with fewer non-blank lines than `:min-lines` are skipped
+- Nested `flet`/`labels` functions are counted separately
 
 **Default**: disabled
