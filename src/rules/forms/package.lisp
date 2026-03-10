@@ -627,7 +627,7 @@ Preserves comments, formatting, and structural close parens."
   ()
   (:default-initargs
    :name :no-package-use
-   :description "Avoid using :use in defpackage; prefer :import-from or :local-nicknames"
+   :description "Using :use in defpackage imports all exported symbols, making it hard to tell which symbols are actually used and risking symbol conflicts when the used package exports new symbols."
    :severity :warning
    :type :form))
 
@@ -636,7 +636,8 @@ Preserves comments, formatting, and structural close parens."
   "Package names that are exempt from the no-package-use rule.")
 
 (defmethod base:check-form ((rule no-package-use-rule) form file)
-  "Detect :use of non-exempt packages in defpackage forms."
+  "Detect :use of non-exempt packages in defpackage forms.
+Emits one violation per :use clause listing all non-exempt packages found."
   (let ((expr (parser:form-expr form)))
     (when (defpackage-form-p expr)
       (let ((position-map (parser:form-position-map form))
@@ -645,12 +646,17 @@ Preserves comments, formatting, and structural close parens."
           (when (and (consp clause)
                      (stringp (first clause))
                      (string-equal (first clause) ":use"))
-            (dolist (pkg (rest clause))
-              (let ((pkg-name (string-upcase (base:symbol-name-from-string pkg))))
-                (unless (member pkg-name *exempt-packages* :test #'string=)
+            (let ((non-exempt
+                    (loop for pkg in (rest clause)
+                          for pkg-name = (string-upcase (base:symbol-name-from-string pkg))
+                          unless (member pkg-name *exempt-packages* :test #'string=)
+                            collect pkg)))
+              (when non-exempt
+                ;; Position at the first non-exempt package in the clause
+                (let ((first-pkg (first non-exempt)))
                   (multiple-value-bind (line column)
-                      (if (and position-map pkg)
-                          (parser:find-position pkg position-map
+                      (if (and position-map first-pkg)
+                          (parser:find-position first-pkg position-map
                                                 (parser:form-line form)
                                                 (parser:form-column form))
                           (values (parser:form-line form) (parser:form-column form)))
@@ -661,8 +667,8 @@ Preserves comments, formatting, and structural close parens."
                                          :column column
                                          :end-line line
                                          :end-column (1+ column)
-                                         :message (format nil "Avoid :use of package ~A; prefer :import-from or :local-nicknames"
-                                                          pkg)
+                                         :message (format nil "Avoid :use of ~{~A~^, ~}; prefer :import-from or :local-nicknames"
+                                                          (mapcar #'base:symbol-name-from-string non-exempt))
                                          :severity (base:rule-severity rule))
                           violations)))))))
         (nreverse violations)))))

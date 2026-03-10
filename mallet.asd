@@ -116,6 +116,7 @@
      (:file "metrics-test")
      (:file "bare-float-literal-test")
      (:file "eval-usage-test")
-     (:file "runtime-intern-test"))))
+     (:file "runtime-intern-test")
+     (:file "no-package-use-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
