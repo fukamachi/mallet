@@ -14,6 +14,7 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
   - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
   - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
+  - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
 - [CONVENTION](#convention)
   - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
   - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
@@ -147,6 +148,33 @@ Avoid using `cl:eval` at runtime. Runtime evaluation of arbitrary code is a comm
 ```
 
 **Default**: enabled
+
+### `:runtime-intern`
+
+Avoid using symbol-interning functions at runtime. Runtime interning causes symbol table side effects, makes code harder to reason about, and is often a sign that a macro or compile-time mechanism should be used instead. This rule detects direct calls as well as indirect invocation via `funcall` and `apply`.
+
+Detected functions:
+- `cl:intern`, `cl:unintern`
+- `uiop:intern*`
+- `alexandria:symbolicate`, `alexandria:format-symbol`, `alexandria:make-keyword`
+
+```lisp
+;; Bad
+(intern name :my-package)
+(alexandria:symbolicate prefix "-" suffix)
+(funcall #'alexandria:make-keyword name)
+(apply #'cl:intern args)
+
+;; Good: use compile-time macros or static symbols instead
+(defmacro def-accessor (name)
+  `(defun ,(alexandria:symbolicate name '-get) () ...))
+```
+
+**Exclusions**:
+- `defmacro` bodies are skipped entirely (macro expansion code is not runtime)
+- `eval-when` bodies are only checked when `:execute` is in the situation list (i.e., the body runs at load/execute time); `eval-when (:compile-toplevel)` bodies are skipped
+
+**Default**: disabled (`:warning` severity; included in `:all` preset)
 
 ## CONVENTION
 

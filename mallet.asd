@@ -56,7 +56,8 @@
        (:file "lambda-list")
        (:file "asdf")
        (:file "metrics")
-       (:file "eval-usage")))))
+       (:file "eval-usage")
+       (:file "runtime-intern")))))
    (:file "rules")
 
    ;; Configuration
@@ -114,6 +115,7 @@
      (:file "with-macros-test")
      (:file "metrics-test")
      (:file "bare-float-literal-test")
-     (:file "eval-usage-test"))))
+     (:file "eval-usage-test")
+     (:file "runtime-intern-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
