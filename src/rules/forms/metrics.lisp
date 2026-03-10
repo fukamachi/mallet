@@ -642,6 +642,9 @@
    - A string containing a single function definition
    - A parser:form object
 
+   FILE is the pathname used for parser error reporting; only relevant when
+   SOURCE-CODE is a string (ignored when SOURCE-CODE is a parser:form).
+
    Returns a plist (:ratio float :comment-lines integer :code-lines integer)
    or NIL if code-lines is below MIN-LINES threshold.
 
