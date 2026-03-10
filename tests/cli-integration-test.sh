@@ -242,6 +242,15 @@ else
     test_fail "Expected exit code 2 (errors), got $EXIT_CODE"
 fi
 
+# Metrics rules - disabled-by-default with --enable flag
+test_start "Comment-ratio rule detects violations when enabled via --enable flag"
+OUTPUT=$("$CLI" --enable comment-ratio "$VIOLATIONS_DIR/comment-ratio.lisp" 2>&1 | grep -c "comment-ratio" || true)
+if [ "$OUTPUT" -ge 1 ]; then
+    test_pass
+else
+    test_fail "Expected comment-ratio violations when enabled via --enable flag"
+fi
+
 # Summary
 echo ""
 echo "========================================="
