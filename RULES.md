@@ -13,6 +13,7 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:unused-local-functions`](#unused-local-functions) - Local functions that are never called
   - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
   - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
+  - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
 - [CONVENTION](#convention)
   - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
   - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
@@ -125,6 +126,24 @@ Don't mix `&optional` and `&key` in lambda lists.
 ;; Good: use only one
 (defun foo (x &key y z)
   ...)
+```
+
+**Default**: enabled
+
+### `:eval-usage`
+
+Avoid using `cl:eval` at runtime. Runtime evaluation of arbitrary code is a common source of security vulnerabilities (code injection) and makes programs hard to reason about. This rule detects direct calls as well as indirect invocation via `funcall` and `apply`.
+
+```lisp
+;; Bad
+(eval user-input)
+(funcall #'eval expr)
+(apply #'eval forms)
+
+;; Good: use compile-time macros or explicit dispatch instead
+(case action
+  (:add (+ x y))
+  (:sub (- x y)))
 ```
 
 **Default**: enabled

@@ -323,7 +323,8 @@ Style preferences are disabled to keep output clean."
             :unused-imported-symbols
             :asdf-component-strings
             :mixed-optional-and-key
-            :if-without-else))
+            :if-without-else
+            :eval-usage))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
             :line-length
@@ -350,6 +351,7 @@ Useful for exploration and discovering what rules exist."
             :unused-local-functions
             :missing-otherwise
             :mixed-optional-and-key
+            :eval-usage
             ;; INFO: Code quality suggestions
             :bare-float-literal
             :unused-local-nicknames
