@@ -11,6 +11,7 @@
            ;; Standalone metric calculation functions
            #:calculate-function-length
            #:calculate-cyclomatic-complexity
+           #:calculate-comment-ratio
            ;; Convenience functions for REPL use
            #:analyze-function-metrics))
 (in-package #:mallet/rules/forms/metrics)
@@ -631,6 +632,51 @@
        (calculate-function-length-from-source
         expr position-map source-lines start-line start-column)))))
 
+;;; Public API for comment-ratio calculation
+
+(defun calculate-comment-ratio (source-code &key include-docstrings (min-lines 3)
+                                                 (file #P"string"))
+  "Calculate the comment ratio for SOURCE-CODE.
+
+   SOURCE-CODE can be:
+   - A string containing a single function definition
+   - A parser:form object
+
+   Returns a plist (:ratio float :comment-lines integer :code-lines integer)
+   or NIL if code-lines is below MIN-LINES threshold.
+
+   Example:
+     (calculate-comment-ratio
+       \"(defun foo (x)
+          ;; a comment
+          (+ x 1))\")
+     => (:ratio 0.33d0 :comment-lines 1 :code-lines 2)"
+  (etypecase source-code
+    (string
+     (let* ((forms (parser:parse-forms source-code file))
+            (form (first forms)))
+       (when form
+         (let* ((expr (parser:form-expr form))
+                (position-map (parser:form-position-map form))
+                (source-lines (parse-source-to-lines source-code))
+                (start-line (parser:form-line form))
+                (start-column (parser:form-column form)))
+           (calculate-comment-ratio-from-source
+            expr position-map source-lines start-line start-column
+            :include-docstrings include-docstrings
+            :min-lines min-lines)))))
+    (parser:form
+     (let* ((expr (parser:form-expr source-code))
+            (position-map (parser:form-position-map source-code))
+            (source (parser:form-source source-code))
+            (source-lines (parse-source-to-lines source))
+            (start-line (parser:form-line source-code))
+            (start-column (parser:form-column source-code)))
+       (calculate-comment-ratio-from-source
+        expr position-map source-lines start-line start-column
+        :include-docstrings include-docstrings
+        :min-lines min-lines)))))
+
 ;;; Cyclomatic-complexity rule
 
 (defclass cyclomatic-complexity-rule (base:rule)
@@ -694,18 +740,26 @@
        ;; Raw expression
        (calculate-complexity source-code visited variant)))))
 
-(defun analyze-function-metrics (source-code &key (variant :standard) (file #P"string"))
-  "Analyze both function length and cyclomatic complexity for SOURCE-CODE.
+(defun analyze-function-metrics (source-code &key (variant :standard)
+                                                   include-docstrings
+                                                   (min-lines 3)
+                                                   (file #P"string"))
+  "Analyze function length, cyclomatic complexity, and comment ratio for SOURCE-CODE.
 
    Returns a plist with:
    - :length - Number of code lines
    - :complexity - Cyclomatic complexity
+   - :comment-ratio - Comment ratio result plist or NIL
 
    Example:
      (analyze-function-metrics \"(defun foo (x) (if x (print 1) (print 2)))\")
-     => (:length 3 :complexity 2)"
+     => (:length 3 :complexity 2 :comment-ratio (:ratio 0.0d0 ...))"
   (list :length (calculate-function-length source-code :file file)
-        :complexity (calculate-cyclomatic-complexity source-code :variant variant :file file)))
+        :complexity (calculate-cyclomatic-complexity source-code :variant variant :file file)
+        :comment-ratio (calculate-comment-ratio source-code
+                                                :include-docstrings include-docstrings
+                                                :min-lines min-lines
+                                                :file file)))
 
 (defmethod base:check-form-recursive ((rule cyclomatic-complexity-rule) expr file line column
                                       &optional function-name position-map)

@@ -851,3 +851,77 @@
       ;; Complexity = 1 (base) + 1 (string-case) = 2
       (ok (= 1 (length violations)))
       (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+
+;;; calculate-comment-ratio public API tests
+
+(deftest comment-ratio-api-string-input
+  (testing "calculate-comment-ratio accepts string input"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x)
+  ;; comment one
+  ;; comment two
+  (+ x 1))"
+                   :min-lines 1)))
+      (ok (not (null result)))
+      (ok (= 2 (getf result :comment-lines)))
+      (ok (= 2 (getf result :code-lines)))
+      (ok (< 0.49d0 (getf result :ratio) 0.51d0)))))
+
+(deftest comment-ratio-api-form-input
+  (testing "calculate-comment-ratio accepts parser:form input"
+    (let* ((code "(defun foo (x)
+  ;; a comment
+  ;; another comment
+  (+ x 1))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (result (rules:calculate-comment-ratio form :min-lines 1)))
+      (ok (not (null result)))
+      (ok (= 2 (getf result :comment-lines)))
+      (ok (= 2 (getf result :code-lines))))))
+
+(deftest comment-ratio-api-no-comments
+  (testing "calculate-comment-ratio returns zero ratio for code without comments"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x)
+  (let ((y (* x 2)))
+    (+ y 1)))"
+                   :min-lines 1)))
+      (ok (not (null result)))
+      (ok (= 0 (getf result :comment-lines)))
+      (ok (< (getf result :ratio) 0.01d0)))))
+
+(deftest comment-ratio-api-below-min-lines
+  (testing "calculate-comment-ratio returns NIL when below min-lines"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x) (+ x 1))"
+                   :min-lines 5)))
+      (ok (null result)))))
+
+(deftest comment-ratio-api-include-docstrings
+  (testing "calculate-comment-ratio counts docstrings when include-docstrings is true"
+    (let* ((code "(defun foo (x)
+  \"A docstring.\"
+  ;; a comment
+  (+ x 1))")
+           (without (rules:calculate-comment-ratio code :include-docstrings nil :min-lines 1))
+           (with (rules:calculate-comment-ratio code :include-docstrings t :min-lines 1)))
+      ;; Without docstrings: 1 comment, 2 code (defun + body), docstring not counted as comment
+      (ok (not (null without)))
+      (ok (= 1 (getf without :comment-lines)))
+      ;; With docstrings: docstring counts as comment too
+      (ok (not (null with)))
+      (ok (< (getf without :comment-lines) (getf with :comment-lines))))))
+
+(deftest analyze-metrics-includes-comment-ratio
+  (testing "analyze-function-metrics includes :comment-ratio key"
+    (let ((result (rules:analyze-function-metrics
+                   "(defun foo (x)
+  ;; comment
+  (+ x 1))"
+                   :min-lines 1)))
+      (ok (not (null (getf result :length))))
+      (ok (not (null (getf result :complexity))))
+      (ok (not (null (getf result :comment-ratio))))
+      (let ((cr (getf result :comment-ratio)))
+        (ok (= 1 (getf cr :comment-lines)))))))
