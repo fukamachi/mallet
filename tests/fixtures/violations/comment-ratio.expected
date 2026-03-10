@@ -1,0 +1,3 @@
+# Expected violations for comment-ratio.lisp
+
+13:0 comment-ratio metrics

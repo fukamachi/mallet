@@ -862,6 +862,68 @@
 
 ;;; calculate-comment-ratio public API tests
 
+(deftest comment-ratio-rule-labels-inner
+  (testing "labels inner functions checked independently"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun outer (x)
+  (labels ((helper (y)
+             ;; lots of comments
+             ;; more comments
+             ;; even more
+             (print y)))
+    (helper x)))"
+                       :max 0.3d0
+                       :min-lines 1)))
+      ;; inner function has 3 comments out of 4+1 non-blank = 0.60 > 0.3
+      (ok (<= 1 (length violations)))
+      (ok (some (lambda (v) (search "helper" (violation:violation-message v)))
+                violations)))))
+
+(deftest comment-ratio-rule-severity
+  (testing "comment-ratio rule has :metrics severity"
+    (let ((rule (make-instance 'rules:comment-ratio-rule)))
+      (ok (eq :metrics (base:rule-severity rule))))))
+
+(deftest comment-ratio-rule-disabled-by-default
+  (testing "comment-ratio is not in default config"
+    (let* ((config (mallet/config:get-built-in-config :default))
+           (rule-names (mapcar #'base:rule-name (mallet/config:config-rules config))))
+      (ok (not (member :comment-ratio rule-names))))))
+
+(deftest comment-ratio-rule-in-all-preset
+  (testing "comment-ratio is in :all preset"
+    (let* ((config (mallet/config:get-built-in-config :all))
+           (rule-names (mapcar #'base:rule-name (mallet/config:config-rules config))))
+      (ok (member :comment-ratio rule-names)))))
+
+(deftest comment-ratio-blank-lines-excluded
+  (testing "Blank lines do not affect ratio calculation"
+    (let ((result-with-blanks (test-comment-ratio
+                                "(defun foo (x)
+  ;; comment
+
+  (print x)
+
+  (+ x 1)
+  (* x 2))")))
+      (ok (not (null result-with-blanks)))
+      ;; 1 comment, 4 code lines. Blank lines excluded.
+      (ok (= 1 (getf result-with-blanks :comment-lines)))
+      (ok (= 4 (getf result-with-blanks :code-lines))))))
+
+(deftest comment-ratio-api-returns-float
+  (testing "calculate-comment-ratio returns a float, not a plist"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x)
+  ;; comment
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                   :min-lines 1)))
+      (ok (not (null result)))
+      (ok (typep result 'double-float))
+      (ok (not (consp result))))))
+
 (deftest comment-ratio-api-string-input
   (testing "calculate-comment-ratio accepts string input"
     (let ((result (rules:calculate-comment-ratio

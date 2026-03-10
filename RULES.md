@@ -539,7 +539,7 @@ Functions should not have too many comments relative to code. Useful for catchin
 
 Where:
 - **comment-lines**: line comments (`;`), block comment lines (`#| ... |#`), and optionally docstring lines when `:include-docstrings t`
-- **code-lines**: all other non-blank lines
+- **code-lines**: all other non-blank, non-docstring lines (docstring lines are excluded by default; set `:include-docstrings t` to count them as comment-lines instead)
 - **blank lines**: excluded from both numerator and denominator
 
 Notes:
