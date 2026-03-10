@@ -24,8 +24,8 @@
 ;;; may differ from its nickname — e.g. UIOP's actual package is "UIOP/DRIVER".
 
 (defparameter *prohibited-intern-functions*
-  '((:name "INTERN"          :packages ("COMMON-LISP")                    :display "cl:intern")
-    (:name "UNINTERN"        :packages ("COMMON-LISP")                    :display "cl:unintern")
+  '((:name "INTERN"          :packages ("COMMON-LISP" "CL")               :display "cl:intern")
+    (:name "UNINTERN"        :packages ("COMMON-LISP" "CL")               :display "cl:unintern")
     (:name "INTERN*"         :packages ("UIOP" "UIOP/DRIVER" "UIOP/UTILITY") :display "uiop:intern*")
     (:name "SYMBOLICATE"     :packages ("ALEXANDRIA")                     :display "alexandria:symbolicate")
     (:name "FORMAT-SYMBOL"   :packages ("ALEXANDRIA")                     :display "alexandria:format-symbol")
@@ -129,12 +129,12 @@ CONTEXT is a PACKAGE-CONTEXT built by BUILD-PACKAGE-CONTEXT.
 Resolution order:
 1. If SYMBOL-STRING has a package prefix that is a local nickname in CONTEXT,
    resolve to the canonical package and check against the registry.
-2. If SYMBOL-STRING has a package prefix that is NOT a local nickname,
-   delegate to PROHIBITED-INTERN-FUNCTION-P (handles known canonical packages).
-3. If SYMBOL-STRING has no package prefix and the symbol name appears in the
-   import-from mappings of CONTEXT, check with the mapped package.
-4. If SYMBOL-STRING has no package prefix and is not in imports, fall back
-   to PROHIBITED-INTERN-FUNCTION-P (name-only conservative match)."
+2. If SYMBOL-STRING has the CURRENT: prefix (parser's current-package marker),
+   check import-from mappings; flag only if explicitly imported from a prohibited package.
+   No match if the name is not in imports (avoids false positives for user-defined fns).
+3. If SYMBOL-STRING has any other package prefix, delegate to PROHIBITED-INTERN-FUNCTION-P
+   (handles known canonical packages like COMMON-LISP:, UIOP:, ALEXANDRIA:).
+4. If SYMBOL-STRING has no package prefix, check import-from mappings only; NIL if not imported."
   (unless (stringp symbol-string)
     (return-from resolve-intern-usage nil))
   (let* ((name    (string-upcase (utils:symbol-name-from-string symbol-string)))
@@ -144,30 +144,26 @@ Resolution order:
         (let* ((prefix-upper (string-upcase prefix))
                (canonical-pkg (gethash prefix-upper
                                        (package-context-local-nicknames context))))
-            (cond
+          (cond
             (canonical-pkg
              ;; Prefix is a local nickname → resolve to canonical package
              (prohibited-intern-function-p
               (concatenate 'string canonical-pkg ":" name)))
-            ;; "CURRENT:" prefix means the current package — treat as unqualified
+            ;; "CURRENT:" prefix means the current package — only flag if explicitly imported
             ((string= prefix-upper "CURRENT")
              (let ((imported-pkg (gethash name (package-context-imported-symbols context))))
-               (if imported-pkg
-                   (prohibited-intern-function-p
-                    (concatenate 'string imported-pkg ":" name))
-                   (prohibited-intern-function-p name))))
+               (when imported-pkg
+                 (prohibited-intern-function-p
+                  (concatenate 'string imported-pkg ":" name)))))
             (t
              ;; Not a nickname → try direct check (handles COMMON-LISP:, UIOP:, etc.)
              (prohibited-intern-function-p symbol-string))))
-        ;; No package prefix
+        ;; No package prefix — only flag if explicitly imported
         (let ((imported-pkg (gethash name
                                      (package-context-imported-symbols context))))
-          (if imported-pkg
-              ;; Symbol was explicitly imported → check with known source package
-              (prohibited-intern-function-p
-               (concatenate 'string imported-pkg ":" name))
-              ;; Not in imports → name-only conservative fallback
-              (prohibited-intern-function-p symbol-string))))))
+          (when imported-pkg
+            (prohibited-intern-function-p
+             (concatenate 'string imported-pkg ":" name)))))))
 
 ;;; Intern-Usage Rule Class
 
@@ -324,4 +320,3 @@ Handles: bare symbol string, #'func (FUNCTION form), 'func (QUOTE form)."
       (check-expr expr line column))
 
     violations))
-

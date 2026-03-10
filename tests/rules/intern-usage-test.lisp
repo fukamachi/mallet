@@ -146,15 +146,23 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
     (let ((ctx (make-test-context :imports '(("INTERN" . "MY-PACKAGE")))))
       (ok (null (intern-usage:resolve-intern-usage "intern" ctx)))))
 
-  (testing "Unqualified symbol not in imports falls back to name-only match"
+  (testing "Unqualified symbol not in imports returns NIL (no false positives)"
     (let ((ctx (make-test-context)))
-      ;; intern is a CL symbol, name-only still matches
-      (ok (string= (intern-usage:resolve-intern-usage "intern" ctx)
-                   "cl:intern"))))
+      ;; Without an explicit import, unqualified symbols are not flagged
+      (ok (null (intern-usage:resolve-intern-usage "intern" ctx)))))
 
   (testing "Fully qualified symbol bypasses import lookup"
     (let ((ctx (make-test-context)))
       (ok (string= (intern-usage:resolve-intern-usage "COMMON-LISP:intern" ctx)
+                   "cl:intern"))))
+
+  (testing "CURRENT-prefixed symbol not in imports returns NIL"
+    (let ((ctx (make-test-context)))
+      (ok (null (intern-usage:resolve-intern-usage "CURRENT:intern" ctx)))))
+
+  (testing "CURRENT-prefixed symbol in imports matches"
+    (let ((ctx (make-test-context :imports '(("INTERN" . "COMMON-LISP")))))
+      (ok (string= (intern-usage:resolve-intern-usage "CURRENT:intern" ctx)
                    "cl:intern")))))
 
 (deftest build-package-context-from-forms
@@ -257,13 +265,18 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
   (testing "No intern: intern in a symbol name but not a call"
     (ok (null (check-intern "(defun internalize (x) x)"))))
 
+  (testing "No intern: bare (intern ...) without import context — no false positive"
+    ;; The parser produces CURRENT:intern, but without an import-from mapping
+    ;; saying it comes from CL, we do NOT flag it (avoids false positives).
+    (ok (null (check-intern "(defun foo () (intern \"FOO\"))"))))
+
   (testing "No intern: intern inside defmacro body is skipped"
     (ok (null (check-intern "(defmacro def-var (name)
                                `(defvar ,name (intern (symbol-name ',name))))"))))
 
   (testing "No intern: eval-when without :execute is skipped"
     (ok (null (check-intern "(eval-when (:compile-toplevel :load-toplevel)
-                               (intern \"FOO\"))"))))
+                               (cl:intern \"FOO\"))"))))
 
   (testing "No intern: funcall with unrelated function"
     (ok (null (check-intern "(funcall #'string \"hello\")"))))
@@ -274,16 +287,21 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
 ;;; Direct call violations
 
 (deftest intern-usage-direct
-  (testing "Direct (intern ...) call is flagged"
-    (let ((violations (check-intern "(intern \"FOO\")")))
+  (testing "Qualified (cl:intern ...) is flagged"
+    (let ((violations (check-intern "(cl:intern \"FOO\")")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations)) :intern-usage))
       (ok (search "cl:intern" (violation:violation-message (first violations))))))
 
-  (testing "Direct (unintern ...) call is flagged"
-    (let ((violations (check-intern "(unintern 'foo)")))
+  (testing "Qualified (cl:unintern ...) is flagged"
+    (let ((violations (check-intern "(cl:unintern 'foo)")))
       (ok (= (length violations) 1))
       (ok (search "cl:unintern" (violation:violation-message (first violations))))))
+
+  (testing "Qualified (uiop:intern* ...) is flagged"
+    (let ((violations (check-intern "(uiop:intern* \"FOO\" :keyword)")))
+      (ok (= (length violations) 1))
+      (ok (search "uiop:intern*" (violation:violation-message (first violations))))))
 
   (testing "Qualified (alexandria:symbolicate ...) is flagged"
     (let ((violations (check-intern "(alexandria:symbolicate :foo :bar)")))
@@ -300,55 +318,46 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
       (ok (= (length violations) 1))
       (ok (search "alexandria:make-keyword" (violation:violation-message (first violations))))))
 
-  (testing "Qualified (uiop:intern* ...) is flagged"
-    (let ((violations (check-intern "(uiop:intern* \"FOO\" :keyword)")))
-      (ok (= (length violations) 1))
-      (ok (search "uiop:intern*" (violation:violation-message (first violations))))))
-
-  (testing "Nested intern inside defun is flagged"
-    (let ((violations (check-intern "(defun bad () (intern \"FOO\"))")))
+  (testing "Nested qualified cl:intern inside defun is flagged"
+    (let ((violations (check-intern "(defun bad () (cl:intern \"FOO\"))")))
       (ok (= (length violations) 1))))
 
-  (testing "Multiple intern calls produce multiple violations"
-    (let ((violations (check-intern "(progn (intern \"A\") (intern \"B\"))")))
+  (testing "Multiple qualified intern calls produce multiple violations"
+    (let ((violations (check-intern "(progn (cl:intern \"A\") (cl:intern \"B\"))")))
       (ok (= (length violations) 2))))
 
   (testing "eval-when with :execute is flagged"
     (let ((violations (check-intern "(eval-when (:execute)
-                                       (intern \"FOO\"))")))
+                                       (cl:intern \"FOO\"))")))
       (ok (= (length violations) 1))))
 
   (testing "eval-when with :load-toplevel :execute is flagged"
     (let ((violations (check-intern "(eval-when (:load-toplevel :execute)
-                                       (intern \"BAR\"))")))
+                                       (cl:intern \"BAR\"))")))
       (ok (= (length violations) 1)))))
 
 ;;; Funcall / apply patterns
 
 (deftest intern-usage-funcall-apply
-  (testing "(funcall #'intern ...) is flagged"
-    (let ((violations (check-intern "(funcall #'intern \"FOO\")")))
+  (testing "(funcall #'cl:intern ...) is flagged"
+    (let ((violations (check-intern "(funcall #'cl:intern \"FOO\")")))
       (ok (= (length violations) 1))
       (ok (search "funcall" (violation:violation-message (first violations))))))
 
-  (testing "(funcall 'intern ...) is flagged"
-    (let ((violations (check-intern "(funcall 'intern \"FOO\")")))
+  (testing "(funcall 'cl:intern ...) is flagged"
+    (let ((violations (check-intern "(funcall 'cl:intern \"FOO\")")))
       (ok (= (length violations) 1))
       (ok (search "funcall" (violation:violation-message (first violations))))))
 
-  (testing "(apply #'intern ...) is flagged"
-    (let ((violations (check-intern "(apply #'intern '(\"FOO\" :keyword))")))
+  (testing "(apply #'cl:intern ...) is flagged"
+    (let ((violations (check-intern "(apply #'cl:intern '(\"FOO\" :keyword))")))
       (ok (= (length violations) 1))
       (ok (search "apply" (violation:violation-message (first violations))))))
 
-  (testing "(apply 'unintern ...) is flagged"
-    (let ((violations (check-intern "(apply 'unintern '(foo))")))
+  (testing "(apply 'cl:unintern ...) is flagged"
+    (let ((violations (check-intern "(apply 'cl:unintern '(foo))")))
       (ok (= (length violations) 1))
       (ok (search "apply" (violation:violation-message (first violations))))))
-
-  (testing "(funcall #'symbolicate ...) is flagged (name-only match)"
-    (let ((violations (check-intern "(funcall #'symbolicate :foo :bar)")))
-      (ok (= (length violations) 1))))
 
   (testing "(apply #'alexandria:symbolicate ...) is flagged"
     (let ((violations (check-intern "(apply #'alexandria:symbolicate '(:foo :bar))")))
@@ -381,7 +390,25 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
         (ok (= (length violations) 1))
         (ok (search "alexandria:make-keyword" (violation:violation-message (first violations)))))))
 
-  (testing "Import-from intern* is flagged"
+  (testing "Local nickname a:format-symbol is flagged"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:local-nicknames (#:a #:alexandria)))
+                      (in-package #:test)
+                      (defun bad () (a:format-symbol nil \"~A\" :foo))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (= (length violations) 1))
+        (ok (search "alexandria:format-symbol" (violation:violation-message (first violations)))))))
+
+  (testing "Local nickname u:intern* is flagged"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:local-nicknames (#:u #:uiop)))
+                      (in-package #:test)
+                      (defun bad () (u:intern* \"FOO\" :keyword))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (= (length violations) 1))
+        (ok (search "uiop:intern*" (violation:violation-message (first violations)))))))
+
+  (testing "Import-from uiop:intern* is flagged"
     (with-test-file (tmpfile
                      "(defpackage #:test (:use #:cl) (:import-from #:uiop #:intern*))
                       (in-package #:test)
@@ -389,6 +416,24 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
       (let ((violations (check-intern-file tmpfile)))
         (ok (= (length violations) 1))
         (ok (search "uiop:intern*" (violation:violation-message (first violations)))))))
+
+  (testing "Import-from cl:intern is flagged"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:import-from #:cl #:intern))
+                      (in-package #:test)
+                      (defun bad () (intern \"FOO\"))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (= (length violations) 1))
+        (ok (search "cl:intern" (violation:violation-message (first violations)))))))
+
+  (testing "Import-from alexandria:symbolicate is flagged"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:import-from #:alexandria #:symbolicate))
+                      (in-package #:test)
+                      (defun bad () (symbolicate :foo :bar))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (= (length violations) 1))
+        (ok (search "alexandria:symbolicate" (violation:violation-message (first violations)))))))
 
   (testing "Import from unknown package does not flag"
     (with-test-file (tmpfile
