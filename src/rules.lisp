@@ -11,7 +11,8 @@
                  #:mallet/rules/forms/lambda-list
                  #:mallet/rules/forms/asdf
                  #:mallet/rules/forms/metrics
-                 #:mallet/rules/forms/eval-usage)
+                 #:mallet/rules/forms/eval-usage
+                 #:mallet/rules/forms/intern-usage)
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
@@ -97,6 +98,9 @@ Severity defaults are defined in each rule class's :default-initargs."
       ;; Safety rules
       (:eval-usage
        (apply #'make-instance 'eval-usage-rule
+              initargs))
+      (:intern-usage
+       (apply #'make-instance 'intern-usage-rule
               initargs))
 
       ;; Metric rules

@@ -3,7 +3,9 @@
         #:rove)
   (:local-nicknames
    (#:intern-usage #:mallet/rules/forms/intern-usage)
-   (#:parser #:mallet/parser)))
+   (#:rules #:mallet/rules)
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/rules/intern-usage)
 
 ;;; Registry tests
@@ -212,3 +214,176 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
            (ctx (intern-usage:build-package-context forms)))
       ;; intern imported from MY-PACKAGE → not prohibited
       (ok (null (intern-usage:resolve-intern-usage "intern" ctx))))))
+
+;;; Rule class tests
+
+(defmacro with-test-file ((tmpfile-var code) &body body)
+  "Helper: create a temporary file with CODE and clean up after."
+  `(uiop:with-temporary-file (:stream stream :pathname ,tmpfile-var
+                              :type "lisp" :keep t)
+     (write-string ,code stream)
+     (finish-output stream)
+     ,@body))
+
+(defun check-intern (code)
+  "Check CODE for intern-usage violations using a fake file path (no context)."
+  (let* ((forms (parser:parse-forms code #p"test.lisp"))
+         (rule (make-instance 'rules:intern-usage-rule)))
+    (mapcan (lambda (form)
+              (rules:check-form rule form #p"test.lisp"))
+            forms)))
+
+(defun check-intern-file (tmpfile)
+  "Check TMPFILE for intern-usage violations using real file (with context)."
+  (let* ((text (uiop:read-file-string tmpfile))
+         (forms (parser:parse-forms text tmpfile))
+         (rule (make-instance 'rules:intern-usage-rule)))
+    (mapcan (lambda (form)
+              (rules:check-form rule form tmpfile))
+            forms)))
+
+;;; Valid cases (no violations)
+
+(deftest intern-usage-valid
+  (testing "No intern: plain function call"
+    (ok (null (check-intern "(defun foo (x) (+ x 1))"))))
+
+  (testing "No intern: unrelated string"
+    (ok (null (check-intern "(defun foo () \"intern\")"))))
+
+  (testing "No intern: quoted list (data, not code)"
+    (ok (null (check-intern "'(intern \"foo\")"))))
+
+  (testing "No intern: intern in a symbol name but not a call"
+    (ok (null (check-intern "(defun internalize (x) x)"))))
+
+  (testing "No intern: intern inside defmacro body is skipped"
+    (ok (null (check-intern "(defmacro def-var (name)
+                               `(defvar ,name (intern (symbol-name ',name))))"))))
+
+  (testing "No intern: eval-when without :execute is skipped"
+    (ok (null (check-intern "(eval-when (:compile-toplevel :load-toplevel)
+                               (intern \"FOO\"))"))))
+
+  (testing "No intern: funcall with unrelated function"
+    (ok (null (check-intern "(funcall #'string \"hello\")"))))
+
+  (testing "No intern: apply with unrelated function"
+    (ok (null (check-intern "(apply #'+ '(1 2 3))")))))
+
+;;; Direct call violations
+
+(deftest intern-usage-direct
+  (testing "Direct (intern ...) call is flagged"
+    (let ((violations (check-intern "(intern \"FOO\")")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :intern-usage))
+      (ok (search "cl:intern" (violation:violation-message (first violations))))))
+
+  (testing "Direct (unintern ...) call is flagged"
+    (let ((violations (check-intern "(unintern 'foo)")))
+      (ok (= (length violations) 1))
+      (ok (search "cl:unintern" (violation:violation-message (first violations))))))
+
+  (testing "Qualified (alexandria:symbolicate ...) is flagged"
+    (let ((violations (check-intern "(alexandria:symbolicate :foo :bar)")))
+      (ok (= (length violations) 1))
+      (ok (search "alexandria:symbolicate" (violation:violation-message (first violations))))))
+
+  (testing "Qualified (alexandria:format-symbol ...) is flagged"
+    (let ((violations (check-intern "(alexandria:format-symbol nil \"~A\" :foo)")))
+      (ok (= (length violations) 1))
+      (ok (search "alexandria:format-symbol" (violation:violation-message (first violations))))))
+
+  (testing "Qualified (alexandria:make-keyword ...) is flagged"
+    (let ((violations (check-intern "(alexandria:make-keyword \"FOO\")")))
+      (ok (= (length violations) 1))
+      (ok (search "alexandria:make-keyword" (violation:violation-message (first violations))))))
+
+  (testing "Qualified (uiop:intern* ...) is flagged"
+    (let ((violations (check-intern "(uiop:intern* \"FOO\" :keyword)")))
+      (ok (= (length violations) 1))
+      (ok (search "uiop:intern*" (violation:violation-message (first violations))))))
+
+  (testing "Nested intern inside defun is flagged"
+    (let ((violations (check-intern "(defun bad () (intern \"FOO\"))")))
+      (ok (= (length violations) 1))))
+
+  (testing "Multiple intern calls produce multiple violations"
+    (let ((violations (check-intern "(progn (intern \"A\") (intern \"B\"))")))
+      (ok (= (length violations) 2))))
+
+  (testing "eval-when with :execute is flagged"
+    (let ((violations (check-intern "(eval-when (:execute)
+                                       (intern \"FOO\"))")))
+      (ok (= (length violations) 1))))
+
+  (testing "eval-when with :load-toplevel :execute is flagged"
+    (let ((violations (check-intern "(eval-when (:load-toplevel :execute)
+                                       (intern \"BAR\"))")))
+      (ok (= (length violations) 1)))))
+
+;;; Funcall / apply patterns
+
+(deftest intern-usage-funcall-apply
+  (testing "(funcall #'intern ...) is flagged"
+    (let ((violations (check-intern "(funcall #'intern \"FOO\")")))
+      (ok (= (length violations) 1))
+      (ok (search "funcall" (violation:violation-message (first violations))))))
+
+  (testing "(funcall 'intern ...) is flagged"
+    (let ((violations (check-intern "(funcall 'intern \"FOO\")")))
+      (ok (= (length violations) 1))
+      (ok (search "funcall" (violation:violation-message (first violations))))))
+
+  (testing "(apply #'intern ...) is flagged"
+    (let ((violations (check-intern "(apply #'intern '(\"FOO\" :keyword))")))
+      (ok (= (length violations) 1))
+      (ok (search "apply" (violation:violation-message (first violations))))))
+
+  (testing "(apply 'unintern ...) is flagged"
+    (let ((violations (check-intern "(apply 'unintern '(foo))")))
+      (ok (= (length violations) 1))
+      (ok (search "apply" (violation:violation-message (first violations))))))
+
+  (testing "(funcall #'symbolicate ...) is flagged (name-only match)"
+    (let ((violations (check-intern "(funcall #'symbolicate :foo :bar)")))
+      (ok (= (length violations) 1)))))
+
+;;; Context-dependent tests (with real files)
+
+(deftest intern-usage-context-nickname
+  (testing "Local nickname a:symbolicate is flagged"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:local-nicknames (#:a #:alexandria)))
+                      (in-package #:test)
+                      (defun bad () (a:symbolicate :foo :bar))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (= (length violations) 1))
+        (ok (search "alexandria:symbolicate" (violation:violation-message (first violations)))))))
+
+  (testing "Local nickname a:make-keyword is flagged"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:local-nicknames (#:a #:alexandria)))
+                      (in-package #:test)
+                      (defun bad () (a:make-keyword \"FOO\"))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (= (length violations) 1))
+        (ok (search "alexandria:make-keyword" (violation:violation-message (first violations)))))))
+
+  (testing "Import-from intern* is flagged"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:import-from #:uiop #:intern*))
+                      (in-package #:test)
+                      (defun bad () (intern* \"FOO\" :keyword))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (= (length violations) 1))
+        (ok (search "uiop:intern*" (violation:violation-message (first violations)))))))
+
+  (testing "Import from unknown package does not flag"
+    (with-test-file (tmpfile
+                     "(defpackage #:test (:use #:cl) (:import-from #:my-package #:intern))
+                      (in-package #:test)
+                      (defun safe () (intern \"FOO\"))")
+      (let ((violations (check-intern-file tmpfile)))
+        (ok (null violations))))))
