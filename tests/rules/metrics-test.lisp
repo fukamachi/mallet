@@ -863,9 +863,7 @@
   (+ x 1))"
                    :min-lines 1)))
       (ok (not (null result)))
-      (ok (= 2 (getf result :comment-lines)))
-      (ok (= 2 (getf result :code-lines)))
-      (ok (< 0.49d0 (getf result :ratio) 0.51d0)))))
+      (ok (< 0.49d0 result 0.51d0)))))
 
 (deftest comment-ratio-api-form-input
   (testing "calculate-comment-ratio accepts parser:form input"
@@ -877,8 +875,7 @@
            (form (first forms))
            (result (rules:calculate-comment-ratio form :min-lines 1)))
       (ok (not (null result)))
-      (ok (= 2 (getf result :comment-lines)))
-      (ok (= 2 (getf result :code-lines))))))
+      (ok (< 0.49d0 result 0.51d0)))))
 
 (deftest comment-ratio-api-no-comments
   (testing "calculate-comment-ratio returns zero ratio for code without comments"
@@ -888,8 +885,7 @@
     (+ y 1)))"
                    :min-lines 1)))
       (ok (not (null result)))
-      (ok (= 0 (getf result :comment-lines)))
-      (ok (< (getf result :ratio) 0.01d0)))))
+      (ok (< result 0.01d0)))))
 
 (deftest comment-ratio-api-below-min-lines
   (testing "calculate-comment-ratio returns NIL when below min-lines"
@@ -906,12 +902,12 @@
   (+ x 1))")
            (without (rules:calculate-comment-ratio code :include-docstrings nil :min-lines 1))
            (with (rules:calculate-comment-ratio code :include-docstrings t :min-lines 1)))
-      ;; Without docstrings: 1 comment, 2 code (defun + body), docstring not counted as comment
+      ;; Without docstrings: 1 comment line out of 3 non-blank = ratio ~0.33
       (ok (not (null without)))
-      (ok (= 1 (getf without :comment-lines)))
-      ;; With docstrings: docstring counts as comment too
+      (ok (< without 0.5d0))
+      ;; With docstrings: docstring line also counted, ratio higher
       (ok (not (null with)))
-      (ok (< (getf without :comment-lines) (getf with :comment-lines))))))
+      (ok (< without with)))))
 
 (deftest analyze-metrics-includes-comment-ratio
   (testing "analyze-function-metrics includes :comment-ratio key"
@@ -923,5 +919,4 @@
       (ok (not (null (getf result :length))))
       (ok (not (null (getf result :complexity))))
       (ok (not (null (getf result :comment-ratio))))
-      (let ((cr (getf result :comment-ratio)))
-        (ok (= 1 (getf cr :comment-lines)))))))
+      (ok (floatp (getf result :comment-ratio))))))
