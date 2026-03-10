@@ -6,7 +6,8 @@
    (#:parser #:mallet/parser))
   (:export #:interned-package-symbol-rule
            #:unused-local-nicknames-rule
-           #:unused-imported-symbols-rule))
+           #:unused-imported-symbols-rule
+           #:no-package-use-rule))
 (in-package #:mallet/rules/forms/package)
 
 (defun defpackage-form-p (expr)
@@ -619,6 +620,52 @@ Preserves comments, formatting, and structural close parens."
                   :type :delete-lines
                   :start-line violation-line
                   :end-line violation-line)))))))))
+
+;;; No Package Use Rule
+
+(defclass no-package-use-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :no-package-use
+   :description "Avoid using :use in defpackage; prefer :import-from or :local-nicknames"
+   :severity :warning
+   :type :form))
+
+(defparameter *exempt-packages*
+  '("CL" "COMMON-LISP" "COALTON" "COALTON-PRELUDE")
+  "Package names that are exempt from the no-package-use rule.")
+
+(defmethod base:check-form ((rule no-package-use-rule) form file)
+  "Detect :use of non-exempt packages in defpackage forms."
+  (let ((expr (parser:form-expr form)))
+    (when (defpackage-form-p expr)
+      (let ((position-map (parser:form-position-map form))
+            (violations '()))
+        (dolist (clause (cddr expr))
+          (when (and (consp clause)
+                     (stringp (first clause))
+                     (string-equal (first clause) ":use"))
+            (dolist (pkg (rest clause))
+              (let ((pkg-name (string-upcase (base:symbol-name-from-string pkg))))
+                (unless (member pkg-name *exempt-packages* :test #'string=)
+                  (multiple-value-bind (line column)
+                      (if (and position-map pkg)
+                          (parser:find-position pkg position-map
+                                                (parser:form-line form)
+                                                (parser:form-column form))
+                          (values (parser:form-line form) (parser:form-column form)))
+                    (push (make-instance 'violation:violation
+                                         :rule (base:rule-name rule)
+                                         :file file
+                                         :line line
+                                         :column column
+                                         :end-line line
+                                         :end-column (1+ column)
+                                         :message (format nil "Avoid :use of package ~A; prefer :import-from or :local-nicknames"
+                                                          pkg)
+                                         :severity (base:rule-severity rule))
+                          violations)))))))
+        (nreverse violations)))))
 
 ;;; Helper Functions
 

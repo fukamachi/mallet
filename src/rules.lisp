@@ -82,6 +82,9 @@ Severity defaults are defined in each rule class's :default-initargs."
       (:unused-imported-symbols
        (apply #'make-instance 'unused-imported-symbols-rule
               initargs))
+      (:no-package-use
+       (apply #'make-instance 'no-package-use-rule
+              initargs))
       (:special-variable-naming
        (apply #'make-instance 'special-variable-naming-rule
               initargs))
