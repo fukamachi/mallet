@@ -411,7 +411,7 @@ Returns (values has-errors-p has-warnings-p has-any-p)."
 
 (defun process-fix-mode (all-violations fix-mode format)
   "Apply fixes to violations and output results.
-Returns (values has-errors-p has-warnings-p)."
+Returns (values has-errors-p has-warnings-p has-any-p)."
   (multiple-value-bind (fixed-count fixed-violations unfixed-violations)
       (fixer:apply-fixes all-violations :dry-run (eq fix-mode :fix-dry-run))
 
