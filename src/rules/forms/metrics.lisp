@@ -645,15 +645,14 @@
    FILE is the pathname used for parser error reporting; only relevant when
    SOURCE-CODE is a string (ignored when SOURCE-CODE is a parser:form).
 
-   Returns a plist (:ratio float :comment-lines integer :code-lines integer)
-   or NIL if code-lines is below MIN-LINES threshold.
+   Returns the comment ratio as a float, or NIL if code-lines is below MIN-LINES threshold.
 
    Example:
      (calculate-comment-ratio
        \"(defun foo (x)
           ;; a comment
           (+ x 1))\")
-     => (:ratio 0.33d0 :comment-lines 1 :code-lines 2)"
+     => 0.33d0"
   (etypecase source-code
     (string
      (let* ((forms (parser:parse-forms source-code file))
@@ -664,10 +663,11 @@
                 (source-lines (parse-source-to-lines source-code))
                 (start-line (parser:form-line form))
                 (start-column (parser:form-column form)))
-           (calculate-comment-ratio-from-source
-            expr position-map source-lines start-line start-column
-            :include-docstrings include-docstrings
-            :min-lines min-lines)))))
+           (getf (calculate-comment-ratio-from-source
+                  expr position-map source-lines start-line start-column
+                  :include-docstrings include-docstrings
+                  :min-lines min-lines)
+                 :ratio)))))
     (parser:form
      (let* ((expr (parser:form-expr source-code))
             (position-map (parser:form-position-map source-code))
@@ -675,10 +675,11 @@
             (source-lines (parse-source-to-lines source))
             (start-line (parser:form-line source-code))
             (start-column (parser:form-column source-code)))
-       (calculate-comment-ratio-from-source
-        expr position-map source-lines start-line start-column
-        :include-docstrings include-docstrings
-        :min-lines min-lines)))))
+       (getf (calculate-comment-ratio-from-source
+              expr position-map source-lines start-line start-column
+              :include-docstrings include-docstrings
+              :min-lines min-lines)
+             :ratio)))))
 
 ;;; Cyclomatic-complexity rule
 
@@ -752,11 +753,11 @@
    Returns a plist with:
    - :length - Number of code lines
    - :complexity - Cyclomatic complexity
-   - :comment-ratio - Comment ratio result plist or NIL
+   - :comment-ratio - Comment ratio as a float, or NIL if below min-lines threshold
 
    Example:
      (analyze-function-metrics \"(defun foo (x) (if x (print 1) (print 2)))\")
-     => (:length 3 :complexity 2 :comment-ratio (:ratio 0.0d0 ...))"
+     => (:length 3 :complexity 2 :comment-ratio 0.0d0)"
   (list :length (calculate-function-length source-code :file file)
         :complexity (calculate-cyclomatic-complexity source-code :variant variant :file file)
         :comment-ratio (calculate-comment-ratio source-code
