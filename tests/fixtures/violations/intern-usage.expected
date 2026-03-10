@@ -1,0 +1,6 @@
+# Expected violations for intern-usage.lisp
+# Format: line:column rule-name severity
+
+5:2 intern-usage warning
+9:2 intern-usage warning
+13:2 intern-usage warning
