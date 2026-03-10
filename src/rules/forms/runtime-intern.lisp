@@ -1,4 +1,4 @@
-(defpackage #:mallet/rules/forms/intern-usage
+(defpackage #:mallet/rules/forms/runtime-intern
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
@@ -13,9 +13,9 @@
            #:package-context-local-nicknames
            #:package-context-imported-symbols
            #:build-package-context
-           #:resolve-intern-usage
-           #:intern-usage-rule))
-(in-package #:mallet/rules/forms/intern-usage)
+           #:resolve-runtime-intern
+           #:runtime-intern-rule))
+(in-package #:mallet/rules/forms/runtime-intern)
 
 ;;; Target Function Registry
 ;;;
@@ -45,7 +45,7 @@ Uses the first colon position, so double-colon access \"PKG::NAME\" returns \"PK
 ;;; Package Context
 ;;;
 ;;; A package context holds the local-nickname and import-from mappings extracted
-;;; from the file's defpackage form.  It is used by RESOLVE-INTERN-USAGE to
+;;; from the file's defpackage form.  It is used by RESOLVE-RUNTIME-INTERN to
 ;;; resolve nickname-prefixed and imported symbols to their canonical packages.
 
 (defstruct (package-context (:conc-name package-context-))
@@ -119,7 +119,7 @@ Matching rules:
           (return-from prohibited-intern-function-p (getf entry :display)))))
     nil))
 
-(defun resolve-intern-usage (symbol-string context)
+(defun resolve-runtime-intern (symbol-string context)
   "Return the display name if SYMBOL-STRING refers to a prohibited intern function
 given package CONTEXT, NIL otherwise.
 
@@ -136,9 +136,9 @@ Resolution order:
    (handles known canonical packages like COMMON-LISP:, UIOP:, ALEXANDRIA:).
 4. If SYMBOL-STRING has no package prefix, check import-from mappings only; NIL if not imported."
   (unless (stringp symbol-string)
-    (return-from resolve-intern-usage nil))
+    (return-from resolve-runtime-intern nil))
   (unless context
-    (return-from resolve-intern-usage nil))
+    (return-from resolve-runtime-intern nil))
   (let* ((name    (string-upcase (utils:symbol-name-from-string symbol-string)))
          (prefix  (extract-package-from-symbol-string symbol-string)))
     (if prefix
@@ -167,18 +167,18 @@ Resolution order:
             (prohibited-intern-function-p
              (concatenate 'string imported-pkg ":" name)))))))
 
-;;; Intern-Usage Rule Class
+;;; Runtime-Intern Rule Class
 
-(defvar *intern-check-context* nil
-  "Dynamic variable: the current file's PACKAGE-CONTEXT during intern-usage checking.")
+(defvar *runtime-intern-check-context* nil
+  "Dynamic variable: the current file's PACKAGE-CONTEXT during runtime-intern checking.")
 
-(defclass intern-usage-rule (base:rule)
+(defclass runtime-intern-rule (base:rule)
   ((context-cache
     :initform nil
-    :accessor intern-usage-rule-context-cache
+    :accessor runtime-intern-rule-context-cache
     :documentation "Cons (file . context) to avoid re-reading the file per form."))
   (:default-initargs
-   :name :intern-usage
+   :name :runtime-intern
    :description "Avoid runtime use of symbol-interning functions"
    :severity :warning
    :type :form)
@@ -199,7 +199,7 @@ Handles: bare symbol string, already-interned CL symbol, #'func (FUNCTION form),
   (cond
     ;; Bare symbol: "COMMON-LISP:intern"
     ((stringp expr)
-     (resolve-intern-usage expr context))
+     (resolve-runtime-intern expr context))
     ;; Already-interned Lisp symbol head (e.g. CL:INTERN as a symbol object).
     ;; Build a "PKG:name" string from the symbol's package and name, then check.
     ((symbolp expr)
@@ -209,17 +209,17 @@ Handles: bare symbol string, already-interned CL symbol, #'func (FUNCTION form),
             (sym-string (if pkg-name
                             (concatenate 'string pkg-name ":" sym-name)
                             sym-name)))
-       (resolve-intern-usage sym-string context)))
+       (resolve-runtime-intern sym-string context)))
     ;; #'func → (FUNCTION "PKG:func") where FUNCTION may be interned CL symbol
     ((and (consp expr)
           (form-head-name-matches-p (first expr) "FUNCTION")
           (stringp (second expr)))
-     (resolve-intern-usage (second expr) context))
+     (resolve-runtime-intern (second expr) context))
     ;; 'func → (QUOTE "PKG:func") where QUOTE may be interned CL symbol
     ((and (consp expr)
           (form-head-name-matches-p (first expr) "QUOTE")
           (stringp (second expr)))
-     (resolve-intern-usage (second expr) context))
+     (resolve-runtime-intern (second expr) context))
     (t nil)))
 
 (defun eval-when-has-execute-p (expr)
@@ -230,12 +230,12 @@ Handles: bare symbol string, already-interned CL symbol, #'func (FUNCTION form),
                  (string-equal (utils:symbol-name-from-string s) "EXECUTE")))
           (second expr))))
 
-(defmethod base:check-form ((rule intern-usage-rule) form file)
+(defmethod base:check-form ((rule runtime-intern-rule) form file)
   "Check FORM from FILE for prohibited intern function usage."
   (check-type form parser:form)
   (check-type file pathname)
   ;; Build (or reuse cached) package context for this file.
-  (let* ((cache (intern-usage-rule-context-cache rule))
+  (let* ((cache (runtime-intern-rule-context-cache rule))
          (context (if (and cache (equal (car cache) file))
                       (cdr cache)
                       (let ((ctx (handler-case
@@ -244,9 +244,9 @@ Handles: bare symbol string, already-interned CL symbol, #'func (FUNCTION form),
                                        (build-package-context all-forms))
                                    (error ()
                                      (make-package-context)))))
-                        (setf (intern-usage-rule-context-cache rule) (cons file ctx))
+                        (setf (runtime-intern-rule-context-cache rule) (cons file ctx))
                         ctx))))
-    (let ((*intern-check-context* context))
+    (let ((*runtime-intern-check-context* context))
       (base:check-form-recursive rule
                                  (parser:form-expr form)
                                  file
@@ -256,16 +256,16 @@ Handles: bare symbol string, already-interned CL symbol, #'func (FUNCTION form),
                                  (parser:form-position-map form)))))
 
 (defmethod base:check-form-recursive
-    ((rule intern-usage-rule) expr file line column &optional function-name position-map)
+    ((rule runtime-intern-rule) expr file line column &optional function-name position-map)
   "Recursively check EXPR for prohibited intern function usage."
   (declare (ignore function-name))
-  (let ((context *intern-check-context*)
+  (let ((context *runtime-intern-check-context*)
         (violations '())
         (visited (make-hash-table :test 'eq)))
 
     (labels ((make-intern-violation (vline vcol pattern-desc)
                (make-instance 'violation:violation
-                              :rule :intern-usage
+                              :rule :runtime-intern
                               :file file
                               :line vline
                               :column vcol

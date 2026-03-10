@@ -1,0 +1,6 @@
+# Expected violations for runtime-intern.lisp
+# Format: line:column rule-name severity
+
+5:2 runtime-intern warning
+9:2 runtime-intern warning
+13:2 runtime-intern warning

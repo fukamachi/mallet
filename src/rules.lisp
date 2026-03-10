@@ -12,7 +12,7 @@
                  #:mallet/rules/forms/asdf
                  #:mallet/rules/forms/metrics
                  #:mallet/rules/forms/eval-usage
-                 #:mallet/rules/forms/intern-usage)
+                 #:mallet/rules/forms/runtime-intern)
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
@@ -99,8 +99,8 @@ Severity defaults are defined in each rule class's :default-initargs."
       (:eval-usage
        (apply #'make-instance 'eval-usage-rule
               initargs))
-      (:intern-usage
-       (apply #'make-instance 'intern-usage-rule
+      (:runtime-intern
+       (apply #'make-instance 'runtime-intern-rule
               initargs))
 
       ;; Metric rules

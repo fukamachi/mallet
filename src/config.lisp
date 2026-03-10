@@ -352,7 +352,7 @@ Useful for exploration and discovering what rules exist."
             :missing-otherwise
             :mixed-optional-and-key
             :eval-usage
-            :intern-usage
+            :runtime-intern
             ;; INFO: Code quality suggestions
             :bare-float-literal
             :unused-local-nicknames

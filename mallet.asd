@@ -57,7 +57,7 @@
        (:file "asdf")
        (:file "metrics")
        (:file "eval-usage")
-       (:file "intern-usage")))))
+       (:file "runtime-intern")))))
    (:file "rules")
 
    ;; Configuration
@@ -116,6 +116,6 @@
      (:file "metrics-test")
      (:file "bare-float-literal-test")
      (:file "eval-usage-test")
-     (:file "intern-usage-test"))))
+     (:file "runtime-intern-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

@@ -14,7 +14,7 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
   - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
   - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
-  - [`:intern-usage`](#intern-usage) - Runtime use of symbol-interning functions
+  - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
 - [CONVENTION](#convention)
   - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
   - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
@@ -149,7 +149,7 @@ Avoid using `cl:eval` at runtime. Runtime evaluation of arbitrary code is a comm
 
 **Default**: enabled
 
-### `:intern-usage`
+### `:runtime-intern`
 
 Avoid using symbol-interning functions at runtime. Runtime interning causes symbol table side effects, makes code harder to reason about, and is often a sign that a macro or compile-time mechanism should be used instead. This rule detects direct calls as well as indirect invocation via `funcall` and `apply`.
 

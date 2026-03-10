@@ -1,83 +1,83 @@
-(defpackage #:mallet/tests/rules/intern-usage
+(defpackage #:mallet/tests/rules/runtime-intern
   (:use #:cl
         #:rove)
   (:local-nicknames
-   (#:intern-usage #:mallet/rules/forms/intern-usage)
+   (#:runtime-intern #:mallet/rules/forms/runtime-intern)
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
-(in-package #:mallet/tests/rules/intern-usage)
+(in-package #:mallet/tests/rules/runtime-intern)
 
 ;;; Registry tests
 
 (deftest prohibited-intern-function-registry
   (testing "cl:intern matched by full package name (as produced by parser)"
-    (ok (string= (intern-usage:prohibited-intern-function-p "COMMON-LISP:intern")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "COMMON-LISP:intern")
                  "cl:intern")))
 
   (testing "cl:intern matched case-insensitively"
-    (ok (string= (intern-usage:prohibited-intern-function-p "common-lisp:INTERN")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "common-lisp:INTERN")
                  "cl:intern")))
 
   (testing "cl:unintern matched"
-    (ok (string= (intern-usage:prohibited-intern-function-p "COMMON-LISP:unintern")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "COMMON-LISP:unintern")
                  "cl:unintern")))
 
   (testing "uiop:intern* matched"
-    (ok (string= (intern-usage:prohibited-intern-function-p "UIOP:intern*")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "UIOP:intern*")
                  "uiop:intern*")))
 
   (testing "uiop:intern* matched case-insensitively"
-    (ok (string= (intern-usage:prohibited-intern-function-p "uiop:INTERN*")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "uiop:INTERN*")
                  "uiop:intern*")))
 
   (testing "alexandria:symbolicate matched"
-    (ok (string= (intern-usage:prohibited-intern-function-p "ALEXANDRIA:symbolicate")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "ALEXANDRIA:symbolicate")
                  "alexandria:symbolicate")))
 
   (testing "alexandria:format-symbol matched"
-    (ok (string= (intern-usage:prohibited-intern-function-p "ALEXANDRIA:format-symbol")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "ALEXANDRIA:format-symbol")
                  "alexandria:format-symbol")))
 
   (testing "alexandria:make-keyword matched"
-    (ok (string= (intern-usage:prohibited-intern-function-p "ALEXANDRIA:make-keyword")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "ALEXANDRIA:make-keyword")
                  "alexandria:make-keyword")))
 
   (testing "Unqualified intern matched by name (conservative)"
-    (ok (string= (intern-usage:prohibited-intern-function-p "intern")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "intern")
                  "cl:intern")))
 
   (testing "Unqualified intern* matched by name"
-    (ok (string= (intern-usage:prohibited-intern-function-p "intern*")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "intern*")
                  "uiop:intern*")))
 
   (testing "Unqualified symbolicate matched by name"
-    (ok (string= (intern-usage:prohibited-intern-function-p "symbolicate")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "symbolicate")
                  "alexandria:symbolicate")))
 
   (testing "intern from unknown package does not match"
-    (ok (null (intern-usage:prohibited-intern-function-p "MYPACKAGE:intern"))))
+    (ok (null (runtime-intern:prohibited-intern-function-p "MYPACKAGE:intern"))))
 
   (testing "intern-something does not match (different name)"
-    (ok (null (intern-usage:prohibited-intern-function-p "COMMON-LISP:intern-something"))))
+    (ok (null (runtime-intern:prohibited-intern-function-p "COMMON-LISP:intern-something"))))
 
   (testing "unrelated symbol does not match"
-    (ok (null (intern-usage:prohibited-intern-function-p "COMMON-LISP:string"))))
+    (ok (null (runtime-intern:prohibited-intern-function-p "COMMON-LISP:string"))))
 
   (testing "nil returns nil"
-    (ok (null (intern-usage:prohibited-intern-function-p nil))))
+    (ok (null (runtime-intern:prohibited-intern-function-p nil))))
 
   (testing "non-string returns nil"
-    (ok (null (intern-usage:prohibited-intern-function-p 42))))
+    (ok (null (runtime-intern:prohibited-intern-function-p 42))))
 
   (testing "INTERN and INTERN* are distinct (no false match of INTERN* as INTERN)"
-    (ok (string= (intern-usage:prohibited-intern-function-p "UIOP:intern*")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "UIOP:intern*")
                  "uiop:intern*"))
-    (ok (string= (intern-usage:prohibited-intern-function-p "COMMON-LISP:intern")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "COMMON-LISP:intern")
                  "cl:intern")))
 
   (testing "double-colon internal access still matches"
-    (ok (string= (intern-usage:prohibited-intern-function-p "COMMON-LISP::intern")
+    (ok (string= (runtime-intern:prohibited-intern-function-p "COMMON-LISP::intern")
                  "cl:intern"))))
 
 ;;; Helper: make a minimal package-context with given nicknames and imports
@@ -86,12 +86,12 @@
   "Create a package-context for testing.
 NICKNAMES is an alist of (nick . pkg) e.g. ((\"A\" . \"ALEXANDRIA\"))
 IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
-  (let ((ctx (intern-usage:make-package-context)))
+  (let ((ctx (runtime-intern:make-package-context)))
     (dolist (pair nicknames)
-      (setf (gethash (car pair) (intern-usage:package-context-local-nicknames ctx))
+      (setf (gethash (car pair) (runtime-intern:package-context-local-nicknames ctx))
             (cdr pair)))
     (dolist (pair imports)
-      (setf (gethash (car pair) (intern-usage:package-context-imported-symbols ctx))
+      (setf (gethash (car pair) (runtime-intern:package-context-imported-symbols ctx))
             (cdr pair)))
     ctx))
 
@@ -100,69 +100,69 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
 (deftest package-context-local-nicknames
   (testing "Local nickname for ALEXANDRIA resolves symbolicate"
     (let ((ctx (make-test-context :nicknames '(("A" . "ALEXANDRIA")))))
-      (ok (string= (intern-usage:resolve-intern-usage "A:symbolicate" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "A:symbolicate" ctx)
                    "alexandria:symbolicate"))))
 
   (testing "Local nickname for ALEXANDRIA resolves format-symbol"
     (let ((ctx (make-test-context :nicknames '(("A" . "ALEXANDRIA")))))
-      (ok (string= (intern-usage:resolve-intern-usage "A:format-symbol" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "A:format-symbol" ctx)
                    "alexandria:format-symbol"))))
 
   (testing "Local nickname for ALEXANDRIA resolves make-keyword"
     (let ((ctx (make-test-context :nicknames '(("A" . "ALEXANDRIA")))))
-      (ok (string= (intern-usage:resolve-intern-usage "A:make-keyword" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "A:make-keyword" ctx)
                    "alexandria:make-keyword"))))
 
   (testing "Local nickname for UIOP resolves intern*"
     (let ((ctx (make-test-context :nicknames '(("U" . "UIOP")))))
-      (ok (string= (intern-usage:resolve-intern-usage "U:intern*" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "U:intern*" ctx)
                    "uiop:intern*"))))
 
   (testing "Local nickname for CL resolves intern"
     (let ((ctx (make-test-context :nicknames '(("L" . "COMMON-LISP")))))
-      (ok (string= (intern-usage:resolve-intern-usage "L:intern" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "L:intern" ctx)
                    "cl:intern"))))
 
   (testing "Unknown prefix without nickname mapping does not match"
     (let ((ctx (make-test-context :nicknames '(("A" . "MYPACKAGE")))))
-      (ok (null (intern-usage:resolve-intern-usage "A:symbolicate" ctx)))))
+      (ok (null (runtime-intern:resolve-runtime-intern "A:symbolicate" ctx)))))
 
   (testing "Prefix for unrelated package does not match"
     (let ((ctx (make-test-context :nicknames '(("FOO" . "SOMETHING")))))
-      (ok (null (intern-usage:resolve-intern-usage "FOO:intern" ctx))))))
+      (ok (null (runtime-intern:resolve-runtime-intern "FOO:intern" ctx))))))
 
 (deftest package-context-imported-symbols
   (testing "Imported symbolicate from ALEXANDRIA matches"
     (let ((ctx (make-test-context :imports '(("SYMBOLICATE" . "ALEXANDRIA")))))
-      (ok (string= (intern-usage:resolve-intern-usage "symbolicate" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "symbolicate" ctx)
                    "alexandria:symbolicate"))))
 
   (testing "Imported intern* from UIOP matches"
     (let ((ctx (make-test-context :imports '(("INTERN*" . "UIOP")))))
-      (ok (string= (intern-usage:resolve-intern-usage "intern*" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "intern*" ctx)
                    "uiop:intern*"))))
 
   (testing "Imported intern from MY-PACKAGE does NOT match (wrong source)"
     (let ((ctx (make-test-context :imports '(("INTERN" . "MY-PACKAGE")))))
-      (ok (null (intern-usage:resolve-intern-usage "intern" ctx)))))
+      (ok (null (runtime-intern:resolve-runtime-intern "intern" ctx)))))
 
   (testing "Unqualified symbol not in imports returns NIL (no false positives)"
     (let ((ctx (make-test-context)))
       ;; Without an explicit import, unqualified symbols are not flagged
-      (ok (null (intern-usage:resolve-intern-usage "intern" ctx)))))
+      (ok (null (runtime-intern:resolve-runtime-intern "intern" ctx)))))
 
   (testing "Fully qualified symbol bypasses import lookup"
     (let ((ctx (make-test-context)))
-      (ok (string= (intern-usage:resolve-intern-usage "COMMON-LISP:intern" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "COMMON-LISP:intern" ctx)
                    "cl:intern"))))
 
   (testing "CURRENT-prefixed symbol not in imports returns NIL"
     (let ((ctx (make-test-context)))
-      (ok (null (intern-usage:resolve-intern-usage "CURRENT:intern" ctx)))))
+      (ok (null (runtime-intern:resolve-runtime-intern "CURRENT:intern" ctx)))))
 
   (testing "CURRENT-prefixed symbol in imports matches"
     (let ((ctx (make-test-context :imports '(("INTERN" . "COMMON-LISP")))))
-      (ok (string= (intern-usage:resolve-intern-usage "CURRENT:intern" ctx)
+      (ok (string= (runtime-intern:resolve-runtime-intern "CURRENT:intern" ctx)
                    "cl:intern")))))
 
 (deftest build-package-context-from-forms
@@ -171,10 +171,10 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
                     (:use #:cl)
                     (:local-nicknames (#:a #:alexandria) (#:u #:uiop)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (ctx (intern-usage:build-package-context forms)))
-      (ok (string= (gethash "A" (intern-usage:package-context-local-nicknames ctx))
+           (ctx (runtime-intern:build-package-context forms)))
+      (ok (string= (gethash "A" (runtime-intern:package-context-local-nicknames ctx))
                    "ALEXANDRIA"))
-      (ok (string= (gethash "U" (intern-usage:package-context-local-nicknames ctx))
+      (ok (string= (gethash "U" (runtime-intern:package-context-local-nicknames ctx))
                    "UIOP"))))
 
   (testing "Extracts import-from mappings from defpackage"
@@ -183,26 +183,26 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
                     (:import-from #:uiop #:intern*)
                     (:import-from #:alexandria #:symbolicate #:make-keyword))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (ctx (intern-usage:build-package-context forms)))
-      (ok (string= (gethash "INTERN*" (intern-usage:package-context-imported-symbols ctx))
+           (ctx (runtime-intern:build-package-context forms)))
+      (ok (string= (gethash "INTERN*" (runtime-intern:package-context-imported-symbols ctx))
                    "UIOP"))
-      (ok (string= (gethash "SYMBOLICATE" (intern-usage:package-context-imported-symbols ctx))
+      (ok (string= (gethash "SYMBOLICATE" (runtime-intern:package-context-imported-symbols ctx))
                    "ALEXANDRIA"))
-      (ok (string= (gethash "MAKE-KEYWORD" (intern-usage:package-context-imported-symbols ctx))
+      (ok (string= (gethash "MAKE-KEYWORD" (runtime-intern:package-context-imported-symbols ctx))
                    "ALEXANDRIA"))))
 
   (testing "Empty forms produce empty context"
-    (let* ((ctx (intern-usage:build-package-context '())))
-      (ok (zerop (hash-table-count (intern-usage:package-context-local-nicknames ctx))))
-      (ok (zerop (hash-table-count (intern-usage:package-context-imported-symbols ctx))))))
+    (let* ((ctx (runtime-intern:build-package-context '())))
+      (ok (zerop (hash-table-count (runtime-intern:package-context-local-nicknames ctx))))
+      (ok (zerop (hash-table-count (runtime-intern:package-context-imported-symbols ctx))))))
 
   (testing "Full resolve: nickname prefix detects violation"
     (let* ((code "(defpackage #:test
                     (:use #:cl)
                     (:local-nicknames (#:a #:alexandria)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (ctx (intern-usage:build-package-context forms)))
-      (ok (string= (intern-usage:resolve-intern-usage "A:symbolicate" ctx)
+           (ctx (runtime-intern:build-package-context forms)))
+      (ok (string= (runtime-intern:resolve-runtime-intern "A:symbolicate" ctx)
                    "alexandria:symbolicate"))))
 
   (testing "Full resolve: import-from detects violation"
@@ -210,8 +210,8 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
                     (:use #:cl)
                     (:import-from #:uiop #:intern*))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (ctx (intern-usage:build-package-context forms)))
-      (ok (string= (intern-usage:resolve-intern-usage "intern*" ctx)
+           (ctx (runtime-intern:build-package-context forms)))
+      (ok (string= (runtime-intern:resolve-runtime-intern "intern*" ctx)
                    "uiop:intern*"))))
 
   (testing "Full resolve: import from wrong package avoids false positive"
@@ -219,9 +219,9 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
                     (:use #:cl)
                     (:import-from #:my-package #:intern))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (ctx (intern-usage:build-package-context forms)))
+           (ctx (runtime-intern:build-package-context forms)))
       ;; intern imported from MY-PACKAGE → not prohibited
-      (ok (null (intern-usage:resolve-intern-usage "intern" ctx))))))
+      (ok (null (runtime-intern:resolve-runtime-intern "intern" ctx))))))
 
 ;;; Rule class tests
 
@@ -234,18 +234,18 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
      ,@body))
 
 (defun check-intern (code)
-  "Check CODE for intern-usage violations using a fake file path (no context)."
+  "Check CODE for runtime-intern violations using a fake file path (no context)."
   (let* ((forms (parser:parse-forms code #p"test.lisp"))
-         (rule (make-instance 'rules:intern-usage-rule)))
+         (rule (make-instance 'rules:runtime-intern-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
 
 (defun check-intern-file (tmpfile)
-  "Check TMPFILE for intern-usage violations using real file (with context)."
+  "Check TMPFILE for runtime-intern violations using real file (with context)."
   (let* ((text (uiop:read-file-string tmpfile))
          (forms (parser:parse-forms text tmpfile))
-         (rule (make-instance 'rules:intern-usage-rule)))
+         (rule (make-instance 'rules:runtime-intern-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form tmpfile))
             forms)))
@@ -290,7 +290,7 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
   (testing "Qualified (cl:intern ...) is flagged"
     (let ((violations (check-intern "(cl:intern \"FOO\")")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :intern-usage))
+      (ok (eq (violation:violation-rule (first violations)) :runtime-intern))
       (ok (search "cl:intern" (violation:violation-message (first violations))))))
 
   (testing "Qualified (cl:unintern ...) is flagged"
@@ -443,17 +443,17 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
       (let ((violations (check-intern-file tmpfile)))
         (ok (null violations))))))
 
-;;; U-1: resolve-intern-usage nil-context guard
+;;; U-1: resolve-runtime-intern nil-context guard
 
-(deftest resolve-intern-usage-nil-context
-  (testing "resolve-intern-usage with nil context returns nil without error"
-    (ok (null (intern-usage:resolve-intern-usage "COMMON-LISP:intern" nil))))
+(deftest resolve-runtime-intern-nil-context
+  (testing "resolve-runtime-intern with nil context returns nil without error"
+    (ok (null (runtime-intern:resolve-runtime-intern "COMMON-LISP:intern" nil))))
 
-  (testing "resolve-intern-usage with nil context and unqualified name returns nil"
-    (ok (null (intern-usage:resolve-intern-usage "intern" nil))))
+  (testing "resolve-runtime-intern with nil context and unqualified name returns nil"
+    (ok (null (runtime-intern:resolve-runtime-intern "intern" nil))))
 
-  (testing "resolve-intern-usage with nil context and nil string returns nil"
-    (ok (null (intern-usage:resolve-intern-usage nil nil)))))
+  (testing "resolve-runtime-intern with nil context and nil string returns nil"
+    (ok (null (runtime-intern:resolve-runtime-intern nil nil)))))
 
 ;;; U-3: direct-call branch handles already-interned CL symbol heads
 ;;;
@@ -465,7 +465,7 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
 (defun check-intern-with-symbol-head (head args)
   "Check a synthetic form (HEAD . ARGS) where HEAD is a Lisp symbol (not a string),
 using an empty-context fake file.  Returns violations."
-  (let* ((rule (make-instance 'rules:intern-usage-rule))
+  (let* ((rule (make-instance 'rules:runtime-intern-rule))
          ;; Build a synthetic parser:form with an expr whose head is a real symbol
          (expr (cons head args))
          (form (make-instance 'parser:form
@@ -479,7 +479,7 @@ using an empty-context fake file.  Returns violations."
                               :file #p"test.lisp")))
     (rules:check-form rule form #p"test.lisp")))
 
-(deftest intern-usage-symbol-head
+(deftest runtime-intern-symbol-head
   (testing "Symbol head cl:intern is flagged"
     (let ((violations (check-intern-with-symbol-head 'cl:intern '("FOO"))))
       (ok (= (length violations) 1))
@@ -495,5 +495,5 @@ using an empty-context fake file.  Returns violations."
       (ok (null violations))))
 
   (testing "Symbol head from unrelated package is not flagged"
-    (let ((violations (check-intern-with-symbol-head 'intern-usage:resolve-intern-usage '(x nil))))
+    (let ((violations (check-intern-with-symbol-head 'runtime-intern:resolve-runtime-intern '(x nil))))
       (ok (null violations)))))
