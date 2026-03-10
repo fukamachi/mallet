@@ -251,6 +251,14 @@ else
     test_fail "Expected comment-ratio violations when enabled via --enable flag"
 fi
 
+# Documentation completeness
+test_start "RULES.md documents :comment-ratio rule under METRICS section"
+if grep -q ":comment-ratio" "$PROJECT_DIR/RULES.md" && grep -q ":min-lines" "$PROJECT_DIR/RULES.md"; then
+    test_pass
+else
+    test_fail "Expected :comment-ratio entry with options in RULES.md"
+fi
+
 # Summary
 echo ""
 echo "========================================="
