@@ -348,7 +348,17 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
 
   (testing "(funcall #'symbolicate ...) is flagged (name-only match)"
     (let ((violations (check-intern "(funcall #'symbolicate :foo :bar)")))
-      (ok (= (length violations) 1)))))
+      (ok (= (length violations) 1))))
+
+  (testing "(apply #'alexandria:symbolicate ...) is flagged"
+    (let ((violations (check-intern "(apply #'alexandria:symbolicate '(:foo :bar))")))
+      (ok (= (length violations) 1))
+      (ok (search "apply" (violation:violation-message (first violations))))))
+
+  (testing "(funcall #'uiop:intern* ...) is flagged"
+    (let ((violations (check-intern "(funcall #'uiop:intern* \"FOO\" :keyword)")))
+      (ok (= (length violations) 1))
+      (ok (search "funcall" (violation:violation-message (first violations)))))))
 
 ;;; Context-dependent tests (with real files)
 
