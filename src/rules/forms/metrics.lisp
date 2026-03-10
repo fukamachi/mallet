@@ -230,20 +230,14 @@
                           (return)))
     excluded-lines))
 
-(defun calculate-function-length-from-source (expr position-map source-lines
-                                               start-line start-column)
-  "Calculate the length of a function definition in code lines only.
-   Excludes:
-   - Line comments (;)
-   - Block comments (#| ... |#)
-   - Blank lines
-   - Docstrings
-   - Disabled reader conditionals (#+nil, #+(or), #-(and)) and their guarded forms
+(defun collect-form-line-context (expr position-map source-lines start-line)
+  "Collect shared context needed for per-line classification of a form.
+   Returns (values max-line docstring-start-line docstring-end-line
+                   block-comment-ranges disabled-conditional-lines).
 
-   Note: start-line is file-relative (from position-map).
-         source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
-  (declare (ignore start-column))
-
+   max-line is file-relative (the last line of EXPR in the file).
+   docstring-start-line and docstring-end-line are file-relative, or NIL if no docstring.
+   block-comment-ranges and disabled-conditional-lines are form-relative (1-indexed)."
   ;; Find end line from position-map (file-relative)
   (let ((max-line start-line))
     (maphash (lambda (k v)
@@ -269,30 +263,109 @@
                            (setf docstring-end-line (+ docstring-start-line newline-count)))))
                      position-map))))
 
-      ;; Find block comment ranges (form-relative indices)
-      (let ((block-comment-ranges (find-block-comment-ranges source-lines))
-            (disabled-conditional-lines (find-disabled-conditional-lines source-lines)))
+      ;; Find block comment ranges and disabled reader conditional lines (form-relative indices)
+      (values max-line
+              docstring-start-line
+              docstring-end-line
+              (find-block-comment-ranges source-lines)
+              (find-disabled-conditional-lines source-lines)))))
 
-        ;; Count code lines only
-        ;; Convert file-relative line numbers to form-relative indices
-        (let ((code-lines 0)
-              (form-start-line start-line))  ; First line of the form in file
-          (loop for file-line from start-line to max-line
-                for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
-                for line = (and (< form-index (length source-lines))
-                                (aref source-lines form-index))
-                when line
-                  do (unless (or (blank-line-p line)
-                                 (comment-line-p line)
-                                 ;; Exclude all lines within docstring span (file-relative comparison)
-                                 (and docstring-start-line docstring-end-line
-                                      (<= docstring-start-line file-line docstring-end-line))
-                                 ;; Exclude lines within block comments (form-relative comparison)
-                                 (line-in-block-comment-p form-index block-comment-ranges)
-                                 ;; Exclude disabled reader conditional lines (form-relative)
-                                 (member form-index disabled-conditional-lines :test #'=))
-                       (incf code-lines)))
-          code-lines)))))
+(defun calculate-function-length-from-source (expr position-map source-lines
+                                               start-line start-column)
+  "Calculate the length of a function definition in code lines only.
+   Excludes:
+   - Line comments (;)
+   - Block comments (#| ... |#)
+   - Blank lines
+   - Docstrings
+   - Disabled reader conditionals (#+nil, #+(or), #-(and)) and their guarded forms
+
+   Note: start-line is file-relative (from position-map).
+         source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
+  (declare (ignore start-column))
+
+  (multiple-value-bind (max-line docstring-start-line docstring-end-line
+                        block-comment-ranges disabled-conditional-lines)
+      (collect-form-line-context expr position-map source-lines start-line)
+
+    ;; Count code lines only
+    ;; Convert file-relative line numbers to form-relative indices
+    (let ((code-lines 0)
+          (form-start-line start-line))  ; First line of the form in file
+      (loop for file-line from start-line to max-line
+            for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
+            for line = (and (< form-index (length source-lines))
+                            (aref source-lines form-index))
+            when line
+              do (unless (or (blank-line-p line)
+                             (comment-line-p line)
+                             ;; Exclude all lines within docstring span (file-relative comparison)
+                             (and docstring-start-line docstring-end-line
+                                  (<= docstring-start-line file-line docstring-end-line))
+                             ;; Exclude lines within block comments (form-relative comparison)
+                             (line-in-block-comment-p form-index block-comment-ranges)
+                             ;; Exclude disabled reader conditional lines (form-relative)
+                             (member form-index disabled-conditional-lines :test #'=))
+                   (incf code-lines)))
+      code-lines)))
+
+(defun calculate-comment-ratio-from-source (expr position-map source-lines
+                                             start-line start-column
+                                             &key include-docstrings (min-lines 3))
+  "Calculate the comment ratio of a function definition.
+   Classifies each non-blank line as comment or code.
+   Comment lines include: line comments (;), block comments (#| ... |#),
+   and optionally docstring lines when INCLUDE-DOCSTRINGS is true.
+   Returns a plist (:ratio float :comment-lines integer :code-lines integer)
+   or NIL if code-lines is below MIN-LINES threshold.
+
+   Note: start-line is file-relative (from position-map).
+         source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
+  (declare (ignore start-column))
+
+  (multiple-value-bind (max-line docstring-start-line docstring-end-line
+                        block-comment-ranges disabled-conditional-lines)
+      (collect-form-line-context expr position-map source-lines start-line)
+
+    ;; Count comment and code lines
+    ;; Convert file-relative line numbers to form-relative indices
+    (let ((comment-lines 0)
+          (code-lines 0)
+          (form-start-line start-line))
+      (loop for file-line from start-line to max-line
+            for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
+            for line = (and (< form-index (length source-lines))
+                            (aref source-lines form-index))
+            when line
+              do (unless (or (blank-line-p line)
+                             (member form-index disabled-conditional-lines :test #'=))
+                   (cond
+                     ;; Line comment
+                     ((comment-line-p line)
+                      (incf comment-lines))
+                     ;; Block comment
+                     ((line-in-block-comment-p form-index block-comment-ranges)
+                      (incf comment-lines))
+                     ;; Docstring line (file-relative comparison)
+                     ((and docstring-start-line docstring-end-line
+                           (<= docstring-start-line file-line docstring-end-line))
+                      (when include-docstrings
+                        (incf comment-lines)))
+                     ;; Code line
+                     (t
+                      (incf code-lines)))))
+
+      ;; Return nil if below min-lines threshold
+      (when (< code-lines min-lines)
+        (return-from calculate-comment-ratio-from-source nil))
+
+      ;; Calculate ratio
+      (let ((total (+ comment-lines code-lines)))
+        (list :ratio (if (zerop total)
+                         0.0d0
+                         (coerce (/ comment-lines total) 'double-float))
+              :comment-lines comment-lines
+              :code-lines code-lines)))))
 
 (defun eq-subexpr-p (needle haystack)
   "Check if NEEDLE is EQ to HAYSTACK or any sub-expression in HAYSTACK."
