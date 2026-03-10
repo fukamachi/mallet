@@ -10,7 +10,8 @@
                  #:mallet/rules/forms/naming
                  #:mallet/rules/forms/lambda-list
                  #:mallet/rules/forms/asdf
-                 #:mallet/rules/forms/metrics)
+                 #:mallet/rules/forms/metrics
+                 #:mallet/rules/forms/eval-usage)
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
@@ -91,6 +92,11 @@ Severity defaults are defined in each rule class's :default-initargs."
               initargs))
       (:asdf-component-strings
        (apply #'make-instance 'asdf-component-strings-rule
+              initargs))
+
+      ;; Safety rules
+      (:eval-usage
+       (apply #'make-instance 'eval-usage-rule
               initargs))
 
       ;; Metric rules
