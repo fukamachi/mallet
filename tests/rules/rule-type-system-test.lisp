@@ -67,6 +67,14 @@
                                :category :style)))
       (ok (eq :style (base:rule-category rule)))))
 
+  (testing "Rule accepts :practice category"
+    (let ((rule (make-instance 'base:rule
+                               :name :test-rule
+                               :description "test"
+                               :severity :warning
+                               :category :practice)))
+      (ok (eq :practice (base:rule-category rule)))))
+
   (testing "Rule accepts :format category"
     (let ((rule (make-instance 'base:rule
                                :name :test-rule
@@ -186,6 +194,10 @@
   (testing ":if-without-else rule has :style category"
     (let ((rule (rules:make-rule :if-without-else)))
       (ok (eq :style (base:rule-category rule)))))
+
+  (testing ":no-package-use rule has :practice category"
+    (let ((rule (rules:make-rule :no-package-use)))
+      (ok (eq :practice (base:rule-category rule)))))
 
   (testing ":cyclomatic-complexity rule has :metrics category"
     (let ((rule (rules:make-rule :cyclomatic-complexity)))

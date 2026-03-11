@@ -171,8 +171,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                                        (unless (member severity '(:error :warning :info))
                                          (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
                                        (unless (member category '(:correctness :suspicious :cleanliness
-                                                                  :style :format :metrics))
-                                         (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :format :metrics), but got: ~S" category))
+                                                                  :style :practice :format :metrics))
+                                         (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :practice :format :metrics), but got: ~S" category))
                                        (cons category severity)))))
             (nreverse raw))))
 
