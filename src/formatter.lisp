@@ -115,15 +115,11 @@ Returns a plist of severity counts (:error N :warning M ...)."
 
 (defun format-text-summary (severity-counts &key (stream *standard-output*))
   "Print summary line based on accumulated SEVERITY-COUNTS plist.
-SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
+SEVERITY-COUNTS should be a plist like (:error 2 :warning 5 :info 3)."
   (let* ((error-count (or (getf severity-counts :error) 0))
          (warning-count (or (getf severity-counts :warning) 0))
-         (convention-count (or (getf severity-counts :convention) 0))
-         (format-count (or (getf severity-counts :format) 0))
          (info-count (or (getf severity-counts :info) 0))
-         (metrics-count (or (getf severity-counts :metrics) 0))
-         (total-violations (+ error-count warning-count convention-count
-                              format-count info-count metrics-count)))
+         (total-violations (+ error-count warning-count info-count)))
 
     (format stream "~%")
     (if (zerop total-violations)
@@ -136,14 +132,8 @@ SEVERITY-COUNTS should be a plist like (:error 2 :warning 5)."
             (push (format nil "~A error~:P" error-count) parts))
           (when (> warning-count 0)
             (push (format nil "~A warning~:P" warning-count) parts))
-          (when (> convention-count 0)
-            (push (format nil "~A convention~:P" convention-count) parts))
-          (when (> format-count 0)
-            (push (format nil "~A format~:P" format-count) parts))
           (when (> info-count 0)
             (push (format nil "~A info" info-count) parts))
-          (when (> metrics-count 0)
-            (push (format nil "~A metrics" metrics-count) parts))
 
           (let ((summary (format nil "✗ ~A ~A (~{~A~^, ~})"
                                  total-violations
@@ -233,8 +223,14 @@ Returns T if this file had violations, NIL otherwise."
                      (violation:violation-line v))
              (format stream "        \"column\": ~A,~%"
                      (violation:violation-column v))
-             (format stream "        \"message\": ~S~%"
+             (format stream "        \"message\": ~S,~%"
                      (violation:violation-message v))
+             (let ((cat (violation:violation-category v)))
+               (if cat
+                   (format stream "        \"category\": ~S~%"
+                           (string-downcase (symbol-name cat)))
+                   ;; null is emitted as a JSON literal (not a quoted string)
+                   (format stream "        \"category\": null~%")))
              (format stream "      }"))
     (format stream "~%    ]~%")
     (format stream "  }")

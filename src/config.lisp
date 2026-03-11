@@ -19,6 +19,7 @@
            #:*default-preset*
            ;; CLI overrides
            #:apply-cli-overrides
+           #:config-set-severity-overrides
            ;; Path override structure and accessors
            #:path-override
            #:path-override-patterns
@@ -64,18 +65,24 @@ Stores patterns that match files and the rules/disabled-rules that apply."
     :initarg :root-dir
     :initform nil
     :accessor config-root-dir
-    :documentation "Root directory where config file is located (nil for built-in configs)"))
+    :documentation "Root directory where config file is located (nil for built-in configs)")
+   (set-severity-overrides
+    :initarg :set-severity-overrides
+    :initform '()
+    :accessor config-set-severity-overrides
+    :documentation "Alist of (category . severity) from :set-severity directives in the config file"))
   (:documentation "Configuration for Mallet linter containing rule instances."))
 
-(defun make-config (&key rules disabled-rules path-rules ignore root-dir)
+(defun make-config (&key rules disabled-rules path-rules ignore root-dir set-severity-overrides)
   "Create a new config with RULES (list of rule instances), DISABLED-RULES (list of keywords),
-PATH-RULES, and IGNORE patterns."
+PATH-RULES, IGNORE patterns, and SET-SEVERITY-OVERRIDES (alist of (category . severity))."
   (make-instance 'config
                  :rules (or rules '())
                  :disabled-rules (or disabled-rules '())
                  :path-rules (or path-rules '())
                  :ignore (or ignore '())
-                 :root-dir root-dir))
+                 :root-dir root-dir
+                 :set-severity-overrides (or set-severity-overrides '())))
 
 ;;; Config parsing
 
@@ -88,9 +95,10 @@ RULE-SPEC is a cons of (rule-name . options-plist)."
 
 (defun parse-override-rules (override-forms base-rules base-disabled)
   "Parse override rules from (:enable ...) and (:disable ...) forms.
-Returns (values rules disabled-rules) where:
+Returns (values rules disabled-rules explicit-severity-names) where:
 - rules is a list of rule instances
-- disabled-rules is a list of rule names that are disabled"
+- disabled-rules is a list of rule names that are disabled
+- explicit-severity-names is a list of rule names that had an explicit :severity in their spec"
   ;; Create a hash table of base rules for easy lookup
   (let ((base-rules-map (make-hash-table :test 'eq)))
     (dolist (rule base-rules)
@@ -114,7 +122,8 @@ Returns (values rules disabled-rules) where:
       ;; Build final rule list
       (let ((result-rules '())
             (result-disabled (copy-list base-disabled))
-            (overridden-names (mapcar #'car override-specs)))
+            (overridden-names (mapcar #'car override-specs))
+            (explicit-severity-names '()))
 
         ;; Add all base rules that aren't being overridden
         (dolist (rule base-rules)
@@ -122,10 +131,12 @@ Returns (values rules disabled-rules) where:
             (unless (member rule-name overridden-names)
               (push rule result-rules))))
 
-        ;; Add override rules
+        ;; Add override rules; track those with explicit :severity
         (dolist (spec (nreverse override-specs))
           (let ((rule (create-rule-from-spec spec)))
             (push rule result-rules)
+            (when (getf (cdr spec) :severity)
+              (push (car spec) explicit-severity-names))
             ;; Remove from disabled list if it was there
             (setf result-disabled (remove (car spec) result-disabled))))
 
@@ -133,7 +144,7 @@ Returns (values rules disabled-rules) where:
         (dolist (rule-name disabled)
           (pushnew rule-name result-disabled))
 
-        (values (nreverse result-rules) result-disabled)))))
+        (values (nreverse result-rules) result-disabled explicit-severity-names)))))
 
 (defun parse-config (sexp &key preset-override)
   "Parse S-expression SEXP into a config object.
@@ -144,11 +155,33 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
   (unless (eq (first sexp) :mallet-config)
     (error "Config must start with :mallet-config"))
 
+  ;; Pre-pass: collect all :set-severity overrides before the main loop so that
+  ;; :for-paths blocks are always processed with the complete override set, regardless
+  ;; of ordering within the config file.
+  ;;
+  ;; When the same category appears more than once, the last directive wins.
+  ;; We achieve this by reversing the collected list before building the alist:
+  ;; assoc returns the first matching key, so putting the last-seen entry first
+  ;; makes it authoritative.
+  (let ((set-severity-overrides
+          (let ((raw (loop for item in (rest sexp)
+                           when (and (consp item) (eq (first item) :set-severity))
+                             collect (let ((category (second item))
+                                          (severity (third item)))
+                                       (unless (member severity '(:error :warning :info))
+                                         (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
+                                       (unless (member category '(:correctness :suspicious :cleanliness
+                                                                  :style :format :metrics))
+                                         (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :format :metrics), but got: ~S" category))
+                                       (cons category severity)))))
+            (nreverse raw))))
+
   (let ((rule-specs '())
         (disabled-rules '())
         (ignore-patterns '())
         (path-rules '())
-        (extends nil))
+        (extends nil)
+        (explicit-severity-rules '()))
 
     ;; Parse top-level options
     (loop for item in (rest sexp)
@@ -166,11 +199,18 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                     ;; New syntax: (:enable :rule-name :option value ...)
                     (let* ((rule-name (second item))
                            (options (cddr item)))
-                      (push (cons rule-name options) rule-specs)))
+                      (push (cons rule-name options) rule-specs)
+                      ;; Track rules with explicit :severity — they take precedence
+                      ;; over :set-severity category overrides.
+                      (when (getf options :severity)
+                        (push rule-name explicit-severity-rules))))
                    (:disable
                     ;; New syntax: (:disable :rule-name)
                     (let ((rule-name (second item)))
                       (push rule-name disabled-rules)))
+                   (:set-severity
+                    ;; Already collected in pre-pass above; skip here.
+                    nil)
                    (:ignore
                     ;; Ignore patterns: (:ignore "pattern1" "pattern2" ...)
                     (setf ignore-patterns (rest item)))
@@ -197,8 +237,18 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                              (merged-base-disabled
                                (union disabled-rules
                                       (set-difference extends-disabled project-wide-rule-names))))
-                        (multiple-value-bind (override-rules override-disabled)
+                        (multiple-value-bind (override-rules override-disabled override-explicit-sev)
                             (parse-override-rules override-forms merged-base-rules merged-base-disabled)
+                          ;; Apply :set-severity overrides to path-specific rules,
+                          ;; but skip rules that have an explicit per-rule :severity —
+                          ;; per-rule :severity takes precedence over :set-severity.
+                          (when set-severity-overrides
+                            (dolist (rule override-rules)
+                              (let* ((cat (rules:rule-category rule))
+                                     (sev-override (assoc cat set-severity-overrides)))
+                                (when (and sev-override
+                                           (not (member (rules:rule-name rule) override-explicit-sev)))
+                                  (setf (rules:rule-severity rule) (cdr sev-override))))))
                           (push (make-path-override
                                  :patterns patterns
                                  :rules override-rules
@@ -227,10 +277,23 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                        ;; Remove enabled rules from base disabled list
                        (set-difference (config-disabled-rules extends) rule-names)))))
 
-      (make-config :rules (nreverse rules)
-                   :disabled-rules disabled-rules
-                   :path-rules (nreverse path-rules)
-                   :ignore ignore-patterns))))
+      ;; Apply :set-severity overrides to rules in matching categories.
+      ;; Per-rule :severity (from (:enable :rule :severity :x)) takes precedence
+      ;; over :set-severity.  Rules without an explicit :severity get the category
+      ;; override applied.
+      (let ((final-rules (nreverse rules)))
+        (when set-severity-overrides
+          (dolist (rule final-rules)
+            (let* ((cat (rules:rule-category rule))
+                   (sev-override (assoc cat set-severity-overrides)))
+              (when (and sev-override
+                         (not (member (rules:rule-name rule) explicit-severity-rules)))
+                (setf (rules:rule-severity rule) (cdr sev-override))))))
+        (make-config :rules final-rules
+                     :disabled-rules disabled-rules
+                     :path-rules (nreverse path-rules)
+                     :ignore ignore-patterns
+                     :set-severity-overrides set-severity-overrides))))))
 
 ;;; Config file loading
 
@@ -345,36 +408,36 @@ Style preferences are disabled to keep output clean."
   "Create configuration with all rules enabled.
 Useful for exploration and discovering what rules exist."
   (let ((all-rules
-          '(;; ERROR: Objectively wrong code
+          '(;; Correctness
             :wrong-otherwise
-            ;; WARNING: Likely bugs or dangerous patterns
-            :unused-variables
-            :unused-local-functions
-            :missing-otherwise
             :mixed-optional-and-key
+            ;; Suspicious
             :eval-usage
             :runtime-intern
-            :no-package-use
-            ;; INFO: Code quality suggestions
-            :bare-float-literal
+            ;; Cleanliness
+            :unused-variables
+            :unused-local-functions
             :unused-local-nicknames
             :unused-imported-symbols
-            :constant-naming
             :unused-loop-variables
-            :needless-let*
-            ;; CONVENTION: Style/idiom suggestions
+            ;; Style
             :if-without-else
             :bare-progn-in-if
+            :missing-otherwise
             :interned-package-symbol
             :special-variable-naming
+            :constant-naming
             :asdf-component-strings
-            ;; FORMAT: Consensus formatting (Emacs/SLIME standards)
+            :needless-let*
+            :no-package-use
+            :bare-float-literal
+            ;; Format
             :no-tabs
             :trailing-whitespace
             :final-newline
-            ;; INFO: Subjective preferences
             :line-length
             :consecutive-blank-lines
+            ;; Metrics
             :function-length
             :cyclomatic-complexity
             :comment-ratio)))
@@ -428,29 +491,18 @@ Returns T if the file matches any ignore pattern, NIL otherwise."
 
 ;;; CLI override merging
 
-(defun get-all-rules-by-severity (severity)
-  "Get all rule instances with the given SEVERITY from the :all preset."
-  (let ((all-config (make-all-config)))
-    (remove-if-not (lambda (rule)
-                     (eq (rules:rule-severity rule) severity))
-                   (config-rules all-config))))
-
 (defun apply-cli-overrides (config cli-rules)
   "Apply CLI rule overrides to CONFIG. Returns new config object.
 CLI overrides have highest precedence.
 
 CLI-RULES is a plist with:
   :enable-rules - List of (rule-name . options-plist)
-  :disable-rules - List of rule-name keywords
-  :enable-groups - List of severity keywords
-  :disable-groups - List of severity keywords"
+  :disable-rules - List of rule-name keywords"
   (check-type config config)
   (check-type cli-rules list)
 
   (let* ((enable-rules (getf cli-rules :enable-rules))
          (disable-rules (getf cli-rules :disable-rules))
-         (enable-groups (getf cli-rules :enable-groups))
-         (disable-groups (getf cli-rules :disable-groups))
          (base-rules (config-rules config))
          (base-disabled (config-disabled-rules config))
          (result-rules '())
@@ -458,29 +510,22 @@ CLI-RULES is a plist with:
 
     ;; Step 1: Process each base rule against CLI overrides
     (dolist (rule base-rules)
-      (let* ((severity (rules:rule-severity rule))
-             (rule-name (rules:rule-name rule))
+      (let* ((rule-name (rules:rule-name rule))
              (explicitly-enabled (assoc rule-name enable-rules))
-             (explicitly-disabled (member rule-name disable-rules))
-             (group-enabled (member severity enable-groups))
-             (group-disabled (member severity disable-groups)))
+             (explicitly-disabled (member rule-name disable-rules)))
         (cond
-          ;; Explicitly enabled: recreate with new options (highest priority)
+          ;; Explicitly enabled: recreate with new options (highest priority).
+          ;; Preserve config-applied severity (e.g. from :set-severity) unless the
+          ;; CLI explicitly provides a :severity override.
           (explicitly-enabled
-           (let ((options (cdr explicitly-enabled)))
-             (push (apply #'rules:make-rule rule-name options) result-rules)))
+           (let* ((options (cdr explicitly-enabled))
+                  (new-rule (apply #'rules:make-rule rule-name options)))
+             (unless (getf options :severity)
+               (setf (rules:rule-severity new-rule) (rules:rule-severity rule)))
+             (push new-rule result-rules)))
 
           ;; Explicitly disabled: add to disabled list
           (explicitly-disabled
-           (pushnew rule-name result-disabled))
-
-          ;; Group enabled: include rule, remove from disabled
-          (group-enabled
-           (push rule result-rules)
-           (setf result-disabled (remove rule-name result-disabled)))
-
-          ;; Group disabled: add to disabled list
-          (group-disabled
            (pushnew rule-name result-disabled))
 
           ;; No CLI override: keep base rule state
@@ -488,33 +533,34 @@ CLI-RULES is a plist with:
            (unless (member rule-name base-disabled)
              (push rule result-rules))))))
 
-    ;; Step 2: Add rules that were only in enable-rules (not in base config)
-    (dolist (enable-spec enable-rules)
-      (let ((rule-name (car enable-spec)))
-        (unless (find rule-name base-rules :key #'rules:rule-name)
-          (let ((options (cdr enable-spec)))
-            (push (apply #'rules:make-rule rule-name options) result-rules)
-            ;; Remove from disabled if it was there
-            (setf result-disabled (remove rule-name result-disabled))))))
-
-    ;; Step 3: Add rules from enabled groups that aren't in base config
-    (dolist (severity enable-groups)
-      (let ((group-rules (get-all-rules-by-severity severity)))
-        (dolist (rule group-rules)
-          (let ((rule-name (rules:rule-name rule)))
-            (unless (or (find rule-name result-rules :key #'rules:rule-name)
-                        (find rule-name base-rules :key #'rules:rule-name)
-                        (assoc rule-name enable-rules))  ; Skip if explicitly enabled
-              (push rule result-rules)
+    ;; Step 2: Add rules that were only in enable-rules (not in base config).
+    ;; Apply :set-severity overrides for rules without an explicit CLI :severity,
+    ;; consistent with the per-rule :severity > :set-severity precedence used in
+    ;; parse-config.
+    (let ((overrides (config-set-severity-overrides config)))
+      (dolist (enable-spec enable-rules)
+        (let ((rule-name (car enable-spec)))
+          (unless (find rule-name base-rules :key #'rules:rule-name)
+            (let* ((options (cdr enable-spec))
+                   (new-rule (apply #'rules:make-rule rule-name options)))
+              ;; Apply :set-severity when no explicit :severity was given on the CLI.
+              (when (and overrides (not (getf options :severity)))
+                (let* ((cat (rules:rule-category new-rule))
+                       (sev-override (assoc cat overrides)))
+                  (when sev-override
+                    (setf (rules:rule-severity new-rule) (cdr sev-override)))))
+              (push new-rule result-rules)
+              ;; Remove from disabled if it was there
               (setf result-disabled (remove rule-name result-disabled)))))))
 
-    ;; Step 4: Create new config with overridden rules
+    ;; Step 3: Create new config with overridden rules
     (make-config
      :rules (nreverse result-rules)
      :disabled-rules result-disabled
      :path-rules (config-path-rules config)
      :ignore (config-ignore config)
-     :root-dir (config-root-dir config))))
+     :root-dir (config-root-dir config)
+     :set-severity-overrides (config-set-severity-overrides config))))
 
 ;;; Config file discovery
 

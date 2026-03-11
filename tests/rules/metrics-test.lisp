@@ -880,9 +880,14 @@
                 violations)))))
 
 (deftest comment-ratio-rule-severity
-  (testing "comment-ratio rule has :metrics severity"
+  (testing "comment-ratio rule has :info severity"
     (let ((rule (make-instance 'rules:comment-ratio-rule)))
-      (ok (eq :metrics (base:rule-severity rule))))))
+      (ok (eq :info (base:rule-severity rule))))))
+
+(deftest comment-ratio-rule-category
+  (testing "comment-ratio rule has :metrics category"
+    (let ((rule (make-instance 'rules:comment-ratio-rule)))
+      (ok (eq :metrics (base:rule-category rule))))))
 
 (deftest comment-ratio-rule-disabled-by-default
   (testing "comment-ratio is not in default config"

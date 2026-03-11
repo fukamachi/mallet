@@ -143,10 +143,11 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                      (suppression:pop-scope-suppression *suppression-state*)
                      (setf pending-next-form-suppression nil))))))))))
 
-    ;; Generate fix metadata
+    ;; Generate fix metadata and populate category from rule
     (dolist (v violations)
       (let ((rule (find (violation:violation-rule v) rules :key #'rules:rule-name)))
         (when rule
+          (setf (violation:violation-category v) (rules:rule-category rule))
           (let ((fix (rules:make-fix rule text file v)))
             (when fix
               (setf (violation:violation-fix v) fix))))))

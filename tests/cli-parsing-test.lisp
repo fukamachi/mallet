@@ -5,7 +5,7 @@
                 #:parse-rule-options
                 #:parse-rule-name
                 #:parse-rule-spec
-                #:parse-group-name))
+                #:should-fail-p))
 (in-package #:mallet/tests/cli-parsing)
 
 ;;; Tests for parse-option-value
@@ -86,20 +86,26 @@
       (ok (eq :cyclomatic-complexity (car result)))
       (ok (equal '(:max 15 :variant :modified) (cdr result))))))
 
-;;; Tests for parse-group-name
+;;; Tests for should-fail-p
 
-(deftest parse-group-name-valid
-  (testing "Parse valid group names"
-    (ok (eq :error (parse-group-name "error")))
-    (ok (eq :warning (parse-group-name "warning")))
-    (ok (eq :convention (parse-group-name "convention")))
-    (ok (eq :format (parse-group-name "format")))
-    (ok (eq :info (parse-group-name "info")))
-    (ok (eq :metrics (parse-group-name "metrics")))))
+(deftest should-fail-p-fail-on-error
+  (testing "fail-on :error: only fail when there are errors"
+    (ok (should-fail-p :error t t t))     ; errors present
+    (ok (not (should-fail-p :error nil t t)))  ; no errors, only warnings
+    (ok (not (should-fail-p :error nil nil t))) ; no errors, only info
+    (ok (not (should-fail-p :error nil nil nil)))))  ; no violations
 
-(deftest parse-group-name-invalid
-  (testing "Invalid group name"
-    (ok (signals (parse-group-name "invalid")
-            'mallet/errors:invalid-group))
-    (ok (signals (parse-group-name "foo")
-            'mallet/errors:invalid-group))))
+(deftest should-fail-p-fail-on-warning
+  (testing "fail-on :warning: fail when there are errors or warnings"
+    (ok (should-fail-p :warning t t t))     ; errors
+    (ok (should-fail-p :warning nil t t))   ; warnings
+    (ok (not (should-fail-p :warning nil nil t)))  ; only info
+    (ok (not (should-fail-p :warning nil nil nil)))))  ; no violations
+
+(deftest should-fail-p-fail-on-info
+  (testing "fail-on :info: fail when there are any violations"
+    (ok (should-fail-p :info t t t))     ; errors
+    (ok (should-fail-p :info nil t t))   ; warnings
+    (ok (should-fail-p :info nil nil t)) ; any violations
+    (ok (not (should-fail-p :info nil nil nil)))))  ; no violations
+

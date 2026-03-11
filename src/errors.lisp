@@ -25,9 +25,7 @@
            #:unknown-rule
            #:unknown-rule-value
            #:invalid-rule-option
-           #:invalid-rule-option-value
-           #:invalid-group
-           #:invalid-group-value))
+           #:invalid-rule-option-value))
 (in-package #:mallet/errors)
 
 ;;; Base error conditions
@@ -151,12 +149,3 @@
                             Expected format: key=value (e.g., max=15)"
                      (invalid-rule-option-value condition))))
   (:documentation "Signaled when a rule option has invalid syntax."))
-
-(define-condition invalid-group (cli-error)
-  ((value :initarg :value
-          :reader invalid-group-value))
-  (:report (lambda (condition stream)
-             (format stream "Invalid group: ~A~%~
-                            Expected one of: error, warning, convention, format, info, metrics"
-                     (invalid-group-value condition))))
-  (:documentation "Signaled when an invalid group name is specified."))

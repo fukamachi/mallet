@@ -101,6 +101,6 @@
       (ok (= (length violations) 5)))))
 
 (deftest interned-package-symbol-severity
-  (testing "Rule has :convention severity"
+  (testing "Rule has :info severity"
     (let ((rule (make-instance 'rules:interned-package-symbol-rule)))
-      (ok (eq (rules:rule-severity rule) :convention)))))
+      (ok (eq (rules:rule-severity rule) :info)))))

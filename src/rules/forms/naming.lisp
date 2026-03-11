@@ -16,7 +16,8 @@
   (:default-initargs
    :name :special-variable-naming
    :description "Special variables should be named *foo*"
-   :severity :convention
+   :severity :info
+   :category :style
    :type :form))
 
 (defmethod base:check-form ((rule special-variable-naming-rule) form file)
@@ -84,6 +85,7 @@
    :name :constant-naming
    :description "Constants should be named +foo+"
    :severity :info
+   :category :style
    :type :form))
 
 (defmethod base:check-form ((rule constant-naming-rule) form file)

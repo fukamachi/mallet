@@ -1982,6 +1982,7 @@ Returns NIL for empty bindings, unknown binding shapes, or when dependencies exi
    :name :needless-let*
    :description "Use 'let' instead of 'let*' when bindings don't depend on each other"
    :severity :info
+   :category :style
    :type :form)
   (:documentation "Rule to detect LET* forms whose bindings are independent."))
 
@@ -2046,6 +2047,7 @@ Returns NIL for empty bindings, unknown binding shapes, or when dependencies exi
    :name :unused-variables
    :description "Variables should be used or explicitly ignored"
    :severity :warning
+   :category :cleanliness
    :type :form)
   (:documentation "Rule to detect unused variables in bindings."))
 
@@ -2055,6 +2057,7 @@ Returns NIL for empty bindings, unknown binding shapes, or when dependencies exi
    :name :unused-loop-variables
    :description "LOOP variables should be used or explicitly ignored"
    :severity :info
+   :category :cleanliness
    :type :form)
   (:documentation "Rule to detect unused LOOP variables.
 Disabled by default since unused LOOP variables are common and idiomatic in CL

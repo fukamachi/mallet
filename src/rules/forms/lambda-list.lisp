@@ -15,7 +15,8 @@
   (:default-initargs
    :name :mixed-optional-and-key
    :description "Don't mix &optional and &key in lambda lists"
-   :severity :warning
+   :severity :error
+   :category :correctness
    :type :form))
 
 (defmethod base:check-form ((rule mixed-optional-and-key-rule) form file)

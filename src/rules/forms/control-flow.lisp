@@ -18,7 +18,8 @@
   (:default-initargs
    :name :if-without-else
    :description "Use 'when' or 'unless' instead of 'if' without else clause"
-   :severity :convention
+   :severity :warning
+   :category :style
    :type :form)
   (:documentation "Rule to detect 'if' forms without an else clause."))
 
@@ -92,7 +93,8 @@ Suppressions are handled automatically by the :around method."
   (:default-initargs
    :name :bare-progn-in-if
    :description "Use 'cond' instead of 'if' with bare 'progn'"
-   :severity :convention
+   :severity :info
+   :category :style
    :type :form)
   (:documentation "Rule to detect bare 'progn' in 'if' clauses."))
 
@@ -177,7 +179,8 @@ Suppressions are handled automatically by the :around method."
   (:default-initargs
    :name :missing-otherwise
    :description "case/typecase should have 'otherwise' clause"
-   :severity :warning
+   :severity :info
+   :category :style
    :type :form)
   (:documentation "Rule to detect case/typecase without otherwise clause."))
 
@@ -294,6 +297,7 @@ Suppressions are handled automatically by the :around method."
    :name :wrong-otherwise
    :description "ecase/etypecase should not have 'otherwise' or 't' clause"
    :severity :error
+   :category :correctness
    :type :form)
   (:documentation "Rule to detect otherwise/t in ecase/etypecase."))
 

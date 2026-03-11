@@ -24,6 +24,7 @@
            #:rule-name
            #:rule-description
            #:rule-severity
+           #:rule-category
            #:rule-type
            #:rule-enabled-p
            #:config
@@ -35,6 +36,7 @@
            #:violation-column
            #:violation-severity
            #:violation-message
+           #:violation-category
            #:violation-fix
            ;; Re-exported from mallet/parser
            #:token
@@ -54,7 +56,9 @@
            #:form-file
            #:form-source
            #:parse-forms
-           #:analyze-text))
+           #:analyze-text
+           ;; CLI helpers (exported for testing)
+           #:should-fail-p))
 (in-package #:mallet)
 
 ;;; Special variables
@@ -123,14 +127,6 @@ Returns (rule-name . options-plist)."
         ;; No options: just rule name
         (cons (parse-rule-name spec) '()))))
 
-(defun parse-group-name (group-str)
-  "Parse group name and validate it's a valid severity."
-  (check-type group-str string)
-  (let ((keyword (intern (string-upcase group-str) :keyword)))
-    (unless (member keyword '(:error :warning :convention :format :info :metrics))
-      (error 'errors:invalid-group :value group-str))
-    keyword))
-
 (defun handle-format-option (args)
   "Handle --format option. Returns (values format remaining-args)."
   (let ((fmt (pop args)))
@@ -184,24 +180,25 @@ Returns (rule-name . options-plist)."
       (error 'errors:missing-option-value :option "--disable"))
     (values (parse-rule-name rule-name-str) args)))
 
-(defun handle-enable-group-option (args)
-  "Handle --enable-group option. Returns (values group-name remaining-args)."
-  (let ((group-str (pop args)))
-    (unless group-str
-      (error 'errors:missing-option-value :option "--enable-group"))
-    (values (parse-group-name group-str) args)))
-
-(defun handle-disable-group-option (args)
-  "Handle --disable-group option. Returns (values group-name remaining-args)."
-  (let ((group-str (pop args)))
-    (unless group-str
-      (error 'errors:missing-option-value :option "--disable-group"))
-    (values (parse-group-name group-str) args)))
-
+(defun handle-fail-on-option (args)
+  "Handle --fail-on option. Returns (values fail-on-keyword remaining-args)."
+  (let ((level-str (pop args)))
+    (unless level-str
+      (error 'errors:missing-option-value :option "--fail-on"))
+    (values
+     (cond
+       ((string= level-str "error") :error)
+       ((string= level-str "warning") :warning)
+       ((string= level-str "info") :info)
+       (t (error 'errors:invalid-option-value
+                 :option "--fail-on"
+                 :value level-str
+                 :expected "error, warning, or info")))
+     args)))
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug no-color fix-mode cli-rules strict files).
+Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on files).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
@@ -209,11 +206,9 @@ Signals specific error conditions for invalid input."
         (debug nil)
         (no-color nil)
         (fix-mode nil)
-        (strict nil)
+        (fail-on :error)
         (enable-rules '())
         (disable-rules '())
-        (enable-groups '())
-        (disable-groups '())
         (files '()))
     (loop while args do
       (let ((arg (pop args)))
@@ -239,8 +234,12 @@ Signals specific error conditions for invalid input."
            (setf fix-mode :fix))
           ((string= arg "--fix-dry-run")
            (setf fix-mode :fix-dry-run))
+          ((string= arg "--fail-on")
+           (multiple-value-setq (fail-on args)
+             (handle-fail-on-option args)))
           ((string= arg "--strict")
-           (setf strict t))
+           ;; Backward compatibility: --strict is alias for --fail-on info
+           (setf fail-on :info))
           ((string= arg "--enable")
            (let (rule-spec)
              (multiple-value-setq (rule-spec args)
@@ -251,16 +250,6 @@ Signals specific error conditions for invalid input."
              (multiple-value-setq (rule-name args)
                (handle-disable-option args))
              (push rule-name disable-rules)))
-          ((string= arg "--enable-group")
-           (let (group-name)
-             (multiple-value-setq (group-name args)
-               (handle-enable-group-option args))
-             (push group-name enable-groups)))
-          ((string= arg "--disable-group")
-           (let (group-name)
-             (multiple-value-setq (group-name args)
-               (handle-disable-group-option args))
-             (push group-name disable-groups)))
           ((string= arg "--help")
            (print-help)
            (uiop:quit 0))
@@ -272,10 +261,8 @@ Signals specific error conditions for invalid input."
           (t
            (push arg files)))))
     (let ((cli-rules (list :enable-rules (nreverse enable-rules)
-                           :disable-rules (nreverse disable-rules)
-                           :enable-groups (nreverse enable-groups)
-                           :disable-groups (nreverse disable-groups))))
-      (values format config-path preset debug no-color fix-mode cli-rules strict (nreverse files)))))
+                           :disable-rules (nreverse disable-rules))))
+      (values format config-path preset debug no-color fix-mode cli-rules fail-on (nreverse files)))))
 
 
 (defun print-help ()
@@ -295,13 +282,13 @@ Options:
   --enable <rule>     Enable specific rule (e.g., --enable cyclomatic-complexity)
   --enable <rule:opts> Enable rule with options (e.g., --enable line-length:max=120)
   --disable <rule>    Disable specific rule (e.g., --disable trailing-whitespace)
-  --enable-group <group>  Enable all rules in severity group
-  --disable-group <group> Disable all rules in severity group
+
+  --fail-on <level>   Exit 1 if any violation meets or exceeds level (error, warning, info; default: error)
+  --strict            Alias for --fail-on info (exit 1 for any violation)
 
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
   --no-color          Disable ANSI color codes in output
-  --strict            Exit non-zero for any violation (including format/info/metrics)
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
@@ -316,13 +303,10 @@ Presets:
   all                 All rules enabled (useful for exploration)
   none                No rules enabled (explicitly enable specific rules)
 
-Rule Groups (by severity):
-  error               Objectively wrong code (causes runtime errors)
+Severity Levels (for --fail-on):
+  error               Objectively wrong code (exit 1 by default)
   warning             Likely bugs or dangerous patterns
-  convention          Idiom suggestions (not wrong, but not idiomatic)
-  format              Consensus formatting (Emacs/SLIME standards)
-  info                Subjective preferences (style choices)
-  metrics             Code quality measurements (complexity, length)
+  info                Style preferences, metrics, and formatting suggestions
 
 Examples:
   mallet src
@@ -334,14 +318,14 @@ Examples:
   mallet --fix src/                   # Auto-fix violations
   mallet --fix-dry-run src/           # Preview fixes without changing files
 
-  # Enable metrics rules without config file
-  mallet --enable-group metrics src/
+  # Fail on warnings and above (CI-friendly)
+  mallet --fail-on warning src/
+
+  # Fail on any violation (equivalent to --strict)
+  mallet --fail-on info src/
 
   # Enable specific rule with custom options
   mallet --enable cyclomatic-complexity:max=15 src/
-
-  # Mix preset with CLI overrides
-  mallet --preset default --enable-group metrics src/
 
   # Override multiple rules
   mallet --enable cyclomatic-complexity:max=10 --enable function-length:max=30 src/
@@ -401,17 +385,26 @@ Returns the final config with CLI preset override applied."
 (defun has-cli-rules-p (cli-rules)
   "Check if cli-rules has any actual overrides."
   (or (getf cli-rules :enable-rules)
-      (getf cli-rules :disable-rules)
-      (getf cli-rules :enable-groups)
-      (getf cli-rules :disable-groups)))
+      (getf cli-rules :disable-rules)))
 
 (defun track-violation-severity (violations)
   "Check violations for errors, warnings, and any violations.
-Returns (values has-errors-p has-warnings-p has-any-p)."
+Returns (values has-errors-p has-warnings-p has-any-p).
+Note: :info-severity violations are NOT counted in has-warnings-p; they are
+only counted in has-any-p (used when fail-on is :info)."
   (values
    (some (lambda (v) (eq (violation-severity v) :error)) violations)
    (some (lambda (v) (eq (violation-severity v) :warning)) violations)
    (not (null violations))))
+
+(defun should-fail-p (fail-on has-errors has-warnings has-any-violations)
+  "Return T if the process should exit 1 given FAIL-ON threshold and violation presence.
+FAIL-ON is one of :error, :warning, :info.
+Severity ordering: error > warning > info."
+  (ecase fail-on
+    (:error has-errors)
+    (:warning (or has-errors has-warnings))
+    (:info has-any-violations)))
 
 (defun process-fix-mode (all-violations fix-mode format)
   "Apply fixes to violations and output results.
@@ -473,7 +466,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (uiop:print-condition-backtrace e))
                  (uiop:quit 3))))
 
-          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules strict file-args)
+          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on file-args)
               (parse-args args)
 
             ;; Enable debug mode if requested
@@ -565,12 +558,10 @@ Lints files specified in ARGS and exits with appropriate status code."
                   (:json
                    (formatter:format-json-end))))
 
-              ;; Exit with appropriate status
-              (cond
-                (has-errors (uiop:quit 2))
-                (has-warnings (uiop:quit 1))
-                ((and strict has-any-violations) (uiop:quit 1))
-                (t (uiop:quit 0))))))
+              ;; Exit with appropriate status (0 or 1 only)
+              (if (should-fail-p fail-on has-errors has-warnings has-any-violations)
+                  (uiop:quit 1)
+                  (uiop:quit 0)))))
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt
        #-sbcl error ()

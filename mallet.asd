@@ -1,5 +1,5 @@
 (defsystem "mallet"
-  :version "0.1.1"
+  :version "0.2.0"
   :description "A sensible Common Lisp linter that catches mistakes, not style"
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
   :license "MIT"
@@ -117,6 +117,7 @@
      (:file "bare-float-literal-test")
      (:file "eval-usage-test")
      (:file "runtime-intern-test")
-     (:file "no-package-use-test"))))
+     (:file "no-package-use-test")
+     (:file "rule-type-system-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

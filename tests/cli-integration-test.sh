@@ -107,12 +107,10 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
         fi
 
         # Determine expected exit code based on highest severity
-        # Exit 2: ERROR, Exit 1: WARNING, Exit 0: CONVENTION/FORMAT/INFO/METRICS
+        # Default --fail-on is error: exit 1 only for errors, not warnings/info
         EXPECTED_EXIT_CODE=0
         if [ -f "$expected_file" ]; then
             if grep -q ' error$' "$expected_file" 2>/dev/null; then
-                EXPECTED_EXIT_CODE=2
-            elif grep -q ' warning$' "$expected_file" 2>/dev/null; then
                 EXPECTED_EXIT_CODE=1
             fi
         fi
@@ -233,13 +231,60 @@ else
     test_fail "Expected wrong-otherwise violations"
 fi
 
-# Test severity levels
-test_start "Form rules file returns exit code 2 (has errors)"
+# Test exit codes
+test_start "Form rules file returns exit code 1 (has errors)"
+EXIT_CODE=0
 "$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
-if [ $EXIT_CODE -eq 2 ]; then
+if [ $EXIT_CODE -eq 1 ]; then
     test_pass
 else
-    test_fail "Expected exit code 2 (errors), got $EXIT_CODE"
+    test_fail "Expected exit code 1 (errors), got $EXIT_CODE"
+fi
+
+# --fail-on flag tests
+test_start "--fail-on error: exit 0 for warning-only violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on error "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 0 (no errors, only warnings), got $EXIT_CODE"
+fi
+
+test_start "--fail-on warning: exit 1 for warning violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on warning "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (warnings with --fail-on warning), got $EXIT_CODE"
+fi
+
+test_start "--fail-on info: exit 1 for any violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on info "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (any violations with --fail-on info), got $EXIT_CODE"
+fi
+
+test_start "--strict: exit 1 for any violations (alias for --fail-on info)"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --strict "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (--strict with warnings), got $EXIT_CODE"
+fi
+
+test_start "--fail-on error: exit 1 for error violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on error "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (errors with --fail-on error), got $EXIT_CODE"
 fi
 
 # Metrics rules - disabled-by-default with --enable flag

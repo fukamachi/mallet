@@ -16,6 +16,7 @@
    :name :eval-usage
    :description "Avoid using cl:eval at runtime for safety"
    :severity :warning
+   :category :suspicious
    :type :form)
   (:documentation "Rule to detect runtime use of cl:eval, including via funcall and apply."))
 

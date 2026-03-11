@@ -66,25 +66,24 @@
                               :file file))
            (v3 (make-instance 'violation:violation
                               :rule :if-without-else
-                              :severity :convention
+                              :severity :warning
                               :line 20
                               :column 0
-                              :message "Convention message"
+                              :message "Warning message"
                               :file file))
            (counts (formatter:format-line-file
                     file
                     (list v1 v2 v3)
                     :stream (make-string-output-stream))))
       ;; Check severity counts in returned plist
-      (ok (= (getf counts :warning) 1))
-      (ok (= (getf counts :error) 1))
-      (ok (= (getf counts :convention) 1))))
+      (ok (= (getf counts :warning) 2))
+      (ok (= (getf counts :error) 1))))
 
   (testing "format-line-file with fixed violations"
     (let* ((file (pathname "/path/to/file.lisp"))
            (v1 (make-instance 'violation:violation
                               :rule :trailing-whitespace
-                              :severity :format
+                              :severity :warning
                               :line 10
                               :column 5
                               :message "Trailing whitespace"
@@ -153,4 +152,77 @@
       (ok (search "\"severity\": \"warning\"" output))
       (ok (search "\"line\": 10" output))
       (ok (search "\"column\": 5" output))
-      (ok (search "\"message\": \"Variable 'x' is unused\"" output)))))
+      (ok (search "\"message\": \"Variable 'x' is unused\"" output))
+      ;; No category when nil
+      (ok (search "\"category\": null" output))))
+
+  (testing "format-json-file includes category when present"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :line-length
+                              :severity :warning
+                              :line 5
+                              :column 0
+                              :category :style
+                              :message "Line too long"
+                              :file file))
+           (output (with-output-to-string (stream)
+                     (formatter:format-json-file
+                      file
+                      (list v1)
+                      t
+                      :stream stream))))
+      (ok (search "\"category\": \"style\"" output)))))
+
+(deftest format-with-info-severity
+  (testing "format-line-file with :info severity"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :cyclomatic-complexity
+                              :severity :info
+                              :line 42
+                              :column 0
+                              :message "Function is too complex"
+                              :file file))
+           (output (with-output-to-string (stream)
+                     (formatter:format-line-file
+                      file
+                      (list v1)
+                      :stream stream))))
+      (ok (search "info:" output))
+      (ok (search "Function is too complex" output))
+      (ok (search "[cyclomatic-complexity]" output))))
+
+  (testing "format-line-file returns :info count"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :line-length
+                              :severity :info
+                              :line 10
+                              :column 0
+                              :message "Line too long"
+                              :file file))
+           (counts (formatter:format-line-file
+                    file
+                    (list v1)
+                    :stream (make-string-output-stream))))
+      (ok (= (getf counts :info) 1))
+      (ok (null (getf counts :error)))
+      (ok (null (getf counts :warning)))))
+
+  (testing "format-text-file with :info severity"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :line-length
+                              :severity :info
+                              :line 99
+                              :column 0
+                              :message "Line too long"
+                              :file file))
+           (output (with-output-to-string (stream)
+                     (formatter:format-text-file
+                      file
+                      (list v1)
+                      :stream stream))))
+      (ok (search "info" output))
+      (ok (search "Line too long" output)))))
