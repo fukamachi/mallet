@@ -24,6 +24,7 @@
            #:rule-name
            #:rule-description
            #:rule-severity
+           #:rule-category
            #:rule-type
            #:rule-enabled-p
            #:config
@@ -127,7 +128,7 @@ Returns (rule-name . options-plist)."
   "Parse group name and validate it's a valid severity."
   (check-type group-str string)
   (let ((keyword (intern (string-upcase group-str) :keyword)))
-    (unless (member keyword '(:error :warning :convention :format :info :metrics))
+    (unless (member keyword '(:error :warning :info))
       (error 'errors:invalid-group :value group-str))
     keyword))
 

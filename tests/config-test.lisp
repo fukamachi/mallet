@@ -692,10 +692,10 @@
     (let* ((base-config (config:get-built-in-config :default))
            (cli-rules '(:enable-rules ()
                         :disable-rules ()
-                        :enable-groups (:metrics)
+                        :enable-groups (:info)
                         :disable-groups ()))
            (merged (config:apply-cli-overrides base-config cli-rules)))
-      ;; Metrics rules should be added
+      ;; Info/metrics rules should be added
       (ok (find :cyclomatic-complexity (config:config-rules merged)
                 :key #'rules:rule-name))
       (ok (find :function-length (config:config-rules merged)
@@ -707,9 +707,9 @@
            (cli-rules '(:enable-rules ()
                         :disable-rules ()
                         :enable-groups ()
-                        :disable-groups (:metrics)))
+                        :disable-groups (:info)))
            (merged (config:apply-cli-overrides base-config cli-rules)))
-      ;; Metrics rules should be disabled
+      ;; Info/metrics rules should be disabled
       (ok (not (find :cyclomatic-complexity (config:config-rules merged)
                      :key #'rules:rule-name)))
       (ok (not (find :function-length (config:config-rules merged)
@@ -721,7 +721,7 @@
            (cli-rules '(:enable-rules ((:cyclomatic-complexity :max 5))
                         :disable-rules ()
                         :enable-groups ()
-                        :disable-groups (:metrics)))
+                        :disable-groups (:info)))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       ;; cyclomatic-complexity should be enabled with custom option (overrides group disable)
       (ok (find :cyclomatic-complexity (config:config-rules merged)
@@ -747,7 +747,7 @@
     (let* ((base-config (config:get-built-in-config :default))
            (cli-rules '(:enable-rules ((:line-length :max 120))
                         :disable-rules (:if-without-else)
-                        :enable-groups (:metrics)
+                        :enable-groups (:info)
                         :disable-groups ()))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       ;; line-length enabled with custom option
@@ -755,7 +755,7 @@
                 :key #'rules:rule-name))
       ;; if-without-else disabled
       (ok (member :if-without-else (config:config-disabled-rules merged)))
-      ;; metrics group enabled
+      ;; info/metrics group enabled
       (ok (find :cyclomatic-complexity (config:config-rules merged)
                 :key #'rules:rule-name))
       (ok (find :function-length (config:config-rules merged)

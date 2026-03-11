@@ -18,7 +18,8 @@
   (:default-initargs
    :name :if-without-else
    :description "Use 'when' or 'unless' instead of 'if' without else clause"
-   :severity :convention
+   :severity :warning
+   :category :cleanliness
    :type :form)
   (:documentation "Rule to detect 'if' forms without an else clause."))
 
@@ -92,7 +93,8 @@ Suppressions are handled automatically by the :around method."
   (:default-initargs
    :name :bare-progn-in-if
    :description "Use 'cond' instead of 'if' with bare 'progn'"
-   :severity :convention
+   :severity :warning
+   :category :cleanliness
    :type :form)
   (:documentation "Rule to detect bare 'progn' in 'if' clauses."))
 

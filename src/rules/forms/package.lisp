@@ -30,7 +30,8 @@
   (:default-initargs
    :name :interned-package-symbol
    :description "Use uninterned symbols (#:symbol) in package definitions"
-   :severity :convention
+   :severity :warning
+   :category :style
    :type :form))
 
 (defun extract-symbol-source-at (source-text line column)

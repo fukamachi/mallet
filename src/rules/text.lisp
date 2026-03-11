@@ -84,7 +84,8 @@ Returns the line content as a string, or NIL if line doesn't exist."
   (:default-initargs
    :name :trailing-whitespace
    :description "Lines should not have trailing whitespace"
-   :severity :format
+   :severity :info
+   :category :format
    :type :text)
   (:documentation "Rule to check for trailing whitespace on lines."))
 
@@ -144,7 +145,8 @@ Returns the line content as a string, or NIL if line doesn't exist."
   (:default-initargs
    :name :no-tabs
    :description "Use spaces instead of tab characters"
-   :severity :format
+   :severity :info
+   :category :format
    :type :text)
   (:documentation "Rule to check for tab characters."))
 
@@ -181,7 +183,8 @@ Returns the line content as a string, or NIL if line doesn't exist."
   (:default-initargs
    :name :final-newline
    :description "Files must end with a newline"
-   :severity :format
+   :severity :info
+   :category :format
    :type :text)
   (:documentation "Rule to check that files end with a newline."))
 

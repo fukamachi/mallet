@@ -157,6 +157,6 @@
           :reader invalid-group-value))
   (:report (lambda (condition stream)
              (format stream "Invalid group: ~A~%~
-                            Expected one of: error, warning, convention, format, info, metrics"
+                            Expected one of: error, warning, info"
                      (invalid-group-value condition))))
   (:documentation "Signaled when an invalid group name is specified."))

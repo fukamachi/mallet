@@ -15,7 +15,8 @@
   (:default-initargs
    :name :asdf-component-strings
    :description "ASDF components, systems, and dependencies should use strings not symbols"
-   :severity :convention
+   :severity :warning
+   :category :style
    :type :form
    :file-types '(:asd)))
 

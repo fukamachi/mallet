@@ -92,10 +92,7 @@
   (testing "Parse valid group names"
     (ok (eq :error (parse-group-name "error")))
     (ok (eq :warning (parse-group-name "warning")))
-    (ok (eq :convention (parse-group-name "convention")))
-    (ok (eq :format (parse-group-name "format")))
-    (ok (eq :info (parse-group-name "info")))
-    (ok (eq :metrics (parse-group-name "metrics")))))
+    (ok (eq :info (parse-group-name "info")))))
 
 (deftest parse-group-name-invalid
   (testing "Invalid group name"

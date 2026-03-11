@@ -11,6 +11,7 @@
            #:rule-name
            #:rule-description
            #:rule-severity
+           #:rule-category
            #:rule-type
            #:rule-enabled-p
            #:rule-file-types
@@ -53,8 +54,14 @@
    (severity
     :initarg :severity
     :reader rule-severity
-    :type (member :error :warning :convention :format :info)
+    :type (member :error :warning :info)
     :documentation "Default severity level")
+   (category
+    :initarg :category
+    :initform nil
+    :reader rule-category
+    :type (or null (member :correctness :suspicious :cleanliness :style :format :metrics))
+    :documentation "Rule category for grouping and filtering")
    (type
     :initarg :type
     :initform :form
