@@ -885,9 +885,9 @@
             "A warning should be emitted to *error-output*")
         (ok (search "trailing-whitespace" (string-downcase warning-text))
             "Warning should name the affected rule")
-        (ok (search ":format" warning-text)
+        (ok (search ":format" (string-downcase warning-text))
             "Warning should name the affected category")
-        (ok (search ":error" warning-text)
+        (ok (search ":error" (string-downcase warning-text))
             "Warning should name the intended severity"))))
 
   (testing "CLI-enabled rule that IS in base config preserves :set-severity from config"
