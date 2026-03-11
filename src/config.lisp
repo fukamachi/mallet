@@ -176,6 +176,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                     ;; Set severity for all rules in a category: (:set-severity :category :severity)
                     (let ((category (second item))
                           (severity (third item)))
+                      (unless (member severity '(:error :warning :info))
+                        (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
                       (push (cons category severity) set-severity-overrides)))
                    (:ignore
                     ;; Ignore patterns: (:ignore "pattern1" "pattern2" ...)
@@ -205,6 +207,13 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                                       (set-difference extends-disabled project-wide-rule-names))))
                         (multiple-value-bind (override-rules override-disabled)
                             (parse-override-rules override-forms merged-base-rules merged-base-disabled)
+                          ;; Apply :set-severity overrides to path-specific rules
+                          (when set-severity-overrides
+                            (dolist (rule override-rules)
+                              (let* ((cat (rules:rule-category rule))
+                                     (sev-override (assoc cat set-severity-overrides)))
+                                (when sev-override
+                                  (setf (rules:rule-severity rule) (cdr sev-override))))))
                           (push (make-path-override
                                  :patterns patterns
                                  :rules override-rules

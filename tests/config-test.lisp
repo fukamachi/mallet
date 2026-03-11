@@ -707,6 +707,66 @@
         (ok (not (null rule)))
         (ok (eq :error (rules:rule-severity rule)))))))
 
+(deftest set-severity-validates-severity
+  (testing "Invalid severity signals a descriptive error"
+    (let ((sexp '(:mallet-config
+                  (:enable :unused-variables)
+                  (:set-severity :cleanliness :foo))))
+      (ok (signals (config:parse-config sexp) 'simple-error)
+          ":set-severity with invalid severity should signal an error")))
+
+  (testing "Valid severities are accepted without error"
+    (dolist (sev '(:error :warning :info))
+      (let* ((sexp `(:mallet-config
+                     (:enable :unused-variables)
+                     (:set-severity :cleanliness ,sev)))
+             (cfg (config:parse-config sexp)))
+        (ok (not (null cfg))
+            (format nil ":set-severity ~S should be accepted" sev))))))
+
+(deftest set-severity-applies-to-for-paths
+  (testing ":set-severity propagates into :for-paths rules"
+    (let* ((sexp '(:mallet-config
+                   (:enable :trailing-whitespace)    ; :format, default :warning
+                   (:set-severity :format :error)
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :unused-variables))))   ; :cleanliness, unaffected category
+           (cfg (config:parse-config sexp)))
+      ;; For test files: trailing-whitespace should have :error severity from :set-severity
+      (let* ((path-rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (whitespace-rule (find :trailing-whitespace path-rules :key #'rules:rule-name)))
+        (ok (not (null whitespace-rule))
+            ":trailing-whitespace should be present in :for-paths rules")
+        (ok (eq :error (rules:rule-severity whitespace-rule))
+            ":set-severity :format :error should apply to :for-paths rules"))))
+
+  (testing ":set-severity applies to rules enabled inside :for-paths"
+    (let* ((sexp '(:mallet-config
+                   (:set-severity :format :error)
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :trailing-whitespace))))  ; :format category
+           (cfg (config:parse-config sexp)))
+      (let* ((path-rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (whitespace-rule (find :trailing-whitespace path-rules :key #'rules:rule-name)))
+        (ok (not (null whitespace-rule))
+            ":trailing-whitespace should be in :for-paths rules")
+        (ok (eq :error (rules:rule-severity whitespace-rule))
+            ":set-severity should apply to rules enabled inside :for-paths"))))
+
+  (testing ":set-severity and :for-paths: base rules also get correct severity"
+    (let* ((sexp '(:mallet-config
+                   (:enable :trailing-whitespace)     ; :format
+                   (:set-severity :format :error)
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :unused-variables))))
+           (cfg (config:parse-config sexp)))
+      ;; For non-test files: trailing-whitespace severity should be :error
+      (let* ((base-rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (whitespace-rule (find :trailing-whitespace base-rules :key #'rules:rule-name)))
+        (ok (not (null whitespace-rule)))
+        (ok (eq :error (rules:rule-severity whitespace-rule))
+            ":set-severity should apply to base rules too")))))
+
 (deftest apply-cli-overrides-enable-rule
   (testing "Enable a rule that's not in base config"
     (let* ((base-config (config:get-built-in-config :default))
