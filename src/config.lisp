@@ -19,6 +19,7 @@
            #:*default-preset*
            ;; CLI overrides
            #:apply-cli-overrides
+           #:config-set-severity-overrides
            ;; Path override structure and accessors
            #:path-override
            #:path-override-patterns
@@ -64,18 +65,24 @@ Stores patterns that match files and the rules/disabled-rules that apply."
     :initarg :root-dir
     :initform nil
     :accessor config-root-dir
-    :documentation "Root directory where config file is located (nil for built-in configs)"))
+    :documentation "Root directory where config file is located (nil for built-in configs)")
+   (set-severity-overrides
+    :initarg :set-severity-overrides
+    :initform '()
+    :accessor config-set-severity-overrides
+    :documentation "Alist of (category . severity) from :set-severity directives in the config file"))
   (:documentation "Configuration for Mallet linter containing rule instances."))
 
-(defun make-config (&key rules disabled-rules path-rules ignore root-dir)
+(defun make-config (&key rules disabled-rules path-rules ignore root-dir set-severity-overrides)
   "Create a new config with RULES (list of rule instances), DISABLED-RULES (list of keywords),
-PATH-RULES, and IGNORE patterns."
+PATH-RULES, IGNORE patterns, and SET-SEVERITY-OVERRIDES (alist of (category . severity))."
   (make-instance 'config
                  :rules (or rules '())
                  :disabled-rules (or disabled-rules '())
                  :path-rules (or path-rules '())
                  :ignore (or ignore '())
-                 :root-dir root-dir))
+                 :root-dir root-dir
+                 :set-severity-overrides (or set-severity-overrides '())))
 
 ;;; Config parsing
 
@@ -275,7 +282,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
         (make-config :rules final-rules
                      :disabled-rules disabled-rules
                      :path-rules (nreverse path-rules)
-                     :ignore ignore-patterns))))))
+                     :ignore ignore-patterns
+                     :set-severity-overrides set-severity-overrides))))))
 
 ;;; Config file loading
 
@@ -515,22 +523,35 @@ CLI-RULES is a plist with:
            (unless (member rule-name base-disabled)
              (push rule result-rules))))))
 
-    ;; Step 2: Add rules that were only in enable-rules (not in base config)
-    ;; NOTE: Rules created here bypass any :set-severity overrides that were
-    ;; applied when the base config was parsed, because those overrides are
-    ;; baked into the base rule objects and apply-cli-overrides does not have
-    ;; access to the original set-severity-overrides alist.  The rule will use
-    ;; whatever :severity was supplied on the CLI, or the rule's default
-    ;; severity if none was given.  This is a known limitation: users who
-    ;; combine (:set-severity …) in their config file with a CLI --enable for
-    ;; a previously-absent rule should also pass --severity on the CLI.
-    (dolist (enable-spec enable-rules)
-      (let ((rule-name (car enable-spec)))
-        (unless (find rule-name base-rules :key #'rules:rule-name)
-          (let ((options (cdr enable-spec)))
-            (push (apply #'rules:make-rule rule-name options) result-rules)
-            ;; Remove from disabled if it was there
-            (setf result-disabled (remove rule-name result-disabled))))))
+    ;; Step 2: Add rules that were only in enable-rules (not in base config).
+    ;; When the rule is new (absent from base config) and the config contains a
+    ;; :set-severity override for its category, the override cannot be applied
+    ;; automatically (the override alist was used at parse time and baked into
+    ;; existing rule objects).  We warn so the user knows to add an explicit
+    ;; :severity on the CLI if they want the config-file severity.
+    (let ((overrides (config-set-severity-overrides config)))
+      (dolist (enable-spec enable-rules)
+        (let ((rule-name (car enable-spec)))
+          (unless (find rule-name base-rules :key #'rules:rule-name)
+            (let* ((options (cdr enable-spec))
+                   (new-rule (apply #'rules:make-rule rule-name options)))
+              ;; Warn when the category has a :set-severity override that cannot
+              ;; be applied to a rule first seen on the CLI.
+              (when (and overrides (not (getf options :severity)))
+                (let* ((cat (rules:rule-category new-rule))
+                       (sev-override (assoc cat overrides)))
+                  (when sev-override
+                    (format *error-output*
+                            "~&WARNING: ~S was added via --enable but its category ~S has ~
+a :set-severity ~S override in the config file. ~
+The rule will use its default severity (~S) instead. ~
+Pass --enable ~(~A~):severity=~(~A~) to apply the intended severity.~%"
+                            rule-name cat (cdr sev-override)
+                            (rules:rule-severity new-rule)
+                            rule-name (cdr sev-override)))))
+              (push new-rule result-rules)
+              ;; Remove from disabled if it was there
+              (setf result-disabled (remove rule-name result-disabled)))))))
 
     ;; Step 3: Create new config with overridden rules
     (make-config
@@ -538,7 +559,8 @@ CLI-RULES is a plist with:
      :disabled-rules result-disabled
      :path-rules (config-path-rules config)
      :ignore (config-ignore config)
-     :root-dir (config-root-dir config))))
+     :root-dir (config-root-dir config)
+     :set-severity-overrides (config-set-severity-overrides config))))
 
 ;;; Config file discovery
 
