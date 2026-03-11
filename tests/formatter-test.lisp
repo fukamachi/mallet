@@ -173,3 +173,56 @@
                       t
                       :stream stream))))
       (ok (search "\"category\": \"style\"" output)))))
+
+(deftest format-with-info-severity
+  (testing "format-line-file with :info severity"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :cyclomatic-complexity
+                              :severity :info
+                              :line 42
+                              :column 0
+                              :message "Function is too complex"
+                              :file file))
+           (output (with-output-to-string (stream)
+                     (formatter:format-line-file
+                      file
+                      (list v1)
+                      :stream stream))))
+      (ok (search "info:" output))
+      (ok (search "Function is too complex" output))
+      (ok (search "[cyclomatic-complexity]" output))))
+
+  (testing "format-line-file returns :info count"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :line-length
+                              :severity :info
+                              :line 10
+                              :column 0
+                              :message "Line too long"
+                              :file file))
+           (counts (formatter:format-line-file
+                    file
+                    (list v1)
+                    :stream (make-string-output-stream))))
+      (ok (= (getf counts :info) 1))
+      (ok (null (getf counts :error)))
+      (ok (null (getf counts :warning)))))
+
+  (testing "format-text-file with :info severity"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :line-length
+                              :severity :info
+                              :line 99
+                              :column 0
+                              :message "Line too long"
+                              :file file))
+           (output (with-output-to-string (stream)
+                     (formatter:format-text-file
+                      file
+                      (list v1)
+                      :stream stream))))
+      (ok (search "info" output))
+      (ok (search "Line too long" output)))))
