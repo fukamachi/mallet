@@ -313,7 +313,7 @@
 
 (defun calculate-comment-ratio-from-source (expr position-map source-lines
                                              start-line start-column
-                                             &key include-docstrings (min-lines 3))
+                                             &key include-docstrings (min-lines 5))
   "Calculate the comment ratio of a function definition.
    Classifies each non-blank line as comment or code.
    Comment lines include: line comments (;), block comments (#| ... |#),
@@ -472,7 +472,7 @@
     :accessor max-ratio)
    (min-lines
     :initarg :min-lines
-    :initform 3
+    :initform 5
     :accessor rule-min-lines)
    (include-docstrings
     :initarg :include-docstrings
@@ -644,7 +644,7 @@
 
 ;;; Public API for comment-ratio calculation
 
-(defun calculate-comment-ratio (source-code &key include-docstrings (min-lines 3)
+(defun calculate-comment-ratio (source-code &key include-docstrings (min-lines 5)
                                                  (file #P"string"))
   "Calculate the comment ratio for SOURCE-CODE.
 
@@ -756,7 +756,7 @@
 
 (defun analyze-function-metrics (source-code &key (variant :standard)
                                                    include-docstrings
-                                                   (min-lines 3)
+                                                   (min-lines 5)
                                                    (file #P"string"))
   "Analyze function length, cyclomatic complexity, and comment ratio for SOURCE-CODE.
 
