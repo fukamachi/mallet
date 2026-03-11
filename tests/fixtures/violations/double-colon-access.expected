@@ -1,0 +1,6 @@
+# Expected violations for double-colon-access.lisp
+# Rule detects package::internal-symbol access bypassing encapsulation
+
+5:3 double-colon-access warning
+8:12 double-colon-access warning
+13:3 double-colon-access warning

@@ -390,6 +390,7 @@ Style preferences are disabled to keep output clean."
             :eval-usage
             :no-package-use
             :needless-let*
+            :double-colon-access
             :stale-suppression))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
@@ -434,6 +435,7 @@ Useful for exploration and discovering what rules exist."
             :needless-let*
             :no-package-use
             :bare-float-literal
+            :double-colon-access
             :stale-suppression
             ;; Format
             :no-tabs

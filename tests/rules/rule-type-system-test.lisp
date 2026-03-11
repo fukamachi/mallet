@@ -201,4 +201,8 @@
 
   (testing ":cyclomatic-complexity rule has :metrics category"
     (let ((rule (rules:make-rule :cyclomatic-complexity)))
-      (ok (eq :metrics (base:rule-category rule))))))
+      (ok (eq :metrics (base:rule-category rule)))))
+
+  (testing ":double-colon-access rule has :practice category"
+    (let ((rule (rules:make-rule :double-colon-access)))
+      (ok (eq :practice (base:rule-category rule))))))

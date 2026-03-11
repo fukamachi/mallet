@@ -3,6 +3,7 @@
   (:use-reexport #:mallet/rules/base
                  #:mallet/rules/text
                  #:mallet/rules/tokens/bare-float-literal
+                 #:mallet/rules/tokens/double-colon-access
                  #:mallet/rules/forms/control-flow
                  #:mallet/rules/forms/variables
                  #:mallet/rules/forms/local-functions
@@ -39,6 +40,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
     ;; Token rules
     (:bare-float-literal
      (apply #'make-instance 'bare-float-literal-rule options))
+    (:double-colon-access
+     (apply #'make-instance 'double-colon-access-rule options))
 
     ;; Form rules
     (:if-without-else

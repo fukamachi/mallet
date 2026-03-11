@@ -44,7 +44,8 @@
      (:module "tokens"
       :pathname "tokens"
       :components
-      ((:file "bare-float-literal")))
+      ((:file "bare-float-literal")
+       (:file "double-colon-access")))
      (:module "forms"
       :pathname "forms"
       :components
@@ -124,6 +125,7 @@
      (:file "runtime-intern-test")
      (:file "runtime-unintern-test")
      (:file "no-package-use-test")
+     (:file "double-colon-access-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test"))))
 
