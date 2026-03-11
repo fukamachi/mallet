@@ -66,25 +66,24 @@
                               :file file))
            (v3 (make-instance 'violation:violation
                               :rule :if-without-else
-                              :severity :convention
+                              :severity :warning
                               :line 20
                               :column 0
-                              :message "Convention message"
+                              :message "Warning message"
                               :file file))
            (counts (formatter:format-line-file
                     file
                     (list v1 v2 v3)
                     :stream (make-string-output-stream))))
       ;; Check severity counts in returned plist
-      (ok (= (getf counts :warning) 1))
-      (ok (= (getf counts :error) 1))
-      (ok (= (getf counts :convention) 1))))
+      (ok (= (getf counts :warning) 2))
+      (ok (= (getf counts :error) 1))))
 
   (testing "format-line-file with fixed violations"
     (let* ((file (pathname "/path/to/file.lisp"))
            (v1 (make-instance 'violation:violation
                               :rule :trailing-whitespace
-                              :severity :format
+                              :severity :info
                               :line 10
                               :column 5
                               :message "Trailing whitespace"
