@@ -376,7 +376,8 @@ Useful for exploration and discovering what rules exist."
             :line-length
             :consecutive-blank-lines
             :function-length
-            :cyclomatic-complexity)))
+            :cyclomatic-complexity
+            :comment-ratio)))
     (make-config
      :rules (mapcar (lambda (spec)
                       (if (consp spec)

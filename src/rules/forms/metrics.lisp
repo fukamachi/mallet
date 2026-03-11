@@ -7,9 +7,11 @@
    (#:violation #:mallet/violation))
   (:export #:function-length-rule
            #:cyclomatic-complexity-rule
+           #:comment-ratio-rule
            ;; Standalone metric calculation functions
            #:calculate-function-length
            #:calculate-cyclomatic-complexity
+           #:calculate-comment-ratio
            ;; Convenience functions for REPL use
            #:analyze-function-metrics))
 (in-package #:mallet/rules/forms/metrics)
@@ -230,20 +232,14 @@
                           (return)))
     excluded-lines))
 
-(defun calculate-function-length-from-source (expr position-map source-lines
-                                               start-line start-column)
-  "Calculate the length of a function definition in code lines only.
-   Excludes:
-   - Line comments (;)
-   - Block comments (#| ... |#)
-   - Blank lines
-   - Docstrings
-   - Disabled reader conditionals (#+nil, #+(or), #-(and)) and their guarded forms
+(defun collect-form-line-context (expr position-map source-lines start-line)
+  "Collect shared context needed for per-line classification of a form.
+   Returns (values max-line docstring-start-line docstring-end-line
+                   block-comment-ranges disabled-conditional-lines).
 
-   Note: start-line is file-relative (from position-map).
-         source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
-  (declare (ignore start-column))
-
+   max-line is file-relative (the last line of EXPR in the file).
+   docstring-start-line and docstring-end-line are file-relative, or NIL if no docstring.
+   block-comment-ranges and disabled-conditional-lines are form-relative (1-indexed)."
   ;; Find end line from position-map (file-relative)
   (let ((max-line start-line))
     (maphash (lambda (k v)
@@ -269,30 +265,115 @@
                            (setf docstring-end-line (+ docstring-start-line newline-count)))))
                      position-map))))
 
-      ;; Find block comment ranges (form-relative indices)
-      (let ((block-comment-ranges (find-block-comment-ranges source-lines))
-            (disabled-conditional-lines (find-disabled-conditional-lines source-lines)))
+      ;; Find block comment ranges and disabled reader conditional lines (form-relative indices)
+      (values max-line
+              docstring-start-line
+              docstring-end-line
+              (find-block-comment-ranges source-lines)
+              (find-disabled-conditional-lines source-lines)))))
 
-        ;; Count code lines only
-        ;; Convert file-relative line numbers to form-relative indices
-        (let ((code-lines 0)
-              (form-start-line start-line))  ; First line of the form in file
-          (loop for file-line from start-line to max-line
-                for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
-                for line = (and (< form-index (length source-lines))
-                                (aref source-lines form-index))
-                when line
-                  do (unless (or (blank-line-p line)
-                                 (comment-line-p line)
-                                 ;; Exclude all lines within docstring span (file-relative comparison)
-                                 (and docstring-start-line docstring-end-line
-                                      (<= docstring-start-line file-line docstring-end-line))
-                                 ;; Exclude lines within block comments (form-relative comparison)
-                                 (line-in-block-comment-p form-index block-comment-ranges)
-                                 ;; Exclude disabled reader conditional lines (form-relative)
-                                 (member form-index disabled-conditional-lines :test #'=))
-                       (incf code-lines)))
-          code-lines)))))
+(defun calculate-function-length-from-source (expr position-map source-lines
+                                               start-line start-column)
+  "Calculate the length of a function definition in code lines only.
+   Excludes:
+   - Line comments (;)
+   - Block comments (#| ... |#)
+   - Blank lines
+   - Docstrings
+   - Disabled reader conditionals (#+nil, #+(or), #-(and)) and their guarded forms
+
+   Note: start-line is file-relative (from position-map).
+         source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
+  (declare (ignore start-column))
+
+  (multiple-value-bind (max-line docstring-start-line docstring-end-line
+                        block-comment-ranges disabled-conditional-lines)
+      (collect-form-line-context expr position-map source-lines start-line)
+
+    ;; Count code lines only
+    ;; Convert file-relative line numbers to form-relative indices
+    (let ((code-lines 0)
+          (form-start-line start-line))  ; First line of the form in file
+      (loop for file-line from start-line to max-line
+            for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
+            for line = (and (< form-index (length source-lines))
+                            (aref source-lines form-index))
+            when line
+              do (unless (or (blank-line-p line)
+                             (comment-line-p line)
+                             ;; Exclude all lines within docstring span (file-relative comparison)
+                             (and docstring-start-line docstring-end-line
+                                  (<= docstring-start-line file-line docstring-end-line))
+                             ;; Exclude lines within block comments (form-relative comparison)
+                             (line-in-block-comment-p form-index block-comment-ranges)
+                             ;; Exclude disabled reader conditional lines (form-relative)
+                             (member form-index disabled-conditional-lines :test #'=))
+                   (incf code-lines)))
+      code-lines)))
+
+(defun calculate-comment-ratio-from-source (expr position-map source-lines
+                                             start-line start-column
+                                             &key include-docstrings (min-lines 5))
+  "Calculate the comment ratio of a function definition.
+   Classifies each non-blank line as comment or code.
+   Comment lines include: line comments (;), block comments (#| ... |#),
+   and optionally docstring lines when INCLUDE-DOCSTRINGS is true.
+   Returns a plist (:ratio float :comment-lines integer :code-lines integer)
+   or NIL if total non-blank lines (comment + code) is below MIN-LINES threshold.
+
+   Note on MIN-LINES: the threshold applies to (comment-lines + code-lines).
+   Docstring lines are excluded from this count when INCLUDE-DOCSTRINGS is nil
+   (the default). A function with 2 code lines and 1 docstring line has a total
+   of 2, which is below the default MIN-LINES of 3, so NIL is returned.
+   Set MIN-LINES accordingly, or set INCLUDE-DOCSTRINGS t to count docstrings.
+
+   Note: start-line is file-relative (from position-map).
+         source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
+  (declare (ignore start-column))
+
+  (multiple-value-bind (max-line docstring-start-line docstring-end-line
+                        block-comment-ranges disabled-conditional-lines)
+      (collect-form-line-context expr position-map source-lines start-line)
+
+    ;; Count comment and code lines
+    ;; Convert file-relative line numbers to form-relative indices
+    (let ((comment-lines 0)
+          (code-lines 0)
+          (form-start-line start-line))
+      (loop for file-line from start-line to max-line
+            for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
+            for line = (and (< form-index (length source-lines))
+                            (aref source-lines form-index))
+            when line
+              do (unless (or (blank-line-p line)
+                             (member form-index disabled-conditional-lines :test #'=))
+                   (cond
+                     ;; Line comment
+                     ((comment-line-p line)
+                      (incf comment-lines))
+                     ;; Block comment
+                     ((line-in-block-comment-p form-index block-comment-ranges)
+                      (incf comment-lines))
+                     ;; Docstring line (file-relative comparison)
+                     ((and docstring-start-line docstring-end-line
+                           (<= docstring-start-line file-line docstring-end-line))
+                      (when include-docstrings
+                        (incf comment-lines)))
+                     ;; Code line
+                     (t
+                      (incf code-lines)))))
+
+      ;; Return nil if below min-lines threshold (total non-blank lines: comment + code)
+      (when (< (+ comment-lines code-lines) min-lines)
+        (return-from calculate-comment-ratio-from-source nil))
+
+      ;; Calculate ratio
+      (let ((total (+ comment-lines code-lines)))
+        (list :ratio (if (zerop total)
+                         0.0d0
+                         (coerce (/ comment-lines total) 'double-float))
+              :comment-lines comment-lines
+              :code-lines code-lines)))))
 
 (defun eq-subexpr-p (needle haystack)
   "Check if NEEDLE is EQ to HAYSTACK or any sub-expression in HAYSTACK."
@@ -382,6 +463,142 @@
                                   func-name length (max-lines rule))
                  :fix nil))
 
+;;; Comment-ratio rule
+
+(defclass comment-ratio-rule (base:rule)
+  ((max-ratio
+    :initarg :max
+    :initform 0.3d0
+    :accessor max-ratio)
+   (min-lines
+    :initarg :min-lines
+    :initform 5
+    :accessor rule-min-lines)
+   (include-docstrings
+    :initarg :include-docstrings
+    :initform nil
+    :accessor rule-include-docstrings)
+   (source-lines
+    :initform nil
+    :accessor rule-source-lines-for-ratio
+    :documentation "Parsed source lines for current file (set during check-form)"))
+  (:default-initargs
+   :name :comment-ratio
+   :description "Function has high comment ratio"
+   :severity :metrics
+   :type :form))
+
+(defmethod base:check-form ((rule comment-ratio-rule) form file)
+  "Check comment ratio."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  (let ((source (parser:form-source form)))
+    (setf (rule-source-lines-for-ratio rule) (parse-source-to-lines source))
+    (base:check-form-recursive rule
+                               (parser:form-expr form)
+                               file
+                               (parser:form-line form)
+                               (parser:form-column form)
+                               nil
+                               (parser:form-position-map form))))
+
+(defmethod base:check-form-recursive ((rule comment-ratio-rule) expr file line column
+                                      &optional function-name position-map)
+  (declare (ignore function-name))
+
+  (unless (rule-source-lines-for-ratio rule)
+    (error "comment-ratio-rule: source-lines not initialized. ~
+            Call check-form instead of check-form-recursive directly."))
+
+  (let ((violations '())
+        (visited (make-hash-table :test 'eq))
+        (source-lines (rule-source-lines-for-ratio rule)))
+
+    (labels ((check-expr (current-expr fallback-line fallback-column)
+               (base:with-safe-code-expr (current-expr visited)
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map
+                                                fallback-line fallback-column)
+                   (let ((head (first current-expr)))
+
+                     ;; Check if this is a function definition.
+                     ;; Note: for outer defun/defmethod forms that contain flet/labels,
+                     ;; the ratio is computed over the entire form (including inner function
+                     ;; lines). Inner functions are also checked independently below.
+                     ;; This mirrors function-length-rule's established behaviour.
+                     (when (is-function-definition-p head)
+                       (let ((result (calculate-comment-ratio-from-source
+                                      current-expr position-map source-lines
+                                      actual-line actual-column
+                                      :include-docstrings (rule-include-docstrings rule)
+                                      :min-lines (rule-min-lines rule))))
+                         (when (and result
+                                    (> (getf result :ratio) (max-ratio rule))
+                                    (base:should-create-violation-p rule))
+                           (push (make-comment-ratio-violation
+                                  rule file actual-line actual-column
+                                  result (get-function-name current-expr))
+                                 violations))))
+
+                     ;; Recurse into nested forms
+                     (cond
+                       ;; flet/labels: check both inner functions and body
+                       ((or (base:symbol-matches-p head "FLET")
+                            (base:symbol-matches-p head "LABELS"))
+                        (when (and (consp (rest current-expr))
+                                   (a:proper-list-p (second current-expr)))
+                          ;; Check each inner function definition
+                          (dolist (func-def (second current-expr))
+                            (when (consp func-def)
+                              (multiple-value-bind (func-line func-column)
+                                  (base:find-actual-position func-def position-map
+                                                             actual-line actual-column)
+                                (let ((result (calculate-comment-ratio-from-source
+                                               func-def position-map source-lines
+                                               func-line func-column
+                                               :include-docstrings (rule-include-docstrings rule)
+                                               :min-lines (rule-min-lines rule)))
+                                      (func-name (get-inner-function-name func-def)))
+                                  (when (and result
+                                             (> (getf result :ratio) (max-ratio rule))
+                                             (base:should-create-violation-p rule))
+                                    (push (make-comment-ratio-violation
+                                           rule file func-line func-column
+                                           result func-name)
+                                          violations))))))
+                          ;; Check body forms
+                          (dolist (body-form (cddr current-expr))
+                            (when (consp body-form)
+                              (check-expr body-form actual-line actual-column)))))
+
+                       ;; Other forms: recurse normally
+                       (t
+                        (when (a:proper-list-p (rest current-expr))
+                          (dolist (subexpr (rest current-expr))
+                            (when (consp subexpr)
+                              (check-expr subexpr actual-line actual-column)))))))))))
+
+      (check-expr expr line column))
+
+    violations))
+
+(defun make-comment-ratio-violation (rule file line column result func-name)
+  "Create a violation for comment ratio."
+  (let ((ratio (getf result :ratio))
+        (comment-lines (getf result :comment-lines))
+        (code-lines (getf result :code-lines)))
+    (make-instance 'violation:violation
+                   :rule :comment-ratio
+                   :file file
+                   :line line
+                   :column column
+                   :severity (base:rule-severity rule)
+                   :message (format nil "Function '~A' has comment ratio of ~,2F (max: ~,2F, ~D comment lines out of ~D non-blank lines)"
+                                    func-name ratio (max-ratio rule)
+                                    comment-lines (+ comment-lines code-lines))
+                   :fix nil)))
+
 ;;; Public API for standalone metric calculation
 
 (defun calculate-function-length (source-code &key (file #P"string"))
@@ -424,6 +641,55 @@
             (start-column (parser:form-column source-code)))
        (calculate-function-length-from-source
         expr position-map source-lines start-line start-column)))))
+
+;;; Public API for comment-ratio calculation
+
+(defun calculate-comment-ratio (source-code &key include-docstrings (min-lines 5)
+                                                 (file #P"string"))
+  "Calculate the comment ratio for SOURCE-CODE.
+
+   SOURCE-CODE can be:
+   - A string containing a single function definition
+   - A parser:form object
+
+   FILE is the pathname used for parser error reporting; only relevant when
+   SOURCE-CODE is a string (ignored when SOURCE-CODE is a parser:form).
+
+   Returns the comment ratio as a float, or NIL if code-lines is below MIN-LINES threshold.
+
+   Example:
+     (calculate-comment-ratio
+       \"(defun foo (x)
+          ;; a comment
+          (+ x 1))\")
+     => 0.33d0"
+  (etypecase source-code
+    (string
+     (let* ((forms (parser:parse-forms source-code file))
+            (form (first forms)))
+       (when form
+         (let* ((expr (parser:form-expr form))
+                (position-map (parser:form-position-map form))
+                (source-lines (parse-source-to-lines source-code))
+                (start-line (parser:form-line form))
+                (start-column (parser:form-column form)))
+           (getf (calculate-comment-ratio-from-source
+                  expr position-map source-lines start-line start-column
+                  :include-docstrings include-docstrings
+                  :min-lines min-lines)
+                 :ratio)))))
+    (parser:form
+     (let* ((expr (parser:form-expr source-code))
+            (position-map (parser:form-position-map source-code))
+            (source (parser:form-source source-code))
+            (source-lines (parse-source-to-lines source))
+            (start-line (parser:form-line source-code))
+            (start-column (parser:form-column source-code)))
+       (getf (calculate-comment-ratio-from-source
+              expr position-map source-lines start-line start-column
+              :include-docstrings include-docstrings
+              :min-lines min-lines)
+             :ratio)))))
 
 ;;; Cyclomatic-complexity rule
 
@@ -488,18 +754,26 @@
        ;; Raw expression
        (calculate-complexity source-code visited variant)))))
 
-(defun analyze-function-metrics (source-code &key (variant :standard) (file #P"string"))
-  "Analyze both function length and cyclomatic complexity for SOURCE-CODE.
+(defun analyze-function-metrics (source-code &key (variant :standard)
+                                                   include-docstrings
+                                                   (min-lines 5)
+                                                   (file #P"string"))
+  "Analyze function length, cyclomatic complexity, and comment ratio for SOURCE-CODE.
 
    Returns a plist with:
    - :length - Number of code lines
    - :complexity - Cyclomatic complexity
+   - :comment-ratio - Comment ratio as a float, or NIL if below min-lines threshold
 
    Example:
      (analyze-function-metrics \"(defun foo (x) (if x (print 1) (print 2)))\")
-     => (:length 3 :complexity 2)"
+     => (:length 3 :complexity 2 :comment-ratio 0.0d0)"
   (list :length (calculate-function-length source-code :file file)
-        :complexity (calculate-cyclomatic-complexity source-code :variant variant :file file)))
+        :complexity (calculate-cyclomatic-complexity source-code :variant variant :file file)
+        :comment-ratio (calculate-comment-ratio source-code
+                                                :include-docstrings include-docstrings
+                                                :min-lines min-lines
+                                                :file file)))
 
 (defmethod base:check-form-recursive ((rule cyclomatic-complexity-rule) expr file line column
                                       &optional function-name position-map)

@@ -2,6 +2,7 @@
   (:use #:cl #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules/forms/metrics)
+   (#:all-rules #:mallet/rules)
    (#:base #:mallet/rules/base)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
@@ -593,6 +594,254 @@
           (\"restart\" (restart))
           (otherwise (error \"unknown\"))))" 4)))
 
+;;; Comment-ratio calculation tests
+
+(defun test-comment-ratio (code &key include-docstrings (min-lines 3))
+  "Parse CODE and call calculate-comment-ratio-from-source.
+   Returns the plist (:ratio :comment-lines :code-lines) or NIL."
+  (let* ((forms (parser:parse-forms code #P"test.lisp"))
+         (form (first forms))
+         (expr (parser:form-expr form))
+         (position-map (parser:form-position-map form))
+         (source-lines (mallet/rules/forms/metrics::parse-source-to-lines code))
+         (start-line (parser:form-line form))
+         (start-column (parser:form-column form)))
+    (mallet/rules/forms/metrics::calculate-comment-ratio-from-source
+     expr position-map source-lines start-line start-column
+     :include-docstrings include-docstrings
+     :min-lines min-lines)))
+
+(deftest comment-ratio-no-comments
+  (testing "Function with no comments has ratio 0"
+    (let ((result (test-comment-ratio
+                   "(defun foo (x)
+  (let ((y (* x 2)))
+    (when (> y 0)
+      (print y)
+      (+ y 1))))")))
+      (ok (not (null result)))
+      (ok (= 0.0d0 (getf result :ratio)))
+      (ok (= 0 (getf result :comment-lines)))
+      (ok (= 5 (getf result :code-lines))))))
+
+(deftest comment-ratio-all-comments
+  (testing "Function with all comment body lines has high ratio"
+    (let ((result (test-comment-ratio
+                   "(defun foo ()
+  ;; comment 1
+  ;; comment 2
+  ;; comment 3
+  nil)"
+                   :min-lines 1)))
+      (ok (not (null result)))
+      (ok (= 3 (getf result :comment-lines)))
+      ;; ratio = 3/(3+1) = 0.75
+      (ok (< (abs (- (getf result :ratio) 0.75d0)) 0.001d0)))))
+
+(deftest comment-ratio-mixed
+  (testing "Function with mixed comments and code"
+    (let ((result (test-comment-ratio
+                   "(defun process (x)
+  ;; Validate input
+  (check-type x integer)
+  ;; Transform
+  (let ((y (* x 2)))
+    ;; Return result
+    (+ y 1)))")))
+      (ok (not (null result)))
+      (ok (= 3 (getf result :comment-lines)))
+      (ok (= 4 (getf result :code-lines)))
+      ;; ratio = 3/7
+      (ok (< (abs (- (getf result :ratio) (/ 3.0d0 7.0d0))) 0.001d0)))))
+
+(deftest comment-ratio-below-min-lines
+  (testing "Function below min-lines returns nil"
+    (let ((result (test-comment-ratio
+                   "(defun tiny (x) (+ x 1))"
+                   :min-lines 3)))
+      (ok (null result)))))
+
+(deftest comment-ratio-at-min-lines
+  (testing "Function at exactly min-lines returns result"
+    (let ((result (test-comment-ratio
+                   "(defun foo (x)
+  (print x)
+  (+ x 1))"
+                   :min-lines 3)))
+      (ok (not (null result)))
+      (ok (= 0.0d0 (getf result :ratio))))))
+
+(deftest comment-ratio-docstrings-excluded-by-default
+  (testing "Docstring lines are not counted as comments by default"
+    (let ((result (test-comment-ratio
+                   "(defun foo (x)
+  \"This is a docstring.\"
+  (print x)
+  (+ x 1)
+  (* x 2))")))
+      (ok (not (null result)))
+      ;; docstring line excluded from both counts
+      (ok (= 0 (getf result :comment-lines)))
+      (ok (= 4 (getf result :code-lines))))))
+
+(deftest comment-ratio-docstrings-included
+  (testing "Docstring lines counted as comments when include-docstrings is t"
+    (let ((result (test-comment-ratio
+                   "(defun foo (x)
+  \"This is a docstring.\"
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                   :include-docstrings t)))
+      (ok (not (null result)))
+      (ok (= 1 (getf result :comment-lines)))
+      (ok (= 4 (getf result :code-lines))))))
+
+(deftest comment-ratio-multiline-docstring-included
+  (testing "Multi-line docstring counted as comments when included"
+    (let ((result (test-comment-ratio
+                   "(defun foo (x)
+  \"This is a
+  multi-line
+  docstring.\"
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                   :include-docstrings t)))
+      (ok (not (null result)))
+      ;; 3 docstring lines counted as comments
+      (ok (= 3 (getf result :comment-lines)))
+      (ok (= 4 (getf result :code-lines))))))
+
+(deftest comment-ratio-block-comments
+  (testing "Block comment lines counted as comments"
+    (let ((result (test-comment-ratio
+                   "(defun foo (x)
+  #|
+  This is a block comment
+  spanning multiple lines
+  |#
+  (print x)
+  (+ x 1)
+  (* x 2))")))
+      (ok (not (null result)))
+      ;; 4 block comment lines (including #| and |# lines)
+      (ok (= 4 (getf result :comment-lines)))
+      (ok (= 4 (getf result :code-lines))))))
+
+;;; Comment-ratio rule tests
+
+(defun test-comment-ratio-violation (code &key (max 0.3d0) (min-lines 3) include-docstrings)
+  "Test CODE with comment-ratio-rule and return violations."
+  (let* ((rule (make-instance 'rules:comment-ratio-rule
+                              :max max
+                              :min-lines min-lines
+                              :include-docstrings include-docstrings))
+         (forms (parser:parse-forms code #P"test.lisp"))
+         (form (first forms)))
+    (base:check-form rule form #P"test.lisp")))
+
+(deftest comment-ratio-rule-violation
+  (testing "Function exceeding max ratio produces violation"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun foo (x)
+  ;; comment 1
+  ;; comment 2
+  ;; comment 3
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                       :max 0.2d0)))
+      (ok (= 1 (length violations)))
+      (ok (search "foo" (violation:violation-message (first violations))))
+      (ok (search "comment ratio" (violation:violation-message (first violations)))))))
+
+(deftest comment-ratio-rule-no-violation
+  (testing "Function under max ratio produces no violation"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun foo (x)
+  ;; one comment
+  (print x)
+  (+ x 1)
+  (* x 2)
+  (- x 3))"
+                       :max 0.3d0)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-rule-min-lines-skip
+  (testing "Function below min-lines is skipped"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun tiny (x) (+ x 1))"
+                       :max 0.0d0
+                       :min-lines 3)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-rule-message-format
+  (testing "Violation message has expected format"
+    (let* ((violations (test-comment-ratio-violation
+                        "(defun bar (x)
+  ;; comment 1
+  ;; comment 2
+  ;; comment 3
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                        :max 0.1d0))
+           (msg (violation:violation-message (first violations))))
+      (ok (search "bar" msg))
+      (ok (search "max: 0.10" msg))
+      (ok (search "3 comment lines out of 7 non-blank lines" msg)))))
+
+(deftest comment-ratio-rule-flet-inner
+  (testing "flet inner functions checked independently"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun outer (x)
+  (flet ((inner (y)
+           ;; lots of comments
+           ;; more comments
+           ;; even more
+           (print y)))
+    (inner x)))"
+                       :max 0.3d0
+                       :min-lines 1)))
+      ;; inner function has 3 comments out of 4 non-blank = 0.75 > 0.3
+      ;; outer function also checked
+      (ok (<= 1 (length violations)))
+      ;; At least one violation mentions inner function behavior
+      (ok (some (lambda (v) (search "inner" (violation:violation-message v)))
+                violations)))))
+
+(deftest comment-ratio-rule-include-docstrings
+  (testing "include-docstrings option affects violation"
+    ;; Without include-docstrings: 0 comment lines, no violation
+    (let ((violations-without (test-comment-ratio-violation
+                               "(defun foo (x)
+  \"A docstring.\"
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                               :max 0.0d0
+                               :include-docstrings nil)))
+      (ok (null violations-without)))
+    ;; With include-docstrings: 1 comment line out of 5 non-blank = 0.2 > 0.0
+    (let ((violations-with (test-comment-ratio-violation
+                            "(defun foo (x)
+  \"A docstring.\"
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                            :max 0.0d0
+                            :include-docstrings t
+                            :min-lines 1)))
+      (ok (= 1 (length violations-with))))))
+
+(deftest comment-ratio-rule-via-make-rule
+  (testing "comment-ratio rule can be created via make-rule factory"
+    (let ((rule (all-rules:make-rule :comment-ratio :max 0.2d0 :min-lines 5)))
+      (ok (typep rule 'rules:comment-ratio-rule))
+      (ok (= 0.2d0 (rules::max-ratio rule)))
+      (ok (= 5 (rules::rule-min-lines rule))))))
+
 (deftest complexity-string-case-modified
   (testing "STRING-CASE with modified variant counts as +1 total"
     (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
@@ -610,3 +859,134 @@
       ;; Complexity = 1 (base) + 1 (string-case) = 2
       (ok (= 1 (length violations)))
       (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+
+;;; calculate-comment-ratio public API tests
+
+(deftest comment-ratio-rule-labels-inner
+  (testing "labels inner functions checked independently"
+    (let ((violations (test-comment-ratio-violation
+                       "(defun outer (x)
+  (labels ((helper (y)
+             ;; lots of comments
+             ;; more comments
+             ;; even more
+             (print y)))
+    (helper x)))"
+                       :max 0.3d0
+                       :min-lines 1)))
+      ;; inner function has 3 comments out of 4+1 non-blank = 0.60 > 0.3
+      (ok (<= 1 (length violations)))
+      (ok (some (lambda (v) (search "helper" (violation:violation-message v)))
+                violations)))))
+
+(deftest comment-ratio-rule-severity
+  (testing "comment-ratio rule has :metrics severity"
+    (let ((rule (make-instance 'rules:comment-ratio-rule)))
+      (ok (eq :metrics (base:rule-severity rule))))))
+
+(deftest comment-ratio-rule-disabled-by-default
+  (testing "comment-ratio is not in default config"
+    (let* ((config (mallet/config:get-built-in-config :default))
+           (rule-names (mapcar #'base:rule-name (mallet/config:config-rules config))))
+      (ok (not (member :comment-ratio rule-names))))))
+
+(deftest comment-ratio-rule-in-all-preset
+  (testing "comment-ratio is in :all preset"
+    (let* ((config (mallet/config:get-built-in-config :all))
+           (rule-names (mapcar #'base:rule-name (mallet/config:config-rules config))))
+      (ok (member :comment-ratio rule-names)))))
+
+(deftest comment-ratio-blank-lines-excluded
+  (testing "Blank lines do not affect ratio calculation"
+    (let ((result-with-blanks (test-comment-ratio
+                                "(defun foo (x)
+  ;; comment
+
+  (print x)
+
+  (+ x 1)
+  (* x 2))")))
+      (ok (not (null result-with-blanks)))
+      ;; 1 comment, 4 code lines. Blank lines excluded.
+      (ok (= 1 (getf result-with-blanks :comment-lines)))
+      (ok (= 4 (getf result-with-blanks :code-lines))))))
+
+(deftest comment-ratio-api-returns-float
+  (testing "calculate-comment-ratio returns a float, not a plist"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x)
+  ;; comment
+  (print x)
+  (+ x 1)
+  (* x 2))"
+                   :min-lines 1)))
+      (ok (not (null result)))
+      (ok (typep result 'double-float))
+      (ok (not (consp result))))))
+
+(deftest comment-ratio-api-string-input
+  (testing "calculate-comment-ratio accepts string input"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x)
+  ;; comment one
+  ;; comment two
+  (+ x 1))"
+                   :min-lines 1)))
+      (ok (not (null result)))
+      (ok (< 0.49d0 result 0.51d0)))))
+
+(deftest comment-ratio-api-form-input
+  (testing "calculate-comment-ratio accepts parser:form input"
+    (let* ((code "(defun foo (x)
+  ;; a comment
+  ;; another comment
+  (+ x 1))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (form (first forms))
+           (result (rules:calculate-comment-ratio form :min-lines 1)))
+      (ok (not (null result)))
+      (ok (< 0.49d0 result 0.51d0)))))
+
+(deftest comment-ratio-api-no-comments
+  (testing "calculate-comment-ratio returns zero ratio for code without comments"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x)
+  (let ((y (* x 2)))
+    (+ y 1)))"
+                   :min-lines 1)))
+      (ok (not (null result)))
+      (ok (< result 0.01d0)))))
+
+(deftest comment-ratio-api-below-min-lines
+  (testing "calculate-comment-ratio returns NIL when below min-lines"
+    (let ((result (rules:calculate-comment-ratio
+                   "(defun foo (x) (+ x 1))"
+                   :min-lines 5)))
+      (ok (null result)))))
+
+(deftest comment-ratio-api-include-docstrings
+  (testing "calculate-comment-ratio counts docstrings when include-docstrings is true"
+    (let* ((code "(defun foo (x)
+  \"A docstring.\"
+  ;; a comment
+  (+ x 1))")
+           (without (rules:calculate-comment-ratio code :include-docstrings nil :min-lines 1))
+           (with (rules:calculate-comment-ratio code :include-docstrings t :min-lines 1)))
+      ;; Without docstrings: 1 comment line out of 3 non-blank = ratio ~0.33
+      (ok (not (null without)))
+      (ok (< without 0.5d0))
+      ;; With docstrings: docstring line also counted, ratio higher
+      (ok (not (null with)))
+      (ok (< without with)))))
+
+(deftest analyze-metrics-includes-comment-ratio
+  (testing "analyze-function-metrics includes :comment-ratio key"
+    (let ((result (rules:analyze-function-metrics
+                   "(defun foo (x)
+  ;; comment
+  (+ x 1))"
+                   :min-lines 1)))
+      (ok (not (null (getf result :length))))
+      (ok (not (null (getf result :complexity))))
+      (ok (not (null (getf result :comment-ratio))))
+      (ok (floatp (getf result :comment-ratio))))))
