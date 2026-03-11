@@ -4,8 +4,7 @@
                 #:parse-option-value
                 #:parse-rule-options
                 #:parse-rule-name
-                #:parse-rule-spec
-                #:parse-group-name))
+                #:parse-rule-spec))
 (in-package #:mallet/tests/cli-parsing)
 
 ;;; Tests for parse-option-value
@@ -86,17 +85,3 @@
       (ok (eq :cyclomatic-complexity (car result)))
       (ok (equal '(:max 15 :variant :modified) (cdr result))))))
 
-;;; Tests for parse-group-name
-
-(deftest parse-group-name-valid
-  (testing "Parse valid group names"
-    (ok (eq :error (parse-group-name "error")))
-    (ok (eq :warning (parse-group-name "warning")))
-    (ok (eq :info (parse-group-name "info")))))
-
-(deftest parse-group-name-invalid
-  (testing "Invalid group name"
-    (ok (signals (parse-group-name "invalid")
-            'mallet/errors:invalid-group))
-    (ok (signals (parse-group-name "foo")
-            'mallet/errors:invalid-group))))

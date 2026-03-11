@@ -124,14 +124,6 @@ Returns (rule-name . options-plist)."
         ;; No options: just rule name
         (cons (parse-rule-name spec) '()))))
 
-(defun parse-group-name (group-str)
-  "Parse group name and validate it's a valid severity."
-  (check-type group-str string)
-  (let ((keyword (intern (string-upcase group-str) :keyword)))
-    (unless (member keyword '(:error :warning :info))
-      (error 'errors:invalid-group :value group-str))
-    keyword))
-
 (defun handle-format-option (args)
   "Handle --format option. Returns (values format remaining-args)."
   (let ((fmt (pop args)))
@@ -185,21 +177,6 @@ Returns (rule-name . options-plist)."
       (error 'errors:missing-option-value :option "--disable"))
     (values (parse-rule-name rule-name-str) args)))
 
-(defun handle-enable-group-option (args)
-  "Handle --enable-group option. Returns (values group-name remaining-args)."
-  (let ((group-str (pop args)))
-    (unless group-str
-      (error 'errors:missing-option-value :option "--enable-group"))
-    (values (parse-group-name group-str) args)))
-
-(defun handle-disable-group-option (args)
-  "Handle --disable-group option. Returns (values group-name remaining-args)."
-  (let ((group-str (pop args)))
-    (unless group-str
-      (error 'errors:missing-option-value :option "--disable-group"))
-    (values (parse-group-name group-str) args)))
-
-
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
 Returns (values format config-path preset debug no-color fix-mode cli-rules strict files).
@@ -213,8 +190,6 @@ Signals specific error conditions for invalid input."
         (strict nil)
         (enable-rules '())
         (disable-rules '())
-        (enable-groups '())
-        (disable-groups '())
         (files '()))
     (loop while args do
       (let ((arg (pop args)))
@@ -252,16 +227,6 @@ Signals specific error conditions for invalid input."
              (multiple-value-setq (rule-name args)
                (handle-disable-option args))
              (push rule-name disable-rules)))
-          ((string= arg "--enable-group")
-           (let (group-name)
-             (multiple-value-setq (group-name args)
-               (handle-enable-group-option args))
-             (push group-name enable-groups)))
-          ((string= arg "--disable-group")
-           (let (group-name)
-             (multiple-value-setq (group-name args)
-               (handle-disable-group-option args))
-             (push group-name disable-groups)))
           ((string= arg "--help")
            (print-help)
            (uiop:quit 0))
@@ -273,9 +238,7 @@ Signals specific error conditions for invalid input."
           (t
            (push arg files)))))
     (let ((cli-rules (list :enable-rules (nreverse enable-rules)
-                           :disable-rules (nreverse disable-rules)
-                           :enable-groups (nreverse enable-groups)
-                           :disable-groups (nreverse disable-groups))))
+                           :disable-rules (nreverse disable-rules))))
       (values format config-path preset debug no-color fix-mode cli-rules strict (nreverse files)))))
 
 
@@ -296,8 +259,6 @@ Options:
   --enable <rule>     Enable specific rule (e.g., --enable cyclomatic-complexity)
   --enable <rule:opts> Enable rule with options (e.g., --enable line-length:max=120)
   --disable <rule>    Disable specific rule (e.g., --disable trailing-whitespace)
-  --enable-group <group>  Enable all rules in severity group
-  --disable-group <group> Disable all rules in severity group
 
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
@@ -332,14 +293,8 @@ Examples:
   mallet --fix src/                   # Auto-fix violations
   mallet --fix-dry-run src/           # Preview fixes without changing files
 
-  # Enable info rules without config file
-  mallet --enable-group info src/
-
   # Enable specific rule with custom options
   mallet --enable cyclomatic-complexity:max=15 src/
-
-  # Mix preset with CLI overrides
-  mallet --preset default --enable-group info src/
 
   # Override multiple rules
   mallet --enable cyclomatic-complexity:max=10 --enable function-length:max=30 src/
@@ -395,9 +350,7 @@ Returns the final config with CLI preset override applied."
 (defun has-cli-rules-p (cli-rules)
   "Check if cli-rules has any actual overrides."
   (or (getf cli-rules :enable-rules)
-      (getf cli-rules :disable-rules)
-      (getf cli-rules :enable-groups)
-      (getf cli-rules :disable-groups)))
+      (getf cli-rules :disable-rules)))
 
 (defun track-violation-severity (violations)
   "Check violations for errors, warnings, and any violations.
