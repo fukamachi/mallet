@@ -684,6 +684,16 @@
         (ok (eq :info (rules:rule-severity unused)))
         (ok (eq :error (rules:rule-severity wrong))))))
 
+  (testing "Duplicate :set-severity for same category — last one wins"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)     ; :cleanliness
+                   (:set-severity :cleanliness :error)
+                   (:set-severity :cleanliness :info)))  ; last wins
+           (cfg (config:parse-config sexp)))
+      (let ((unused (find :unused-variables (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (eq :info (rules:rule-severity unused))
+            "last :set-severity for a category should win"))))
+
   (testing "Multiple :set-severity directives for different categories"
     (let* ((sexp '(:mallet-config
                    (:enable :unused-variables)     ; :cleanliness

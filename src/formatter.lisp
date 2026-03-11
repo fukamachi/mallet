@@ -229,6 +229,7 @@ Returns T if this file had violations, NIL otherwise."
                (if cat
                    (format stream "        \"category\": ~S~%"
                            (string-downcase (symbol-name cat)))
+                   ;; null is emitted as a JSON literal (not a quoted string)
                    (format stream "        \"category\": null~%")))
              (format stream "      }"))
     (format stream "~%    ]~%")

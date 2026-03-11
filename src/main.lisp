@@ -389,7 +389,9 @@ Returns the final config with CLI preset override applied."
 
 (defun track-violation-severity (violations)
   "Check violations for errors, warnings, and any violations.
-Returns (values has-errors-p has-warnings-p has-any-p)."
+Returns (values has-errors-p has-warnings-p has-any-p).
+Note: :info-severity violations are NOT counted in has-warnings-p; they are
+only counted in has-any-p (used when fail-on is :info)."
   (values
    (some (lambda (v) (eq (violation-severity v) :error)) violations)
    (some (lambda (v) (eq (violation-severity v) :warning)) violations)

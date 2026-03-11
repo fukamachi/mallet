@@ -147,17 +147,23 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
   ;; Pre-pass: collect all :set-severity overrides before the main loop so that
   ;; :for-paths blocks are always processed with the complete override set, regardless
   ;; of ordering within the config file.
+  ;;
+  ;; When the same category appears more than once, the last directive wins.
+  ;; We achieve this by reversing the collected list before building the alist:
+  ;; assoc returns the first matching key, so putting the last-seen entry first
+  ;; makes it authoritative.
   (let ((set-severity-overrides
-          (loop for item in (rest sexp)
-                when (and (consp item) (eq (first item) :set-severity))
-                  collect (let ((category (second item))
-                                (severity (third item)))
-                            (unless (member severity '(:error :warning :info))
-                              (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
-                            (unless (member category '(:correctness :suspicious :cleanliness
-                                                       :style :format :metrics))
-                              (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :format :metrics), but got: ~S" category))
-                            (cons category severity)))))
+          (let ((raw (loop for item in (rest sexp)
+                           when (and (consp item) (eq (first item) :set-severity))
+                             collect (let ((category (second item))
+                                          (severity (third item)))
+                                       (unless (member severity '(:error :warning :info))
+                                         (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
+                                       (unless (member category '(:correctness :suspicious :cleanliness
+                                                                  :style :format :metrics))
+                                         (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :format :metrics), but got: ~S" category))
+                                       (cons category severity)))))
+            (nreverse raw))))
 
   (let ((rule-specs '())
         (disabled-rules '())
