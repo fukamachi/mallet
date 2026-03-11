@@ -416,6 +416,7 @@ Useful for exploration and discovering what rules exist."
             ;; Suspicious
             :eval-usage
             :runtime-intern
+            :runtime-unintern
             ;; Cleanliness
             :unused-variables
             :unused-local-functions

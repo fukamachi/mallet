@@ -57,7 +57,8 @@
        (:file "asdf")
        (:file "metrics")
        (:file "eval-usage")
-       (:file "runtime-intern")))
+       (:file "runtime-intern")
+       (:file "runtime-unintern"))))
      (:file "stale-suppression")))
    (:file "rules")
 
@@ -121,6 +122,7 @@
      (:file "bare-float-literal-test")
      (:file "eval-usage-test")
      (:file "runtime-intern-test")
+     (:file "runtime-unintern-test")
      (:file "no-package-use-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test"))))
