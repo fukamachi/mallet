@@ -115,6 +115,7 @@
      (:file "interned-package-symbol-test")
      (:file "unused-imported-symbols-test")
      (:file "text-formatting-test")
+     (:file "closing-paren-on-own-line-test")
      (:file "naming")
      (:file "lambda-list")
      (:file "asdf")

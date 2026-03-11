@@ -379,6 +379,7 @@ Style preferences are disabled to keep output clean."
             :trailing-whitespace
             :no-tabs
             :final-newline
+            :closing-paren-on-own-line
             :wrong-otherwise
             :unused-variables
             :unused-local-functions
@@ -443,6 +444,7 @@ Useful for exploration and discovering what rules exist."
             :no-tabs
             :trailing-whitespace
             :final-newline
+            :closing-paren-on-own-line
             :line-length
             :consecutive-blank-lines
             ;; Metrics

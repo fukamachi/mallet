@@ -9,7 +9,8 @@
            #:no-tabs-rule
            #:final-newline-rule
            #:consecutive-blank-lines-rule
-           #:consecutive-blank-lines-rule-max))
+           #:consecutive-blank-lines-rule-max
+           #:closing-paren-on-own-line-rule))
 (in-package #:mallet/rules/text)
 
 ;;; Helper functions
@@ -309,3 +310,104 @@ Returns the line content as a string, or NIL if line doesn't exist."
              :type :delete-lines
              :start-line start-line
              :end-line (+ start-line excess-count -1))))))))
+
+;;; Closing paren on own line rule
+
+(defclass closing-paren-on-own-line-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :closing-paren-on-own-line
+   :description "Closing parentheses should not appear alone on a line; place them at the end of the last expression"
+   :severity :warning
+   :category :format
+   :type :text)
+  (:documentation "Rule to detect lines consisting only of closing parentheses.
+In idiomatic Common Lisp, closing parentheses follow the last expression on the
+same line rather than appearing on their own line (unlike Algol-family languages)."))
+
+(defun closing-parens-only-p (line)
+  "Return the column of the first closing paren if LINE contains only closing
+parens (and surrounding whitespace), NIL otherwise.
+
+A line matches if, after stripping leading and trailing whitespace, it consists
+entirely of one or more ')' characters."
+  (let* ((trimmed (string-trim '(#\Space #\Tab) line))
+         (len (length trimmed)))
+    (when (and (plusp len)
+               (every (lambda (ch) (char= ch #\))) trimmed))
+      ;; Return column of the first ')' (0-based position in original line)
+      (position #\) line))))
+
+(defun count-string-transitions (line in-string-p)
+  "Count unescaped double-quote characters in LINE to track string literal state.
+Returns (values new-in-string-p) after processing the entire line.
+
+IN-STRING-P is T if we are already inside a string literal before this line.
+Handles escape sequences: backslash before a quote does not toggle string state."
+  (let ((in-string in-string-p)
+        (escape-next nil))
+    (loop for ch across line
+          do (cond
+               (escape-next
+                (setf escape-next nil))
+               ((char= ch #\\)
+                (setf escape-next t))
+               ((char= ch #\")
+                (setf in-string (not in-string)))))
+    in-string))
+
+(defun line-ends-with-comment-p (line)
+  "Return T if LINE ends with a comment (has a semicolon outside of strings).
+Tracks string state to avoid matching semicolons inside string literals."
+  (let ((in-string nil)
+        (escape-next nil)
+        (found-comment nil))
+    (loop for ch across line
+          do (cond
+               (escape-next
+                (setf escape-next nil))
+               ((char= ch #\\)
+                (setf escape-next t))
+               ((char= ch #\")
+                (setf in-string (not in-string)))
+               ((and (char= ch #\;) (not in-string))
+                (setf found-comment t)
+                (return))))
+    found-comment))
+
+(defmethod base:check-text ((rule closing-paren-on-own-line-rule) text file)
+  "Check that no line consists entirely of closing parentheses.
+Tracks string literal state across lines to avoid false positives inside
+multi-line strings.  Skips violations when the previous non-blank line ends
+with a comment, since the closing paren cannot be appended to such a line."
+  (check-type text string)
+  (check-type file pathname)
+
+  (let ((violations '())
+        (in-string nil)
+        (prev-line nil))
+
+    (with-input-from-string (stream text)
+      (loop for line-number from 1
+            for line = (read-line stream nil nil)
+            while line
+            do (let ((col (and (not in-string) (closing-parens-only-p line))))
+                 (when (and col
+                            (not (and prev-line (line-ends-with-comment-p prev-line))))
+                   (push (make-instance 'violation:violation
+                                        :rule :closing-paren-on-own-line
+                                        :file file
+                                        :line line-number
+                                        :column col
+                                        :severity (base:rule-severity rule)
+                                        :message "Closing parenthesis on its own line; move to end of previous expression"
+                                        :fix nil)
+                         violations))
+                 ;; Update string state after checking, so we use the state
+                 ;; from the START of this line (not end) for the violation check
+                 (setf in-string (count-string-transitions line in-string))
+                 ;; Track previous non-blank line for comment exception
+                 (unless (zerop (length (string-trim '(#\Space #\Tab) line)))
+                   (setf prev-line line)))))
+
+    (nreverse violations)))

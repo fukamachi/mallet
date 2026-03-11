@@ -37,6 +37,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'final-newline-rule options))
     (:consecutive-blank-lines
      (apply #'make-instance 'consecutive-blank-lines-rule options))
+    (:closing-paren-on-own-line
+     (apply #'make-instance 'closing-paren-on-own-line-rule options))
 
     ;; Token rules
     (:bare-float-literal
