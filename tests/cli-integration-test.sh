@@ -241,6 +241,52 @@ else
     test_fail "Expected exit code 1 (errors), got $EXIT_CODE"
 fi
 
+# --fail-on flag tests
+test_start "--fail-on error: exit 0 for warning-only violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on error "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 0 (no errors, only warnings), got $EXIT_CODE"
+fi
+
+test_start "--fail-on warning: exit 1 for warning violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on warning "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (warnings with --fail-on warning), got $EXIT_CODE"
+fi
+
+test_start "--fail-on info: exit 1 for any violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on info "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (any violations with --fail-on info), got $EXIT_CODE"
+fi
+
+test_start "--strict: exit 1 for any violations (alias for --fail-on info)"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --strict "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (--strict with warnings), got $EXIT_CODE"
+fi
+
+test_start "--fail-on error: exit 1 for error violations"
+EXIT_CODE=0
+"$CLI" --config "$FIXTURES_CONFIG" --fail-on error "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 1 (errors with --fail-on error), got $EXIT_CODE"
+fi
+
 # Summary
 echo ""
 echo "========================================="

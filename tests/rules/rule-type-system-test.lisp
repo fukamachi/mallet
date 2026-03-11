@@ -3,6 +3,7 @@
         #:rove)
   (:local-nicknames
    (#:base #:mallet/rules/base)
+   (#:rules #:mallet/rules)
    (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/rules/rule-type-system)
 
@@ -124,3 +125,68 @@
                             :severity :info
                             :message "test")))
       (ok (eq :info (violation:violation-severity v))))))
+
+;;; Tests for violation-category accessor
+
+(deftest violation-category-slot
+  (testing "Violation defaults to nil category"
+    (let ((v (make-instance 'violation:violation
+                            :rule :test-rule
+                            :file #p"test.lisp"
+                            :line 1
+                            :column 0
+                            :severity :warning
+                            :message "test")))
+      (ok (null (violation:violation-category v)))))
+
+  (testing "Violation accepts :category initarg"
+    (let ((v (make-instance 'violation:violation
+                            :rule :test-rule
+                            :file #p"test.lisp"
+                            :line 1
+                            :column 0
+                            :severity :warning
+                            :category :cleanliness
+                            :message "test")))
+      (ok (eq :cleanliness (violation:violation-category v)))))
+
+  (testing "violation-category is settable (accessor)"
+    (let ((v (make-instance 'violation:violation
+                            :rule :test-rule
+                            :file #p"test.lisp"
+                            :line 1
+                            :column 0
+                            :severity :info
+                            :message "test")))
+      (setf (violation:violation-category v) :style)
+      (ok (eq :style (violation:violation-category v)))))
+
+  (testing "violation-category is exported from mallet package"
+    (ok (find-symbol "VIOLATION-CATEGORY" "MALLET"))))
+
+;;; Tests for actual rule categories
+
+(deftest actual-rule-categories
+  (testing ":unused-variables rule has :cleanliness category"
+    (let ((rule (rules:make-rule :unused-variables)))
+      (ok (eq :cleanliness (base:rule-category rule)))))
+
+  (testing ":wrong-otherwise rule has :correctness category"
+    (let ((rule (rules:make-rule :wrong-otherwise)))
+      (ok (eq :correctness (base:rule-category rule)))))
+
+  (testing ":eval-usage rule has :suspicious category"
+    (let ((rule (rules:make-rule :eval-usage)))
+      (ok (eq :suspicious (base:rule-category rule)))))
+
+  (testing ":trailing-whitespace rule has :format category"
+    (let ((rule (rules:make-rule :trailing-whitespace)))
+      (ok (eq :format (base:rule-category rule)))))
+
+  (testing ":if-without-else rule has :style category"
+    (let ((rule (rules:make-rule :if-without-else)))
+      (ok (eq :style (base:rule-category rule)))))
+
+  (testing ":cyclomatic-complexity rule has :metrics category"
+    (let ((rule (rules:make-rule :cyclomatic-complexity)))
+      (ok (eq :metrics (base:rule-category rule))))))
