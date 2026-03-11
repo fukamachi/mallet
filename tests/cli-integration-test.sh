@@ -305,6 +305,45 @@ else
     test_fail "--none with --enable produced unexpected rule violations: $OUTPUT"
 fi
 
+# Inline comment suppression tests
+echo ""
+echo "Testing inline comment suppression..."
+echo ""
+
+NO_VIOLATIONS_DIR="$FIXTURES/no-violations"
+
+test_start "Active :suppress comment eliminates matching violation"
+OUTPUT=$("$CLI" --none --enable needless-let* "$NO_VIOLATIONS_DIR/comment-suppress-active.lisp" 2>&1)
+if echo "$OUTPUT" | grep -q "No problems found"; then
+    test_pass
+else
+    test_fail "Expected no violations when needless-let* is suppressed: $OUTPUT"
+fi
+
+test_start "Active :suppress is not reported as stale"
+STALE_COUNT=$("$CLI" --none --enable needless-let* --enable stale-suppression "$NO_VIOLATIONS_DIR/comment-suppress-active.lisp" 2>&1 | grep -c "stale-suppression" || true)
+if [ "$STALE_COUNT" -eq 0 ]; then
+    test_pass
+else
+    test_fail "Expected no stale-suppression violation when suppress was used"
+fi
+
+test_start "Stale :suppress generates stale-suppression warning"
+STALE_COUNT=$("$CLI" --none --enable needless-let* --enable stale-suppression "$VIOLATIONS_DIR/comment-suppress-stale.lisp" 2>&1 | grep -c "stale-suppression" || true)
+if [ "$STALE_COUNT" -ge 1 ]; then
+    test_pass
+else
+    test_fail "Expected stale-suppression violation when suppress has no matching violation"
+fi
+
+test_start ":disable region suppresses forms until :enable"
+IWE_COUNT=$("$CLI" --none --enable if-without-else "$VIOLATIONS_DIR/comment-disable-enable.lisp" 2>&1 | grep -c "if-without-else" || true)
+if [ "$IWE_COUNT" -eq 2 ]; then
+    test_pass
+else
+    test_fail "Expected exactly 2 if-without-else violations (before-disable and after-enable), got $IWE_COUNT"
+fi
+
 # Documentation completeness
 test_start "RULES.md documents :comment-ratio rule under METRICS section"
 if grep -q ":comment-ratio" "$PROJECT_DIR/RULES.md" && grep -q ":min-lines" "$PROJECT_DIR/RULES.md"; then

@@ -31,7 +31,10 @@
            ;; Suppression registration and stale detection
            #:register-suppression
            #:mark-suppression-used
-           #:collect-stale-suppressions))
+           #:collect-stale-suppressions
+           ;; State accessors needed by engine for lifecycle management
+           #:registered-suppressions
+           #:used-suppression-ids))
 (in-package #:mallet/suppression)
 
 (defclass suppression-state ()
@@ -464,7 +467,11 @@
                        ;; Silently ignore directives with no rules
                        (when rule-strings
                          (let ((rules (mapcar (lambda (r)
-                                               (intern (string-upcase r) :keyword))
+                                               (let ((name (string-upcase r)))
+                                                 (intern (if (utils:keyword-string-p name)
+                                                             (subseq name 1)
+                                                             name)
+                                                         :keyword)))
                                              rule-strings)))
                            (push (list line-number type rules reason) result)))))))))
     (sort result #'< :key #'first)))
