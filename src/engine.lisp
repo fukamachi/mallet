@@ -52,6 +52,109 @@ Returns updated violations list."
             (nconc violations (rules:check-form rule form file)))))
   violations)
 
+(defun build-disable-intervals (directives last-line)
+  "Build a list of (rule-keyword start-line end-line) intervals from DIRECTIVES.
+
+   DIRECTIVES is the sorted list returned by PARSE-COMMENT-DIRECTIVES.
+   LAST-LINE is the last line number in the file (for unclosed :disable regions).
+
+   For each :disable directive at line S with no matching :enable, the interval
+   extends from S to LAST-LINE. Nested :disable/:enable for the same rule are
+   handled by tracking the nesting depth.
+
+   Returns an alist mapping rule keywords to lists of (start . end) conses."
+  (let ((open-starts (make-hash-table :test 'eq))   ; rule -> list of start lines
+        (intervals (make-hash-table :test 'eq)))     ; rule -> list of (start . end)
+    (dolist (directive directives)
+      (destructuring-bind (d-line d-type d-rules d-reason) directive
+        (declare (ignore d-reason))
+        (when (member d-type '(:disable :enable))
+          (dolist (rule d-rules)
+            (ecase d-type
+              (:disable
+               (push d-line (gethash rule open-starts nil)))
+              (:enable
+               (let ((starts (gethash rule open-starts nil)))
+                 (when starts
+                   (push (cons (first starts) (1- d-line))
+                         (gethash rule intervals nil))
+                   (setf (gethash rule open-starts) (rest starts))))))))))
+    ;; Close any unclosed :disable regions — they extend to EOF
+    (maphash (lambda (rule starts)
+               (dolist (start starts)
+                 (push (cons start last-line)
+                       (gethash rule intervals nil))))
+             open-starts)
+    intervals))
+
+(defun violation-in-disabled-interval-p (violation intervals)
+  "Return T if VIOLATION's line falls within a disabled interval for its rule.
+
+   INTERVALS is the alist built by BUILD-DISABLE-INTERVALS, mapping rule keywords
+   to lists of (start . end) conses."
+  (let* ((rule (violation:violation-rule violation))
+         (line (violation:violation-line violation))
+         (rule-intervals (gethash rule intervals nil)))
+    (or (some (lambda (interval)
+                (and (>= line (car interval))
+                     (<= line (cdr interval))))
+              rule-intervals)
+        ;; Also check :all-rules intervals
+        (let ((all-intervals (gethash :all intervals nil)))
+          (some (lambda (interval)
+                  (and (>= line (car interval))
+                       (<= line (cdr interval))))
+                all-intervals)))))
+
+(defun filter-text-token-violations (violations directives state last-line)
+  "Filter text/token VIOLATIONS using comment :disable/:enable DIRECTIVES.
+
+   Violations whose line falls within a disabled interval for their rule are removed.
+   For each suppressed violation, MARK-SUPPRESSION-USED is called on the corresponding
+   suppression ID in STATE.
+
+   :suppress directives are NOT applied to text/token violations.
+
+   Returns the filtered violations list."
+  (when (null directives)
+    (return-from filter-text-token-violations violations))
+  (let ((intervals (build-disable-intervals directives last-line))
+        ;; Map each :disable directive to a suppression ID for stale tracking
+        (directive-ids (make-hash-table :test 'equal)))  ; (rule . line) -> id
+    ;; Register each :disable directive in state for stale tracking
+    (dolist (directive directives)
+      (destructuring-bind (d-line d-type d-rules d-reason) directive
+        (when (eq d-type :disable)
+          (dolist (rule d-rules)
+            (let ((id (suppression:register-suppression
+                        state d-line (list rule) d-reason :text-token-disable)))
+              (setf (gethash (cons rule d-line) directive-ids) id))))))
+    ;; Filter violations
+    (let ((kept nil)
+          (used-rule-lines (make-hash-table :test 'equal)))  ; (rule . line) -> t
+      (dolist (v violations)
+        (if (violation-in-disabled-interval-p v intervals)
+            ;; Find the :disable directive responsible and mark it used
+            (let* ((rule (violation:violation-rule v))
+                   (vline (violation:violation-line v))
+                   ;; Find the most-recently-opened interval containing vline
+                   (rule-intervals (gethash rule intervals nil))
+                   (matched-interval (find-if (lambda (interval)
+                                                (and (>= vline (car interval))
+                                                     (<= vline (cdr interval))))
+                                              rule-intervals))
+                   ;; Find the :disable directive that opened this interval
+                   (disable-line (when matched-interval
+                                   (car matched-interval)))
+                   (id (when disable-line
+                         (gethash (cons rule disable-line) directive-ids))))
+              (when (and id (not (gethash (cons rule disable-line) used-rule-lines)))
+                (setf (gethash (cons rule disable-line) used-rule-lines) t)
+                (suppression:mark-suppression-used state id)))
+            ;; Not suppressed — keep
+            (push v kept)))
+      (nreverse kept))))
+
 (defun consume-comment-directives (pending-directives prev-end-line form-start-line state
                                    pending-suppress-records)
   "Consume comment directives that apply to the form starting at FORM-START-LINE.
@@ -182,7 +285,17 @@ If ignored-p is T, the file was ignored and violations will be NIL."
          (violations '())
          (file-type (let ((type-string (pathname-type file)))
                       (when type-string
-                        (intern (string-upcase type-string) :keyword)))))
+                        (intern (string-upcase type-string) :keyword))))
+         ;; Parse comment directives once — used by both text/token and form processing
+         (all-directives (suppression:parse-comment-directives text))
+         ;; Count lines for unclosed :disable interval handling
+         (last-line (let ((n 0))
+                      (with-input-from-string (s text)
+                        (loop for line = (read-line s nil nil)
+                              while line do (incf n)))
+                      (max n 1)))
+         ;; Suppression state for text/token violation tracking (stale detection)
+         (text-token-suppression-state (suppression:make-suppression-state)))
 
     ;; Run text-level rules
     (dolist (rule rules)
@@ -199,6 +312,11 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                      (should-run-rule-on-file-p rule file-type))
             (setf violations
                   (nconc violations (rules:check-tokens rule tokens file)))))))
+
+    ;; Filter text/token violations by comment :disable/:enable directives
+    (setf violations
+          (filter-text-token-violations violations all-directives
+                                         text-token-suppression-state last-line))
 
     ;; Run form-level rules
     (when (some (lambda (r) (eq (rules:rule-type r) :form)) rules)
@@ -222,8 +340,8 @@ If ignored-p is T, the file was ignored and violations will be NIL."
 
         (let ((*suppression-state* (suppression:make-suppression-state))
               (pending-next-form-suppression nil)
-              ;; Comment directive integration
-              (pending-directives (suppression:parse-comment-directives text))
+              ;; Comment directive integration — use the already-parsed directives
+              (pending-directives all-directives)
               ;; :suppress records: list of (id line rules reason). Not in registered-suppressions.
               (pending-suppress-records nil)
               (stale-suppress-entries nil)

@@ -344,6 +344,25 @@ else
     test_fail "Expected exactly 2 if-without-else violations (before-disable and after-enable), got $IWE_COUNT"
 fi
 
+# Text/token :disable/:enable suppression tests
+test_start ":disable/:enable suppresses line-length violations inside region"
+# Lines 10 and 11 are inside the disable/enable region and should NOT appear
+REGION_COUNT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/line-length-disable.lisp" 2>&1 | grep -E '^\s+1[01]:' | grep -c "line-length" || true)
+if [ "$REGION_COUNT" -eq 0 ]; then
+    test_pass
+else
+    test_fail "Expected 0 line-length violations inside disabled region, got $REGION_COUNT"
+fi
+
+test_start ":disable/:enable still reports line-length violations outside region"
+# Lines 7 and 14 are outside the disable/enable region and SHOULD appear
+OUTSIDE_COUNT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/line-length-disable.lisp" 2>&1 | grep -E '^\s+(7|14):' | grep -c "line-length" || true)
+if [ "$OUTSIDE_COUNT" -eq 2 ]; then
+    test_pass
+else
+    test_fail "Expected 2 line-length violations outside disabled region, got $OUTSIDE_COUNT"
+fi
+
 # Documentation completeness
 test_start "RULES.md documents :comment-ratio rule under METRICS section"
 if grep -q ":comment-ratio" "$PROJECT_DIR/RULES.md" && grep -q ":min-lines" "$PROJECT_DIR/RULES.md"; then
