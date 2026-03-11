@@ -9,6 +9,7 @@
            #:violation-end-column
            #:violation-severity
            #:violation-message
+           #:violation-category
            #:violation-fix
            #:make-violation-fix
            #:violation-fix-type
@@ -131,6 +132,12 @@ Fix types:
     :reader violation-severity
     :type (member :error :warning :info)
     :documentation "Severity level of the violation")
+   (category
+    :initarg :category
+    :initform nil
+    :accessor violation-category
+    :type (or null keyword)
+    :documentation "Rule category (e.g. :style, :correctness), populated from rule after checking")
    (message
     :initarg :message
     :reader violation-message

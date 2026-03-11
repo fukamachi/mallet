@@ -152,4 +152,24 @@
       (ok (search "\"severity\": \"warning\"" output))
       (ok (search "\"line\": 10" output))
       (ok (search "\"column\": 5" output))
-      (ok (search "\"message\": \"Variable 'x' is unused\"" output)))))
+      (ok (search "\"message\": \"Variable 'x' is unused\"" output))
+      ;; No category when nil
+      (ok (search "\"category\": null" output))))
+
+  (testing "format-json-file includes category when present"
+    (let* ((file (pathname "/path/to/file.lisp"))
+           (v1 (make-instance 'violation:violation
+                              :rule :line-length
+                              :severity :warning
+                              :line 5
+                              :column 0
+                              :category :style
+                              :message "Line too long"
+                              :file file))
+           (output (with-output-to-string (stream)
+                     (formatter:format-json-file
+                      file
+                      (list v1)
+                      t
+                      :stream stream))))
+      (ok (search "\"category\": \"style\"" output)))))

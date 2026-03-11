@@ -223,8 +223,13 @@ Returns T if this file had violations, NIL otherwise."
                      (violation:violation-line v))
              (format stream "        \"column\": ~A,~%"
                      (violation:violation-column v))
-             (format stream "        \"message\": ~S~%"
+             (format stream "        \"message\": ~S,~%"
                      (violation:violation-message v))
+             (let ((cat (violation:violation-category v)))
+               (if cat
+                   (format stream "        \"category\": ~S~%"
+                           (string-downcase (symbol-name cat)))
+                   (format stream "        \"category\": null~%")))
              (format stream "      }"))
     (format stream "~%    ]~%")
     (format stream "  }")

@@ -36,6 +36,7 @@
            #:violation-column
            #:violation-severity
            #:violation-message
+           #:violation-category
            #:violation-fix
            ;; Re-exported from mallet/parser
            #:token
