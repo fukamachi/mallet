@@ -577,6 +577,9 @@ Nested `flet`/`labels` functions are counted separately.
 
 Functions should not have too many comments relative to code. Useful for catching AI-generated code patterns where functions are padded with excessive inline commentary.
 
+**Category**: `:metrics`
+**Default**: disabled (`:info` severity; included in `:all` preset)
+
 **Options**:
 - `:max` (default: 0.3) - Maximum allowed comment ratio (0.0–1.0)
 - `:min-lines` (default: 5) - Minimum qualifying lines before the rule applies (avoids noise on tiny functions). Counts comment and code lines only; docstring lines are excluded from this count unless `:include-docstrings t` is set.
