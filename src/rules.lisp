@@ -22,93 +22,67 @@ Always returns a rule object - enabled/disabled state is handled by config.
 Severity and category defaults are defined in each rule class's :default-initargs."
   ;; Create rule instance based on name
   (case name
-      ;; Text rules
-      (:line-length
-       (apply #'make-instance 'line-length-rule
-              options))
-      (:trailing-whitespace
-       (apply #'make-instance 'trailing-whitespace-rule
-              options))
-      (:no-tabs
-       (apply #'make-instance 'no-tabs-rule
-              options))
-      (:final-newline
-       (apply #'make-instance 'final-newline-rule
-              options))
-      (:consecutive-blank-lines
-       (apply #'make-instance 'consecutive-blank-lines-rule
-              options))
+    ;; Text rules
+    (:line-length
+     (apply #'make-instance 'line-length-rule options))
+    (:trailing-whitespace
+     (apply #'make-instance 'trailing-whitespace-rule options))
+    (:no-tabs
+     (apply #'make-instance 'no-tabs-rule options))
+    (:final-newline
+     (apply #'make-instance 'final-newline-rule options))
+    (:consecutive-blank-lines
+     (apply #'make-instance 'consecutive-blank-lines-rule options))
 
-      ;; Token rules
-      (:bare-float-literal
-       (apply #'make-instance 'bare-float-literal-rule
-              options))
+    ;; Token rules
+    (:bare-float-literal
+     (apply #'make-instance 'bare-float-literal-rule options))
 
-      ;; Form rules
-      (:if-without-else
-       (apply #'make-instance 'if-without-else-rule
-              options))
-      (:bare-progn-in-if
-       (apply #'make-instance 'bare-progn-in-if-rule
-              options))
-      (:missing-otherwise
-       (apply #'make-instance 'missing-otherwise-rule
-              options))
-      (:wrong-otherwise
-       (apply #'make-instance 'wrong-otherwise-rule
-              options))
-      (:needless-let*
-       (apply #'make-instance 'needless-let*-rule
-              options))
-      (:unused-variables
-       (apply #'make-instance 'unused-variables-rule
-              options))
-      (:unused-loop-variables
-       (apply #'make-instance 'unused-loop-variables-rule
-              options))
-      (:unused-local-functions
-       (apply #'make-instance 'unused-local-functions-rule
-              options))
-      (:interned-package-symbol
-       (apply #'make-instance 'interned-package-symbol-rule
-              options))
-      (:unused-local-nicknames
-       (apply #'make-instance 'unused-local-nicknames-rule
-              options))
-      (:unused-imported-symbols
-       (apply #'make-instance 'unused-imported-symbols-rule
-              options))
-      (:no-package-use
-       (apply #'make-instance 'no-package-use-rule
-              options))
-      (:special-variable-naming
-       (apply #'make-instance 'special-variable-naming-rule
-              options))
-      (:constant-naming
-       (apply #'make-instance 'constant-naming-rule
-              options))
-      (:mixed-optional-and-key
-       (apply #'make-instance 'mixed-optional-and-key-rule
-              options))
-      (:asdf-component-strings
-       (apply #'make-instance 'asdf-component-strings-rule
-              options))
+    ;; Form rules
+    (:if-without-else
+     (apply #'make-instance 'if-without-else-rule options))
+    (:bare-progn-in-if
+     (apply #'make-instance 'bare-progn-in-if-rule options))
+    (:missing-otherwise
+     (apply #'make-instance 'missing-otherwise-rule options))
+    (:wrong-otherwise
+     (apply #'make-instance 'wrong-otherwise-rule options))
+    (:needless-let*
+     (apply #'make-instance 'needless-let*-rule options))
+    (:unused-variables
+     (apply #'make-instance 'unused-variables-rule options))
+    (:unused-loop-variables
+     (apply #'make-instance 'unused-loop-variables-rule options))
+    (:unused-local-functions
+     (apply #'make-instance 'unused-local-functions-rule options))
+    (:interned-package-symbol
+     (apply #'make-instance 'interned-package-symbol-rule options))
+    (:unused-local-nicknames
+     (apply #'make-instance 'unused-local-nicknames-rule options))
+    (:unused-imported-symbols
+     (apply #'make-instance 'unused-imported-symbols-rule options))
+    (:no-package-use
+     (apply #'make-instance 'no-package-use-rule options))
+    (:special-variable-naming
+     (apply #'make-instance 'special-variable-naming-rule options))
+    (:constant-naming
+     (apply #'make-instance 'constant-naming-rule options))
+    (:mixed-optional-and-key
+     (apply #'make-instance 'mixed-optional-and-key-rule options))
+    (:asdf-component-strings
+     (apply #'make-instance 'asdf-component-strings-rule options))
 
-      ;; Safety rules
-      (:eval-usage
-       (apply #'make-instance 'eval-usage-rule
-              options))
-      (:runtime-intern
-       (apply #'make-instance 'runtime-intern-rule
-              options))
+    ;; Safety rules
+    (:eval-usage
+     (apply #'make-instance 'eval-usage-rule options))
+    (:runtime-intern
+     (apply #'make-instance 'runtime-intern-rule options))
 
-      ;; Metric rules
-      (:function-length
-       (apply #'make-instance 'function-length-rule
-              options))
-      (:cyclomatic-complexity
-       (apply #'make-instance 'cyclomatic-complexity-rule
-              options))
+    ;; Metric rules
+    (:function-length
+     (apply #'make-instance 'function-length-rule options))
+    (:cyclomatic-complexity
+     (apply #'make-instance 'cyclomatic-complexity-rule options))
 
-      (otherwise
-       (error "Unknown rule name: ~A" name))))
+    (otherwise
+     (error "Unknown rule name: ~A" name))))
