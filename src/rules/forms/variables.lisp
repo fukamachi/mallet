@@ -1981,7 +1981,7 @@ Returns NIL for empty bindings, unknown binding shapes, or when dependencies exi
   (:default-initargs
    :name :needless-let*
    :description "Use 'let' instead of 'let*' when bindings don't depend on each other"
-   :severity :info
+   :severity :warning
    :category :style
    :type :form)
   (:documentation "Rule to detect LET* forms whose bindings are independent."))

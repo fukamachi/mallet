@@ -388,7 +388,8 @@ Style preferences are disabled to keep output clean."
             :mixed-optional-and-key
             :if-without-else
             :eval-usage
-            :no-package-use))
+            :no-package-use
+            :needless-let*))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
             :line-length
