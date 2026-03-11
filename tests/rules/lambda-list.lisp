@@ -85,3 +85,99 @@
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1))
           (ok (eq (violation:violation-rule (first violations)) :mixed-optional-and-key)))))))
+
+;;; Allow &allow-other-keys tests
+
+(deftest allow-other-keys-valid
+  (testing "Valid lambda lists without &allow-other-keys"
+    (let ((rule (make-instance 'rules:allow-other-keys-rule))
+          (file (uiop:parse-native-namestring "test.lisp")))
+
+      (testing "Only &key without allow-other-keys is valid"
+        (let* ((text "(defun foo (a &key b) (list a b))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations))))
+
+      (testing "Required params only is valid"
+        (let* ((text "(defun foo (a b) (list a b))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations))))
+
+      (testing "Lambda with &rest is valid"
+        (let* ((text "(lambda (a &rest args) args)")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations))))
+
+      (testing "Defmethod with &optional is valid"
+        (let* ((text "(defmethod foo ((obj string) &optional bar) obj)")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations)))))))
+
+(deftest allow-other-keys-invalid
+  (testing "Invalid lambda lists with &allow-other-keys"
+    (let ((rule (make-instance 'rules:allow-other-keys-rule))
+          (file (uiop:parse-native-namestring "test.lisp")))
+
+      (testing "defun with &allow-other-keys violates"
+        (let* ((text "(defun foo (a &key b &allow-other-keys) (list a b))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))
+          (ok (search "allow-other-keys" (violation:violation-message (first violations))))))
+
+      (testing "lambda with &allow-other-keys violates"
+        (let* ((text "(lambda (a &key b &allow-other-keys) (list a b))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+
+      (testing "defmethod with &allow-other-keys violates"
+        (let* ((text "(defmethod foo ((obj string) &key bar &allow-other-keys) obj)")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+
+      (testing "defmacro with &allow-other-keys violates"
+        (let* ((text "(defmacro with-opts (name &key opt &allow-other-keys) `(list ,name ,opt))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+
+      (testing "flet with &allow-other-keys violates"
+        (let* ((text "(flet ((helper (a &key b &allow-other-keys) (list a b))) (helper 1))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+
+      (testing "violation severity is :warning"
+        (let* ((text "(defun foo (a &key b &allow-other-keys) b)")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-severity (first violations)) :warning)))))))
+
+;;; Registration tests
+
+(deftest allow-other-keys-registration
+  (testing ":allow-other-keys is NOT in default config"
+    (let* ((cfg (mallet/config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (not (member :allow-other-keys rule-names)))))
+
+  (testing ":allow-other-keys is in :all config"
+    (let* ((cfg (mallet/config:get-built-in-config :all))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (member :allow-other-keys rule-names))))
+
+  (testing ":allow-other-keys rule has :practice category"
+    (let ((rule (rules:make-rule :allow-other-keys)))
+      (ok (eq :practice (rules:rule-category rule))))))

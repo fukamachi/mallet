@@ -416,6 +416,8 @@ Useful for exploration and discovering what rules exist."
           '(;; Correctness
             :wrong-otherwise
             :mixed-optional-and-key
+            ;; Practice
+            :allow-other-keys
             ;; Suspicious
             :eval-usage
             :runtime-intern

@@ -199,6 +199,10 @@
     (let ((rule (rules:make-rule :no-package-use)))
       (ok (eq :practice (base:rule-category rule)))))
 
+  (testing ":allow-other-keys rule has :practice category"
+    (let ((rule (rules:make-rule :allow-other-keys)))
+      (ok (eq :practice (base:rule-category rule)))))
+
   (testing ":cyclomatic-complexity rule has :metrics category"
     (let ((rule (rules:make-rule :cyclomatic-complexity)))
       (ok (eq :metrics (base:rule-category rule)))))

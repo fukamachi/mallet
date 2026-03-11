@@ -1,0 +1,8 @@
+# Expected violations for allow-other-keys.lisp
+# Format: line:column rule-name severity
+
+4:20 allow-other-keys warning
+12:8 allow-other-keys warning
+20:19 allow-other-keys warning
+28:23 allow-other-keys warning
+38:15 allow-other-keys warning

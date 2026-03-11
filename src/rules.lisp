@@ -77,6 +77,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'constant-naming-rule options))
     (:mixed-optional-and-key
      (apply #'make-instance 'mixed-optional-and-key-rule options))
+    (:allow-other-keys
+     (apply #'make-instance 'allow-other-keys-rule options))
     (:asdf-component-strings
      (apply #'make-instance 'asdf-component-strings-rule options))
 
