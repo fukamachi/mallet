@@ -320,10 +320,7 @@ Presets:
 Rule Groups (by severity):
   error               Objectively wrong code (causes runtime errors)
   warning             Likely bugs or dangerous patterns
-  convention          Idiom suggestions (not wrong, but not idiomatic)
-  format              Consensus formatting (Emacs/SLIME standards)
-  info                Subjective preferences (style choices)
-  metrics             Code quality measurements (complexity, length)
+  info                Informational checks (style, formatting, metrics)
 
 Examples:
   mallet src
@@ -335,14 +332,14 @@ Examples:
   mallet --fix src/                   # Auto-fix violations
   mallet --fix-dry-run src/           # Preview fixes without changing files
 
-  # Enable metrics rules without config file
-  mallet --enable-group metrics src/
+  # Enable info rules (includes metrics, formatting, style)
+  mallet --enable-group info src/
 
   # Enable specific rule with custom options
   mallet --enable cyclomatic-complexity:max=15 src/
 
   # Mix preset with CLI overrides
-  mallet --preset default --enable-group metrics src/
+  mallet --preset default --enable-group info src/
 
   # Override multiple rules
   mallet --enable cyclomatic-complexity:max=10 --enable function-length:max=30 src/
