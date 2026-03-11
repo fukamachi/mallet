@@ -107,12 +107,10 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
         fi
 
         # Determine expected exit code based on highest severity
-        # Exit 2: ERROR, Exit 1: WARNING, Exit 0: CONVENTION/FORMAT/INFO/METRICS
+        # Default --fail-on is error: exit 1 only for errors, not warnings/info
         EXPECTED_EXIT_CODE=0
         if [ -f "$expected_file" ]; then
             if grep -q ' error$' "$expected_file" 2>/dev/null; then
-                EXPECTED_EXIT_CODE=2
-            elif grep -q ' warning$' "$expected_file" 2>/dev/null; then
                 EXPECTED_EXIT_CODE=1
             fi
         fi
@@ -233,13 +231,14 @@ else
     test_fail "Expected wrong-otherwise violations"
 fi
 
-# Test severity levels
-test_start "Form rules file returns exit code 2 (has errors)"
+# Test exit codes
+test_start "Form rules file returns exit code 1 (has errors)"
+EXIT_CODE=0
 "$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
-if [ $EXIT_CODE -eq 2 ]; then
+if [ $EXIT_CODE -eq 1 ]; then
     test_pass
 else
-    test_fail "Expected exit code 2 (errors), got $EXIT_CODE"
+    test_fail "Expected exit code 1 (errors), got $EXIT_CODE"
 fi
 
 # Summary
