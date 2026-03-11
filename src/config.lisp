@@ -415,7 +415,8 @@ Useful for exploration and discovering what rules exist."
             :consecutive-blank-lines
             ;; Metrics
             :function-length
-            :cyclomatic-complexity)))
+            :cyclomatic-complexity
+            :comment-ratio)))
     (make-config
      :rules (mapcar (lambda (spec)
                       (if (consp spec)

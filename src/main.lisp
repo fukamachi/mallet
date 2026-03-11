@@ -372,7 +372,11 @@ Returns the final config with CLI preset override applied."
   (let ((config:*default-preset* (or preset :default)))
     (or (and config-path
              (config:load-config config-path :preset-override preset))
-        (and start-directory
+        ;; When --none is specified without an explicit --config, skip auto-discovery.
+        ;; The user wants a clean slate; discovered config files with explicit (:enable ...)
+        ;; entries would add rules that contradict the --none intent.
+        (and (not (eq preset :none))
+             start-directory
              (let ((discovered (config:find-config-file start-directory)))
                (when discovered
                  (config:load-config discovered :preset-override preset))))

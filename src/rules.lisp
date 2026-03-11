@@ -83,6 +83,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'function-length-rule options))
     (:cyclomatic-complexity
      (apply #'make-instance 'cyclomatic-complexity-rule options))
+    (:comment-ratio
+     (apply #'make-instance 'comment-ratio-rule options))
 
     (otherwise
      (error "Unknown rule name: ~A" name))))
