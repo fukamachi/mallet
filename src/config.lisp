@@ -217,7 +217,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                                       (set-difference extends-disabled project-wide-rule-names))))
                         (multiple-value-bind (override-rules override-disabled)
                             (parse-override-rules override-forms merged-base-rules merged-base-disabled)
-                          ;; Apply :set-severity overrides to path-specific rules
+                          ;; Apply :set-severity overrides to path-specific rules.
+                          ;; :set-severity always wins (see comment above the main rule loop).
                           (when set-severity-overrides
                             (dolist (rule override-rules)
                               (let* ((cat (rules:rule-category rule))
@@ -252,7 +253,12 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                        ;; Remove enabled rules from base disabled list
                        (set-difference (config-disabled-rules extends) rule-names)))))
 
-      ;; Apply :set-severity overrides to rules in matching categories
+      ;; Apply :set-severity overrides to rules in matching categories.
+      ;; NOTE: :set-severity always wins over per-rule :severity specified via
+      ;; (:enable :rule :severity :x).  The last (:set-severity …) in the config
+      ;; is the authoritative severity for the category.  If you need a per-rule
+      ;; exception, use a separate :for-paths block without a :set-severity, or
+      ;; do not use :set-severity for that category.
       (let ((final-rules (nreverse rules)))
         (when set-severity-overrides
           (dolist (rule final-rules)
@@ -503,6 +509,14 @@ CLI-RULES is a plist with:
              (push rule result-rules))))))
 
     ;; Step 2: Add rules that were only in enable-rules (not in base config)
+    ;; NOTE: Rules created here bypass any :set-severity overrides that were
+    ;; applied when the base config was parsed, because those overrides are
+    ;; baked into the base rule objects and apply-cli-overrides does not have
+    ;; access to the original set-severity-overrides alist.  The rule will use
+    ;; whatever :severity was supplied on the CLI, or the rule's default
+    ;; severity if none was given.  This is a known limitation: users who
+    ;; combine (:set-severity …) in their config file with a CLI --enable for
+    ;; a previously-absent rule should also pass --severity on the CLI.
     (dolist (enable-spec enable-rules)
       (let ((rule-name (car enable-spec)))
         (unless (find rule-name base-rules :key #'rules:rule-name)

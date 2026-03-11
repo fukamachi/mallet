@@ -811,3 +811,80 @@
                 :key #'rules:rule-name))
       ;; if-without-else disabled
       (ok (member :if-without-else (config:config-disabled-rules merged))))))
+
+;;; U-1: :set-severity always-wins contract tests
+
+(deftest set-severity-always-wins-over-per-rule-severity
+  (testing ":set-severity overrides per-rule :severity from (:enable :rule :severity :x)"
+    ;; Document the contract: :set-severity wins over a per-rule :severity.
+    ;; A user who writes (:enable :unused-variables :severity :warning) and
+    ;; (:set-severity :cleanliness :info) will end up with :info severity on
+    ;; :unused-variables.  This is the intended "last directive wins" behaviour.
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables :severity :warning)
+                   (:set-severity :cleanliness :info)))
+           (cfg (config:parse-config sexp)))
+      (let ((rule (find :unused-variables (config:config-rules cfg)
+                        :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        ;; :set-severity :cleanliness :info wins over the per-rule :severity :warning
+        (ok (eq :info (rules:rule-severity rule))
+            ":set-severity :cleanliness wins over per-rule :severity"))))
+
+  (testing ":set-severity overrides per-rule :severity in :for-paths rules"
+    ;; Same contract applies inside :for-paths blocks.
+    (let* ((sexp '(:mallet-config
+                   (:set-severity :cleanliness :error)
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :unused-variables :severity :warning))))
+           (cfg (config:parse-config sexp)))
+      (let* ((path-rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (rule (find :unused-variables path-rules :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        ;; :set-severity wins
+        (ok (eq :error (rules:rule-severity rule))
+            ":set-severity wins over per-rule :severity inside :for-paths")))))
+
+;;; U-2: CLI --enable new-rule bypasses :set-severity — known limitation tests
+
+(deftest apply-cli-overrides-new-rule-bypasses-set-severity
+  (testing "CLI-enabled rule not in base config gets default severity, not :set-severity override"
+    ;; Known limitation: apply-cli-overrides does not have access to the
+    ;; set-severity-overrides alist that was used when parsing the base config.
+    ;; A rule added purely via CLI --enable that was not in the base config will
+    ;; use its default severity (or the CLI-supplied :severity), not any
+    ;; :set-severity from the config file.
+    (let* ((sexp '(:mallet-config
+                   (:extends :none)
+                   (:set-severity :format :error)))
+           (base-config (config:parse-config sexp))
+           ;; CLI enables :trailing-whitespace which is not in the base config
+           (cli-rules '(:enable-rules ((:trailing-whitespace))
+                        :disable-rules ()))
+           (merged (config:apply-cli-overrides base-config cli-rules)))
+      (let ((rule (find :trailing-whitespace (config:config-rules merged)
+                        :key #'rules:rule-name)))
+        (ok (not (null rule)) ":trailing-whitespace should be in merged rules")
+        ;; The rule was not in base config, so :set-severity :format :error was
+        ;; never applied to it.  It keeps its default severity (:warning).
+        (ok (eq :warning (rules:rule-severity rule))
+            "New CLI-enabled rule gets its default severity, not the config's :set-severity"))))
+
+  (testing "CLI-enabled rule that IS in base config preserves :set-severity from config"
+    ;; Contrast: when the rule already exists in the base config, Step 1 of
+    ;; apply-cli-overrides copies the config-applied severity onto the new rule
+    ;; (unless the CLI provides an explicit :severity override).
+    (let* ((sexp '(:mallet-config
+                   (:enable :trailing-whitespace)   ; :format category
+                   (:set-severity :format :error)))
+           (base-config (config:parse-config sexp))
+           ;; CLI re-enables :trailing-whitespace (it is already in base config)
+           (cli-rules '(:enable-rules ((:trailing-whitespace))
+                        :disable-rules ()))
+           (merged (config:apply-cli-overrides base-config cli-rules)))
+      (let ((rule (find :trailing-whitespace (config:config-rules merged)
+                        :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        ;; The base rule had :error (from :set-severity), and Step 1 copies it.
+        (ok (eq :error (rules:rule-severity rule))
+            "Existing rule re-enabled by CLI preserves config-applied severity")))))
