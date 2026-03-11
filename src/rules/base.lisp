@@ -53,7 +53,7 @@
     :documentation "Human-readable description")
    (severity
     :initarg :severity
-    :reader rule-severity
+    :accessor rule-severity
     :type (member :error :warning :info)
     :documentation "Default severity level")
    (category

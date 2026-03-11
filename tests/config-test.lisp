@@ -660,13 +660,58 @@
 
 ;;; CLI override tests
 
+;;; :set-severity directive tests
+
+(deftest set-severity-directive
+  (testing "Set severity for all rules in a category"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)  ; :cleanliness category, default :warning
+                   (:set-severity :cleanliness :error)))
+           (cfg (config:parse-config sexp)))
+      (let ((rule (find :unused-variables (config:config-rules cfg)
+                        :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        (ok (eq :error (rules:rule-severity rule))))))
+
+  (testing "Set severity does not affect rules in other categories"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)    ; :cleanliness
+                   (:enable :wrong-otherwise)     ; :correctness, default :error
+                   (:set-severity :cleanliness :info)))
+           (cfg (config:parse-config sexp)))
+      (let ((unused (find :unused-variables (config:config-rules cfg) :key #'rules:rule-name))
+            (wrong (find :wrong-otherwise (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (eq :info (rules:rule-severity unused)))
+        (ok (eq :error (rules:rule-severity wrong))))))
+
+  (testing "Multiple :set-severity directives for different categories"
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)     ; :cleanliness
+                   (:enable :trailing-whitespace)  ; :format
+                   (:set-severity :cleanliness :error)
+                   (:set-severity :format :info)))
+           (cfg (config:parse-config sexp)))
+      (let ((unused (find :unused-variables (config:config-rules cfg) :key #'rules:rule-name))
+            (whitespace (find :trailing-whitespace (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (eq :error (rules:rule-severity unused)))
+        (ok (eq :info (rules:rule-severity whitespace))))))
+
+  (testing ":set-severity with :extends applies to inherited rules"
+    (let* ((sexp '(:mallet-config
+                   (:extends :default)
+                   (:set-severity :format :error)))
+           (cfg (config:parse-config sexp)))
+      ;; Trailing whitespace is :format category and should be :error now
+      (let ((rule (find :trailing-whitespace (config:config-rules cfg)
+                        :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        (ok (eq :error (rules:rule-severity rule)))))))
+
 (deftest apply-cli-overrides-enable-rule
   (testing "Enable a rule that's not in base config"
     (let* ((base-config (config:get-built-in-config :default))
            (cli-rules '(:enable-rules ((:line-length :max 120))
-                        :disable-rules ()
-                        :enable-groups ()
-                        :disable-groups ()))
+                        :disable-rules ()))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       (ok (find :line-length (config:config-rules merged)
                 :key #'rules:rule-name))
@@ -679,64 +724,17 @@
   (testing "Disable a rule from base config"
     (let* ((base-config (config:get-built-in-config :default))
            (cli-rules '(:enable-rules ()
-                        :disable-rules (:trailing-whitespace)
-                        :enable-groups ()
-                        :disable-groups ()))
+                        :disable-rules (:trailing-whitespace)))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       (ok (not (find :trailing-whitespace (config:config-rules merged)
                      :key #'rules:rule-name)))
       (ok (member :trailing-whitespace (config:config-disabled-rules merged))))))
 
-(deftest apply-cli-overrides-enable-group
-  (testing "Enable all rules in a severity group"
-    (let* ((base-config (config:get-built-in-config :default))
-           (cli-rules '(:enable-rules ()
-                        :disable-rules ()
-                        :enable-groups (:info)
-                        :disable-groups ()))
-           (merged (config:apply-cli-overrides base-config cli-rules)))
-      ;; Info/metrics rules should be added
-      (ok (find :cyclomatic-complexity (config:config-rules merged)
-                :key #'rules:rule-name))
-      (ok (find :function-length (config:config-rules merged)
-                :key #'rules:rule-name)))))
-
-(deftest apply-cli-overrides-disable-group
-  (testing "Disable all rules in a severity group"
-    (let* ((base-config (config:get-built-in-config :all))
-           (cli-rules '(:enable-rules ()
-                        :disable-rules ()
-                        :enable-groups ()
-                        :disable-groups (:info)))
-           (merged (config:apply-cli-overrides base-config cli-rules)))
-      ;; Info/metrics rules should be disabled
-      (ok (not (find :cyclomatic-complexity (config:config-rules merged)
-                     :key #'rules:rule-name)))
-      (ok (not (find :function-length (config:config-rules merged)
-                     :key #'rules:rule-name))))))
-
-(deftest apply-cli-overrides-precedence
-  (testing "CLI enable overrides group disable"
-    (let* ((base-config (config:get-built-in-config :all))
-           (cli-rules '(:enable-rules ((:cyclomatic-complexity :max 5))
-                        :disable-rules ()
-                        :enable-groups ()
-                        :disable-groups (:info)))
-           (merged (config:apply-cli-overrides base-config cli-rules)))
-      ;; cyclomatic-complexity should be enabled with custom option (overrides group disable)
-      (ok (find :cyclomatic-complexity (config:config-rules merged)
-                :key #'rules:rule-name))
-      ;; But function-length should be disabled by group
-      (ok (not (find :function-length (config:config-rules merged)
-                     :key #'rules:rule-name))))))
-
 (deftest apply-cli-overrides-empty
   (testing "Empty CLI rules doesn't change config"
     (let* ((base-config (config:get-built-in-config :default))
            (cli-rules '(:enable-rules ()
-                        :disable-rules ()
-                        :enable-groups ()
-                        :disable-groups ()))
+                        :disable-rules ()))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       ;; Should have same number of rules
       (ok (= (length (config:config-rules base-config))
@@ -746,17 +744,10 @@
   (testing "Complex combination of CLI overrides"
     (let* ((base-config (config:get-built-in-config :default))
            (cli-rules '(:enable-rules ((:line-length :max 120))
-                        :disable-rules (:if-without-else)
-                        :enable-groups (:info)
-                        :disable-groups ()))
+                        :disable-rules (:if-without-else)))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       ;; line-length enabled with custom option
       (ok (find :line-length (config:config-rules merged)
                 :key #'rules:rule-name))
       ;; if-without-else disabled
-      (ok (member :if-without-else (config:config-disabled-rules merged)))
-      ;; info/metrics group enabled
-      (ok (find :cyclomatic-complexity (config:config-rules merged)
-                :key #'rules:rule-name))
-      (ok (find :function-length (config:config-rules merged)
-                :key #'rules:rule-name)))))
+      (ok (member :if-without-else (config:config-disabled-rules merged))))))
