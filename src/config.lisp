@@ -441,6 +441,7 @@ Useful for exploration and discovering what rules exist."
             :no-package-use
             :bare-float-literal
             :double-colon-access
+            :error-with-string-only
             :stale-suppression
             ;; Format
             :no-tabs

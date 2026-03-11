@@ -36,7 +36,7 @@
     ((string= cmd "pause") (pause-server))
     ((string= cmd "resume") (resume-server))
     ((string= cmd "test") (run-tests))
-    (t (error "Unknown command"))))
+    (t (error 'unknown-command-error))))
 
 ;; High complexity - complexity 19 (1 + 18 cond clauses, OK with default 20)
 (defun high-complexity-19 (cmd)
@@ -59,7 +59,7 @@
     ((string= cmd "monitor") (start-monitoring))
     ((string= cmd "alert") (send-alert))
     ((string= cmd "clean") (clean-cache))
-    (t (error "Unknown command"))))
+    (t (error 'unknown-command-error))))
 
 ;; Very high complexity - complexity 21 (1 + 20 cond clauses, VIOLATION with default 20)
 (defun very-high-complexity (cmd)
@@ -84,7 +84,7 @@
     ((string= cmd "clean") (clean-cache))
     ((string= cmd "export") (export-data))
     ((string= cmd "import") (import-data))
-    (t (error "Unknown command"))))
+    (t (error 'unknown-command-error))))
 
 ;; Another simple function
 (defun add (a b)

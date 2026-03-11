@@ -60,7 +60,8 @@
        (:file "eval-usage")
        (:file "runtime-intern")
        (:file "runtime-unintern")
-       (:file "ignore-errors-usage"))))
+       (:file "ignore-errors-usage")
+       (:file "error-usage"))))
      (:file "stale-suppression")))
    (:file "rules")
 
@@ -129,6 +130,7 @@
      (:file "ignore-errors-usage-test")
      (:file "no-package-use-test")
      (:file "double-colon-access-test")
+     (:file "error-with-string-only-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test"))))
 

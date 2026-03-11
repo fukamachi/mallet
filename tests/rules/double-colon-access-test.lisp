@@ -103,3 +103,20 @@
     (let* ((rule (make-instance 'rules:double-colon-access-rule))
            (tokens (parser:tokenize "(defun f () \"like \\\"foo::bar\\\" text\")" #p"test.lisp")))
       (ok (null (rules:check-tokens rule tokens #p"test.lisp"))))))
+
+;;; Registration tests
+
+(deftest double-colon-access-registration
+  (testing ":double-colon-access is in default config"
+    (let* ((cfg (mallet/config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (member :double-colon-access rule-names))))
+
+  (testing ":double-colon-access is in :all config"
+    (let* ((cfg (mallet/config:get-built-in-config :all))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (member :double-colon-access rule-names))))
+
+  (testing ":double-colon-access rule has :practice category"
+    (let ((rule (rules:make-rule :double-colon-access)))
+      (ok (eq :practice (rules:rule-category rule))))))

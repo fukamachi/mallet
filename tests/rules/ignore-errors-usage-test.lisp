@@ -74,3 +74,20 @@
   (testing "Rule has :warning severity"
     (let ((rule (make-instance 'rules:ignore-errors-usage-rule)))
       (ok (eq (rules:rule-severity rule) :warning)))))
+
+;;; Registration tests
+
+(deftest ignore-errors-usage-registration
+  (testing ":ignore-errors-usage is in default config"
+    (let* ((cfg (mallet/config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (member :ignore-errors-usage rule-names))))
+
+  (testing ":ignore-errors-usage is in :all config"
+    (let* ((cfg (mallet/config:get-built-in-config :all))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (member :ignore-errors-usage rule-names))))
+
+  (testing ":ignore-errors-usage rule has :practice category"
+    (let ((rule (rules:make-rule :ignore-errors-usage)))
+      (ok (eq :practice (rules:rule-category rule))))))

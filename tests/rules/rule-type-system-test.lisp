@@ -209,4 +209,8 @@
 
   (testing ":double-colon-access rule has :practice category"
     (let ((rule (rules:make-rule :double-colon-access)))
+      (ok (eq :practice (base:rule-category rule)))))
+
+  (testing ":error-with-string-only rule has :practice category"
+    (let ((rule (rules:make-rule :error-with-string-only)))
       (ok (eq :practice (base:rule-category rule))))))

@@ -1,0 +1,5 @@
+# Expected violations for error-with-string-only.lisp
+# Format: line:column rule-name severity
+
+6:4 error-with-string-only warning
+11:4 error-with-string-only warning

@@ -175,7 +175,8 @@ Returns modified text."
   (check-type end-line (integer 1))
 
   (when (< end-line start-line)
-    (error "end-line (~A) must be >= start-line (~A)" end-line start-line))
+    (error 'simple-error :format-control "end-line (~A) must be >= start-line (~A)"
+                        :format-arguments (list end-line start-line)))
 
   (with-output-to-string (out)
     (with-input-from-string (in text)
@@ -257,7 +258,8 @@ the next line from being concatenated."
   (check-type replacement-content string)
 
   (when (< end-line start-line)
-    (error "end-line (~A) must be >= start-line (~A)" end-line start-line))
+    (error 'simple-error :format-control "end-line (~A) must be >= start-line (~A)"
+                        :format-arguments (list end-line start-line)))
 
   (with-output-to-string (out)
     (with-input-from-string (in text)
