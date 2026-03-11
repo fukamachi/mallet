@@ -822,14 +822,13 @@
       ;; if-without-else disabled
       (ok (member :if-without-else (config:config-disabled-rules merged))))))
 
-;;; U-1: :set-severity always-wins contract tests
+;;; Severity precedence contract tests:
+;;; per-rule :severity > :set-severity > rule default
 
-(deftest set-severity-always-wins-over-per-rule-severity
-  (testing ":set-severity overrides per-rule :severity from (:enable :rule :severity :x)"
-    ;; Document the contract: :set-severity wins over a per-rule :severity.
-    ;; A user who writes (:enable :unused-variables :severity :warning) and
-    ;; (:set-severity :cleanliness :info) will end up with :info severity on
-    ;; :unused-variables.  This is the intended "last directive wins" behaviour.
+(deftest per-rule-severity-wins-over-set-severity
+  (testing "explicit per-rule :severity wins over :set-severity for the same category"
+    ;; (:enable :unused-variables :severity :warning) wins over
+    ;; (:set-severity :cleanliness :info) — per-rule is more specific.
     (let* ((sexp '(:mallet-config
                    (:enable :unused-variables :severity :warning)
                    (:set-severity :cleanliness :info)))
@@ -837,12 +836,22 @@
       (let ((rule (find :unused-variables (config:config-rules cfg)
                         :key #'rules:rule-name)))
         (ok (not (null rule)))
-        ;; :set-severity :cleanliness :info wins over the per-rule :severity :warning
-        (ok (eq :info (rules:rule-severity rule))
-            ":set-severity :cleanliness wins over per-rule :severity"))))
+        (ok (eq :warning (rules:rule-severity rule))
+            "per-rule :severity :warning wins over :set-severity :info"))))
 
-  (testing ":set-severity overrides per-rule :severity in :for-paths rules"
-    ;; Same contract applies inside :for-paths blocks.
+  (testing ":set-severity applies to rules without explicit per-rule :severity"
+    ;; A rule enabled without :severity gets the :set-severity override.
+    (let* ((sexp '(:mallet-config
+                   (:enable :unused-variables)
+                   (:set-severity :cleanliness :error)))
+           (cfg (config:parse-config sexp)))
+      (let ((rule (find :unused-variables (config:config-rules cfg)
+                        :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        (ok (eq :error (rules:rule-severity rule))
+            ":set-severity applies when no per-rule :severity is given"))))
+
+  (testing "per-rule :severity wins over :set-severity inside :for-paths"
     (let* ((sexp '(:mallet-config
                    (:set-severity :cleanliness :error)
                    (:for-paths ("tests/**/*.lisp")
@@ -851,77 +860,55 @@
       (let* ((path-rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
              (rule (find :unused-variables path-rules :key #'rules:rule-name)))
         (ok (not (null rule)))
-        ;; :set-severity wins
-        (ok (eq :error (rules:rule-severity rule))
-            ":set-severity wins over per-rule :severity inside :for-paths")))))
+        (ok (eq :warning (rules:rule-severity rule))
+            "per-rule :severity :warning wins over :set-severity :error inside :for-paths")))))
 
-;;; U-2: CLI --enable new-rule bypasses :set-severity — warning tests
+;;; CLI --enable and :set-severity interaction tests
 
-(deftest apply-cli-overrides-new-rule-bypasses-set-severity
-  (testing "CLI-enabled rule not in base config gets default severity, not :set-severity override"
-    ;; When a rule is absent from the base config, apply-cli-overrides cannot
-    ;; apply a :set-severity override retroactively.  The rule uses its default
-    ;; severity.  A warning is emitted to *error-output* so the user is informed.
+(deftest apply-cli-overrides-set-severity-interaction
+  (testing "CLI-enabled rule not in base config gets :set-severity override applied"
+    ;; When a rule is absent from the base config and enabled on the CLI without
+    ;; an explicit :severity, the config's :set-severity override is applied.
     (let* ((sexp '(:mallet-config
                    (:extends :none)
                    (:set-severity :format :error)))
            (base-config (config:parse-config sexp))
-           ;; CLI enables :trailing-whitespace which is not in the base config
            (cli-rules '(:enable-rules ((:trailing-whitespace))
                         :disable-rules ()))
-           (warning-output (make-string-output-stream))
-           (merged (let ((*error-output* warning-output))
-                     (config:apply-cli-overrides base-config cli-rules)))
-           (warning-text (get-output-stream-string warning-output)))
+           (merged (config:apply-cli-overrides base-config cli-rules)))
       (let ((rule (find :trailing-whitespace (config:config-rules merged)
                         :key #'rules:rule-name)))
         (ok (not (null rule)) ":trailing-whitespace should be in merged rules")
-        ;; The rule was not in base config, so :set-severity :format :error was
-        ;; never applied to it.  It keeps its default severity.
-        (ok (not (eq :error (rules:rule-severity rule)))
-            "New CLI-enabled rule does not get the config's :set-severity")
-        ;; A warning must be emitted to *error-output*.
-        (ok (search "WARNING" warning-text)
-            "A warning should be emitted to *error-output*")
-        (ok (search "trailing-whitespace" (string-downcase warning-text))
-            "Warning should name the affected rule")
-        (ok (search ":format" (string-downcase warning-text))
-            "Warning should name the affected category")
-        (ok (search ":error" (string-downcase warning-text))
-            "Warning should name the intended severity"))))
+        (ok (eq :error (rules:rule-severity rule))
+            "CLI-enabled rule gets :set-severity from config when no explicit :severity given"))))
 
   (testing "CLI-enabled rule that IS in base config preserves :set-severity from config"
-    ;; Contrast: when the rule already exists in the base config, Step 1 of
-    ;; apply-cli-overrides copies the config-applied severity onto the new rule
-    ;; (unless the CLI provides an explicit :severity override).
+    ;; When the rule already exists in the base config, Step 1 of
+    ;; apply-cli-overrides copies the config-applied severity unless the
+    ;; CLI provides an explicit :severity override.
     (let* ((sexp '(:mallet-config
                    (:enable :trailing-whitespace)   ; :format category
                    (:set-severity :format :error)))
            (base-config (config:parse-config sexp))
-           ;; CLI re-enables :trailing-whitespace (it is already in base config)
            (cli-rules '(:enable-rules ((:trailing-whitespace))
                         :disable-rules ()))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       (let ((rule (find :trailing-whitespace (config:config-rules merged)
                         :key #'rules:rule-name)))
         (ok (not (null rule)))
-        ;; The base rule had :error (from :set-severity), and Step 1 copies it.
         (ok (eq :error (rules:rule-severity rule))
             "Existing rule re-enabled by CLI preserves config-applied severity"))))
 
-  (testing "No warning when CLI provides explicit :severity for a new rule"
-    ;; When the user explicitly passes :severity on the CLI, they have opted in
-    ;; to a specific severity, so no warning is needed.
+  (testing "Explicit CLI :severity wins over :set-severity (per-rule > set-severity)"
     (let* ((sexp '(:mallet-config
                    (:extends :none)
                    (:set-severity :format :error)))
            (base-config (config:parse-config sexp))
-           (cli-rules '(:enable-rules ((:trailing-whitespace :severity :error))
+           (cli-rules '(:enable-rules ((:trailing-whitespace :severity :info))
                         :disable-rules ()))
-           (warning-output (make-string-output-stream))
-           (merged (let ((*error-output* warning-output))
-                     (config:apply-cli-overrides base-config cli-rules)))
-           (warning-text (get-output-stream-string warning-output)))
-      (declare (ignore merged))
-      (ok (string= "" warning-text)
-          "No warning when :severity is explicitly supplied on the CLI"))))
+           (merged (config:apply-cli-overrides base-config cli-rules)))
+      (let ((rule (find :trailing-whitespace (config:config-rules merged)
+                        :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        (ok (eq :info (rules:rule-severity rule))
+            "Explicit CLI :severity :info wins over :set-severity :error")))))

@@ -129,13 +129,14 @@ Create `.mallet.lisp` in your project root:
  (:enable :line-length :max 100)
  (:enable :consecutive-blank-lines :max 2)
 
- ;; Enable a rule with a custom severity override
+ ;; Enable a rule with a custom severity override (wins over :set-severity)
  (:enable :cyclomatic-complexity :severity :warning)
 
  ;; Disable specific rules
  (:disable :constant-naming)
 
- ;; Override severity for all rules in a category
+ ;; Override severity for all rules in a category.
+ ;; Per-rule :severity (above) takes precedence over :set-severity.
  (:set-severity :metrics :info)
 
  ;; Path-specific overrides
