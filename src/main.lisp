@@ -55,7 +55,9 @@
            #:form-file
            #:form-source
            #:parse-forms
-           #:analyze-text))
+           #:analyze-text
+           ;; CLI helpers (exported for testing)
+           #:should-fail-p))
 (in-package #:mallet)
 
 ;;; Special variables
@@ -177,9 +179,25 @@ Returns (rule-name . options-plist)."
       (error 'errors:missing-option-value :option "--disable"))
     (values (parse-rule-name rule-name-str) args)))
 
+(defun handle-fail-on-option (args)
+  "Handle --fail-on option. Returns (values fail-on-keyword remaining-args)."
+  (let ((level-str (pop args)))
+    (unless level-str
+      (error 'errors:missing-option-value :option "--fail-on"))
+    (values
+     (cond
+       ((string= level-str "error") :error)
+       ((string= level-str "warning") :warning)
+       ((string= level-str "info") :info)
+       (t (error 'errors:invalid-option-value
+                 :option "--fail-on"
+                 :value level-str
+                 :expected "error, warning, or info")))
+     args)))
+
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug no-color fix-mode cli-rules strict files).
+Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on files).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
@@ -187,7 +205,7 @@ Signals specific error conditions for invalid input."
         (debug nil)
         (no-color nil)
         (fix-mode nil)
-        (strict nil)
+        (fail-on :error)
         (enable-rules '())
         (disable-rules '())
         (files '()))
@@ -215,8 +233,12 @@ Signals specific error conditions for invalid input."
            (setf fix-mode :fix))
           ((string= arg "--fix-dry-run")
            (setf fix-mode :fix-dry-run))
+          ((string= arg "--fail-on")
+           (multiple-value-setq (fail-on args)
+             (handle-fail-on-option args)))
           ((string= arg "--strict")
-           (setf strict t))
+           ;; Backward compatibility: --strict is alias for --fail-on info
+           (setf fail-on :info))
           ((string= arg "--enable")
            (let (rule-spec)
              (multiple-value-setq (rule-spec args)
@@ -239,7 +261,7 @@ Signals specific error conditions for invalid input."
            (push arg files)))))
     (let ((cli-rules (list :enable-rules (nreverse enable-rules)
                            :disable-rules (nreverse disable-rules))))
-      (values format config-path preset debug no-color fix-mode cli-rules strict (nreverse files)))))
+      (values format config-path preset debug no-color fix-mode cli-rules fail-on (nreverse files)))))
 
 
 (defun print-help ()
@@ -260,10 +282,12 @@ Options:
   --enable <rule:opts> Enable rule with options (e.g., --enable line-length:max=120)
   --disable <rule>    Disable specific rule (e.g., --disable trailing-whitespace)
 
+  --fail-on <level>   Exit 1 if any violation meets or exceeds level (error, warning, info; default: error)
+  --strict            Alias for --fail-on info (exit 1 for any violation)
+
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
   --no-color          Disable ANSI color codes in output
-  --strict            Exit non-zero for any violation (including info)
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
@@ -278,8 +302,8 @@ Presets:
   all                 All rules enabled (useful for exploration)
   none                No rules enabled (explicitly enable specific rules)
 
-Rule Groups (by severity):
-  error               Objectively wrong code (causes runtime errors)
+Severity Levels (for --fail-on):
+  error               Objectively wrong code (exit 1 by default)
   warning             Likely bugs or dangerous patterns
   info                Style preferences, metrics, and formatting suggestions
 
@@ -292,6 +316,12 @@ Examples:
   mallet --config .mallet.lisp src/
   mallet --fix src/                   # Auto-fix violations
   mallet --fix-dry-run src/           # Preview fixes without changing files
+
+  # Fail on warnings and above (CI-friendly)
+  mallet --fail-on warning src/
+
+  # Fail on any violation (equivalent to --strict)
+  mallet --fail-on info src/
 
   # Enable specific rule with custom options
   mallet --enable cyclomatic-complexity:max=15 src/
@@ -360,6 +390,15 @@ Returns (values has-errors-p has-warnings-p has-any-p)."
    (some (lambda (v) (eq (violation-severity v) :warning)) violations)
    (not (null violations))))
 
+(defun should-fail-p (fail-on has-errors has-warnings has-any-violations)
+  "Return T if the process should exit 1 given FAIL-ON threshold and violation presence.
+FAIL-ON is one of :error, :warning, :info.
+Severity ordering: error > warning > info."
+  (ecase fail-on
+    (:error has-errors)
+    (:warning (or has-errors has-warnings))
+    (:info has-any-violations)))
+
 (defun process-fix-mode (all-violations fix-mode format)
   "Apply fixes to violations and output results.
 Returns (values has-errors-p has-warnings-p has-any-p)."
@@ -420,7 +459,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (uiop:print-condition-backtrace e))
                  (uiop:quit 3))))
 
-          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules strict file-args)
+          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on file-args)
               (parse-args args)
 
             ;; Enable debug mode if requested
@@ -512,12 +551,10 @@ Lints files specified in ARGS and exits with appropriate status code."
                   (:json
                    (formatter:format-json-end))))
 
-              ;; Exit with appropriate status
-              (cond
-                (has-errors (uiop:quit 2))
-                (has-warnings (uiop:quit 1))
-                ((and strict has-any-violations) (uiop:quit 1))
-                (t (uiop:quit 0))))))
+              ;; Exit with appropriate status (0 or 1 only)
+              (if (should-fail-p fail-on has-errors has-warnings has-any-violations)
+                  (uiop:quit 1)
+                  (uiop:quit 0)))))
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt
        #-sbcl error ()
