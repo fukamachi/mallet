@@ -251,6 +251,15 @@ else
     test_fail "Expected comment-ratio violations when enabled via --enable flag"
 fi
 
+test_start "--none skips auto-discovered config file (only requested rules run)"
+OUTPUT=$("$CLI" --none --enable comment-ratio "$VIOLATIONS_DIR/comment-ratio.lisp" 2>&1)
+UNEXPECTED=$(echo "$OUTPUT" | grep -v "comment-ratio" | grep -E "^\s+[0-9]+:[0-9]+" | wc -l | tr -d ' ')
+if [ "$UNEXPECTED" -eq 0 ]; then
+    test_pass
+else
+    test_fail "--none with --enable produced unexpected rule violations: $OUTPUT"
+fi
+
 # Documentation completeness
 test_start "RULES.md documents :comment-ratio rule under METRICS section"
 if grep -q ":comment-ratio" "$PROJECT_DIR/RULES.md" && grep -q ":min-lines" "$PROJECT_DIR/RULES.md"; then
