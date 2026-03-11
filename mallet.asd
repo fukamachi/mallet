@@ -85,6 +85,7 @@
    (:file "suppression")
    (:file "suppression-declarations")
    (:file "suppression-integration")
+   (:file "comment-directives")
 
    (:module "parser"
     :pathname "parser"

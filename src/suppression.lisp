@@ -25,7 +25,9 @@
            ;; Form processing
            #:update-suppression-for-declaim
            #:mallet-suppress-next-p
-           #:extract-suppress-next-rules))
+           #:extract-suppress-next-rules
+           ;; Comment directive parsing
+           #:parse-comment-directives))
 (in-package #:mallet/suppression)
 
 (defclass suppression-state ()
@@ -347,3 +349,54 @@
       (let ((sym (intern symbol-name pkg)))
         (export sym pkg)))
     pkg))
+
+;;; Comment Directive Parsing
+
+(defun parse-comment-directives (source-text)
+  "Parse mallet comment directives from SOURCE-TEXT.
+
+   Scans each line for patterns like:
+     ; mallet:suppress rule1 rule2 -- optional reason
+     ;; mallet:disable rule1
+     ;;; mallet:enable rule1
+
+   Returns a list of (line-number type rules reason) sorted by line-number, where:
+   - line-number is 1-based
+   - type is :suppress, :disable, or :enable
+   - rules is a list of keyword symbols (e.g., :needless-let*)
+   - reason is a string or NIL (parsed from text after '--')"
+  (let ((result nil)
+        (line-number 0))
+    (with-input-from-string (stream source-text)
+      (loop for line = (read-line stream nil nil)
+            while line
+            do (incf line-number)
+               (multiple-value-bind (matched groups)
+                   (cl-ppcre:scan-to-strings
+                    "^\\s*;+\\s*mallet:(suppress|disable|enable)\\s*(.*)"
+                    line)
+                 (when matched
+                   (let* ((type-str (aref groups 0))
+                          (rest-str (string-trim " " (aref groups 1)))
+                          (type (intern (string-upcase type-str) :keyword))
+                          (reason nil)
+                          (rules-str rest-str))
+                     ;; Split out optional reason after " -- " (space-bounded to avoid
+                     ;; matching "--" embedded within rule names like "my--rule")
+                     (let ((sep-pos (cl-ppcre:scan "\\s+--(?:\\s|$)" rules-str)))
+                       (when sep-pos
+                         (let ((reason-part (string-trim " "
+                                              (cl-ppcre:regex-replace "^.*?\\s+--\\s*" rules-str ""))))
+                           (setf reason (if (string= reason-part "") nil reason-part)))
+                         (setf rules-str (string-trim " " (subseq rules-str 0 sep-pos)))))
+                     ;; Split rules by whitespace, filtering empty strings
+                     (let ((rule-strings
+                             (remove-if #'(lambda (s) (string= s ""))
+                                        (cl-ppcre:split "\\s+" rules-str))))
+                       ;; Silently ignore directives with no rules
+                       (when rule-strings
+                         (let ((rules (mapcar (lambda (r)
+                                               (intern (string-upcase r) :keyword))
+                                             rule-strings)))
+                           (push (list line-number type rules reason) result)))))))))
+    (sort result #'< :key #'first)))
