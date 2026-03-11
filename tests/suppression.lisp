@@ -295,7 +295,7 @@
           (ok (= id2 result))
           ;; Only id2 was consumed; id1 remains stale
           (ok (= 1 (length (suppression:collect-stale-suppressions state))))
-          (ok (= id1 (car (first (suppression:collect-stale-suppressions state)))))))))
+          (ok (= id1 (car (first (suppression:collect-stale-suppressions state))))))))))
 
 (deftest rule-suppressed-p-existing-region-still-truthy
   (testing "rule-suppressed-p returns truthy for region suppressions (backward compat)"
