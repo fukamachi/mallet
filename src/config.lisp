@@ -389,7 +389,8 @@ Style preferences are disabled to keep output clean."
             :if-without-else
             :eval-usage
             :no-package-use
-            :needless-let*))
+            :needless-let*
+            :stale-suppression))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
             :line-length
@@ -432,6 +433,7 @@ Useful for exploration and discovering what rules exist."
             :needless-let*
             :no-package-use
             :bare-float-literal
+            :stale-suppression
             ;; Format
             :no-tabs
             :trailing-whitespace

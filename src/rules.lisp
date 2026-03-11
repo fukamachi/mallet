@@ -12,7 +12,8 @@
                  #:mallet/rules/forms/asdf
                  #:mallet/rules/forms/metrics
                  #:mallet/rules/forms/eval-usage
-                 #:mallet/rules/forms/runtime-intern)
+                 #:mallet/rules/forms/runtime-intern
+                 #:mallet/rules/stale-suppression)
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
@@ -77,6 +78,10 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'eval-usage-rule options))
     (:runtime-intern
      (apply #'make-instance 'runtime-intern-rule options))
+
+    ;; Suppression rules
+    (:stale-suppression
+     (apply #'make-instance 'stale-suppression-rule options))
 
     ;; Metric rules
     (:function-length
