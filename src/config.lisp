@@ -388,6 +388,7 @@ Style preferences are disabled to keep output clean."
             :mixed-optional-and-key
             :if-without-else
             :eval-usage
+            :ignore-errors-usage
             :no-package-use
             :needless-let*
             :double-colon-access
@@ -418,6 +419,7 @@ Useful for exploration and discovering what rules exist."
             :eval-usage
             :runtime-intern
             :runtime-unintern
+            :ignore-errors-usage
             ;; Cleanliness
             :unused-variables
             :unused-local-functions

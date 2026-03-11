@@ -15,6 +15,7 @@
                  #:mallet/rules/forms/eval-usage
                  #:mallet/rules/forms/runtime-intern
                  #:mallet/rules/forms/runtime-unintern
+                 #:mallet/rules/forms/ignore-errors-usage
                  #:mallet/rules/stale-suppression)
   (:export #:make-rule))
 (in-package #:mallet/rules)
@@ -84,6 +85,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'runtime-intern-rule options))
     (:runtime-unintern
      (apply #'make-instance 'runtime-unintern-rule options))
+    (:ignore-errors-usage
+     (apply #'make-instance 'ignore-errors-usage-rule options))
 
     ;; Suppression rules
     (:stale-suppression

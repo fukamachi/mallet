@@ -59,7 +59,8 @@
        (:file "metrics")
        (:file "eval-usage")
        (:file "runtime-intern")
-       (:file "runtime-unintern"))))
+       (:file "runtime-unintern")
+       (:file "ignore-errors-usage"))))
      (:file "stale-suppression")))
    (:file "rules")
 
@@ -124,6 +125,7 @@
      (:file "eval-usage-test")
      (:file "runtime-intern-test")
      (:file "runtime-unintern-test")
+     (:file "ignore-errors-usage-test")
      (:file "no-package-use-test")
      (:file "double-colon-access-test")
      (:file "rule-type-system-test")

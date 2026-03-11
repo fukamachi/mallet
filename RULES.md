@@ -15,6 +15,7 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
   - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
   - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
+  - [`:ignore-errors-usage`](#ignore-errors-usage) - Runtime use of `cl:ignore-errors`
   - [`:no-package-use`](#no-package-use) - Use of `:use` in `defpackage` or `uiop:define-package`
   - [`:needless-let*`](#needless-let*) - Use `let` when bindings are independent
 - [CONVENTION](#convention)
@@ -179,6 +180,26 @@ Detected functions:
 - `eval-when` bodies are only checked when `:execute` is in the situation list (i.e., the body runs at load/execute time); `eval-when (:compile-toplevel)` bodies are skipped
 
 **Default**: disabled (`:warning` severity; included in `:all` preset)
+
+### `:ignore-errors-usage`
+
+Avoid using `cl:ignore-errors` at runtime. `ignore-errors` silently swallows all errors and returns `nil`, making it very difficult to diagnose problems — the caller cannot tell what went wrong, or whether anything went wrong at all. Use `handler-case` with specific condition types to handle expected errors explicitly.
+
+```lisp
+;; Bad: silently swallows all errors
+(ignore-errors (parse-config path))
+(ignore-errors (connect-to-db host port))
+
+;; Good: handle specific conditions explicitly
+(handler-case (parse-config path)
+  (file-error (e) (format t "Cannot read config: ~A" e))
+  (parse-error (e) (format t "Invalid config: ~A" e)))
+```
+
+**Exclusions**:
+- `defmacro` bodies are skipped entirely (macro expansion code is not runtime)
+
+**Default**: enabled (`:warning` severity)
 
 ### `:no-package-use`
 
