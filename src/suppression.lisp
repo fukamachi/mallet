@@ -27,7 +27,11 @@
            #:mallet-suppress-next-p
            #:extract-suppress-next-rules
            ;; Comment directive parsing
-           #:parse-comment-directives))
+           #:parse-comment-directives
+           ;; Suppression registration and stale detection
+           #:register-suppression
+           #:mark-suppression-used
+           #:collect-stale-suppressions))
 (in-package #:mallet/suppression)
 
 (defclass suppression-state ()
@@ -46,7 +50,20 @@
    (scope-stack
     :initform nil
     :accessor scope-stack
-    :documentation "Stack of scope-level suppressions (via declare)"))
+    :documentation "Stack of scope-level suppressions (via declare)")
+   (registered-suppressions
+    :initform nil
+    :accessor registered-suppressions
+    :documentation "Alist of registered suppression entries: ((ID :line LINE :rules RULES :reason REASON :type TYPE) ...)
+    Each entry is a cons of (INTEGER-ID . PLIST) as created by REGISTER-SUPPRESSION.")
+   (used-suppression-ids
+    :initform (make-hash-table :test 'eql)
+    :accessor used-suppression-ids
+    :documentation "Hash table (test 'eql) used as a set of used suppression IDs")
+   (next-suppression-id
+    :initform 0
+    :accessor next-suppression-id
+    :documentation "Counter for generating unique suppression IDs"))
   (:documentation "Tracks suppression state during parsing of a single file"))
 
 (defun make-suppression-state ()
@@ -107,30 +124,81 @@
     (setf (next-form-suppressions state) nil)
     rules))
 
+;;; Suppression Registration and Stale Detection
+
+(defun register-suppression (state line rules reason type)
+  "Register an inline suppression. Returns a unique integer ID.
+
+   LINE: source line number where the suppression was found
+   RULES: list of rule keywords (or '(:all))
+   REASON: optional reason string or NIL
+   TYPE: suppression type keyword (e.g., :inline-comment)
+
+   The entry is stored as (ID :line LINE :rules RULES :reason REASON :type TYPE)."
+  (check-type state suppression-state)
+  (check-type rules list)
+  (let ((id (incf (next-suppression-id state))))
+    (push (cons id (list :line line :rules rules :reason reason :type type))
+          (registered-suppressions state))
+    id))
+
+(defun mark-suppression-used (state id)
+  "Mark the suppression with the given ID as used."
+  (check-type state suppression-state)
+  (setf (gethash id (used-suppression-ids state)) t))
+
+(defun collect-stale-suppressions (state)
+  "Return list of registered suppression entries that were never used.
+
+   Each entry is a cons (ID . PLIST) where PLIST has :line, :rules, :reason, :type.
+   Entries are returned in reverse-registration order (newest first), because
+   suppressions are stored newest-first via PUSH."
+  (check-type state suppression-state)
+  (remove-if (lambda (entry)
+               (gethash (car entry) (used-suppression-ids state)))
+             (registered-suppressions state)))
+
 ;;; Suppression Checking
 
 (defun rule-suppressed-p (state rule-name &key form-type function-name)
   "Check if a rule is currently suppressed.
 
+   Returns the suppression ID (integer) when matched by a registered suppression,
+   T when matched by region/function/scope suppression, or NIL when not suppressed.
+   As a side effect, marks the first matching registered suppression as used.
+   When multiple registered suppressions match the same rule, only the most recently
+   registered one is consumed (suppressions are stored newest-first internally).
+
    form-type: :top-level, :function-body, :lexical-scope
    function-name: If form-type is :function-body, the function name"
   (check-type state suppression-state)
   (or
-   ;; 1. Check region-level suppression
-   (member rule-name (region-disabled-rules state) :test #'eq)
-   (member :all (region-disabled-rules state) :test #'eq)
+   ;; 1. Check registered suppressions (inline comment suppressions)
+   (loop for entry in (registered-suppressions state)
+         when (let ((rules (getf (cdr entry) :rules)))
+                (or (member rule-name rules :test #'eq)
+                    (member :all rules :test #'eq)))
+           do (mark-suppression-used state (car entry))
+              (return (car entry)))
 
-   ;; 2. Check function-specific suppression
+   ;; 2. Check region-level suppression
+   (and (or (member rule-name (region-disabled-rules state) :test #'eq)
+            (member :all (region-disabled-rules state) :test #'eq))
+        t)
+
+   ;; 3. Check function-specific suppression
    (when (and function-name (eq form-type :function-body))
      (let ((suppressed (gethash function-name (function-suppressions state))))
-       (or (member rule-name suppressed :test #'eq)
-           (member :all suppressed :test #'eq))))
+       (and (or (member rule-name suppressed :test #'eq)
+                (member :all suppressed :test #'eq))
+            t)))
 
-   ;; 3. Check scope stack (any parent scope)
-   (some (lambda (scope-rules)
-           (or (member rule-name scope-rules :test #'eq)
-               (member :all scope-rules :test #'eq)))
-         (scope-stack state))))
+   ;; 4. Check scope stack (any parent scope)
+   (and (some (lambda (scope-rules)
+                (or (member rule-name scope-rules :test #'eq)
+                    (member :all scope-rules :test #'eq)))
+              (scope-stack state))
+        t)))
 
 ;;; Declaration Recognition
 
