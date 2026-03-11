@@ -16,6 +16,7 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
   - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
   - [`:no-package-use`](#no-package-use) - Use of `:use` in `defpackage` or `uiop:define-package`
+  - [`:needless-let*`](#needless-let*) - Use `let` when bindings are independent
 - [CONVENTION](#convention)
   - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
   - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
@@ -33,7 +34,6 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:unused-imported-symbols`](#unused-imported-symbols) - Imported symbols should be used or re-exported
   - [`:constant-naming`](#constant-naming) - Constants should be named `+foo+`
   - [`:unused-loop-variables`](#unused-loop-variables) - Loop variables should be used
-  - [`:needless-let*`](#needless-let*) - Use `let` when bindings are independent
 - [METRICS](#metrics)
   - [`:function-length`](#function-length) - Function exceeds maximum line count
   - [`:cyclomatic-complexity`](#cyclomatic-complexity) - Function has high cyclomatic complexity
@@ -451,7 +451,7 @@ Use `let` instead of `let*` when bindings don't depend on each other (including 
   (list x y))
 ```
 
-**Default**: disabled (`:info` severity; included in `:all` preset)
+**Default**: enabled (`:warning` severity; included in `:default` preset)
 
 ## METRICS
 
