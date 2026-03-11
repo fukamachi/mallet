@@ -83,7 +83,7 @@
     (let* ((file (pathname "/path/to/file.lisp"))
            (v1 (make-instance 'violation:violation
                               :rule :trailing-whitespace
-                              :severity :info
+                              :severity :warning
                               :line 10
                               :column 5
                               :message "Trailing whitespace"

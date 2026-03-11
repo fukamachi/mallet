@@ -302,7 +302,7 @@ Options:
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
   --no-color          Disable ANSI color codes in output
-  --strict            Exit non-zero for any violation (including format/info/metrics)
+  --strict            Exit non-zero for any violation (including info)
   --debug             Enable debug mode with detailed diagnostics
   --help              Show this help message
   --version           Show version information
@@ -320,7 +320,7 @@ Presets:
 Rule Groups (by severity):
   error               Objectively wrong code (causes runtime errors)
   warning             Likely bugs or dangerous patterns
-  info                Informational checks (style, formatting, metrics)
+  info                Style preferences, metrics, and formatting suggestions
 
 Examples:
   mallet src
@@ -332,7 +332,7 @@ Examples:
   mallet --fix src/                   # Auto-fix violations
   mallet --fix-dry-run src/           # Preview fixes without changing files
 
-  # Enable info rules (includes metrics, formatting, style)
+  # Enable info rules without config file
   mallet --enable-group info src/
 
   # Enable specific rule with custom options

@@ -405,6 +405,7 @@ Unlike variable references, this ONLY matches when the name appears in function 
    :name :unused-local-functions
    :description "Local functions (flet/labels) should be used or explicitly ignored"
    :severity :warning
+   :category :cleanliness
    :type :form)
   (:documentation "Rule to detect unused local functions in flet and labels forms."))
 

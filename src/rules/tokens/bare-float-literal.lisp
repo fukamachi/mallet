@@ -13,6 +13,7 @@
    :name :bare-float-literal
    :description "Float literals should have explicit type markers (f, d, s, l)"
    :severity :info
+   :category :style
    :type :token)
   (:documentation "Rule to detect float literals without explicit precision."))
 

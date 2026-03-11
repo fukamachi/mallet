@@ -181,6 +181,7 @@ Resolution order:
    :name :runtime-intern
    :description "Avoid runtime use of symbol-interning functions"
    :severity :warning
+   :category :suspicious
    :type :form)
   (:documentation "Rule to detect runtime use of cl:intern, cl:unintern, uiop:intern*,
 alexandria:symbolicate, alexandria:format-symbol, and alexandria:make-keyword."))

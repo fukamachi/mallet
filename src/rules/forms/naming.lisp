@@ -16,7 +16,7 @@
   (:default-initargs
    :name :special-variable-naming
    :description "Special variables should be named *foo*"
-   :severity :warning
+   :severity :info
    :category :style
    :type :form))
 

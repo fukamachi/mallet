@@ -157,9 +157,9 @@
         (ok (= (length violations) 2))))))
 
 (deftest unused-imported-symbols-severity
-  (testing "Rule has :info severity"
+  (testing "Rule has :warning severity"
     (let ((rule (make-instance 'rules:unused-imported-symbols-rule)))
-      (ok (eq (rules:rule-severity rule) :info)))))
+      (ok (eq (rules:rule-severity rule) :warning)))))
 
 (deftest unused-imported-symbols-autofix
   (testing "Auto-fix makes minimal changes - deletes only the unused symbol line"

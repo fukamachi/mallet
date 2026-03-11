@@ -16,13 +16,15 @@
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
-(defun make-rule (name &rest options &key severity &allow-other-keys)
+(defun make-rule (name &rest options &key severity category &allow-other-keys)
   "Create a rule instance based on NAME and OPTIONS.
 Always returns a rule object - enabled/disabled state is handled by config.
-Severity defaults are defined in each rule class's :default-initargs."
+Severity and category defaults are defined in each rule class's :default-initargs."
   (let ((initargs (append
                    (and severity
                         `(:severity ,severity))
+                   (and category
+                        `(:category ,category))
                    options)))
     ;; Create rule instance based on name
     (case name

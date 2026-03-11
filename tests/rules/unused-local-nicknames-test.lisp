@@ -164,9 +164,9 @@
         (ok (search "parser" (violation:violation-message (first violations))))))))
 
 (deftest unused-local-nicknames-severity
-  (testing "Rule has :info severity"
+  (testing "Rule has :warning severity"
     (let ((rule (make-instance 'rules:unused-local-nicknames-rule)))
-      (ok (eq (rules:rule-severity rule) :info)))))
+      (ok (eq (rules:rule-severity rule) :warning)))))
 
 (deftest unused-local-nicknames-autofix
   (testing "Auto-fix makes minimal changes - deletes only the unused line"

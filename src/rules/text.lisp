@@ -47,6 +47,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
    :name :line-length
    :description "Lines should not exceed the maximum length"
    :severity :info
+   :category :format
    :type :text)
   (:documentation "Rule to check line length limits."))
 
@@ -84,7 +85,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
   (:default-initargs
    :name :trailing-whitespace
    :description "Lines should not have trailing whitespace"
-   :severity :info
+   :severity :warning
    :category :format
    :type :text)
   (:documentation "Rule to check for trailing whitespace on lines."))
@@ -145,7 +146,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
   (:default-initargs
    :name :no-tabs
    :description "Use spaces instead of tab characters"
-   :severity :info
+   :severity :warning
    :category :format
    :type :text)
   (:documentation "Rule to check for tab characters."))
@@ -183,7 +184,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
   (:default-initargs
    :name :final-newline
    :description "Files must end with a newline"
-   :severity :info
+   :severity :warning
    :category :format
    :type :text)
   (:documentation "Rule to check that files end with a newline."))
@@ -232,6 +233,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
    :name :consecutive-blank-lines
    :description "Limit consecutive blank lines"
    :severity :info
+   :category :format
    :type :text)
   (:documentation "Rule to check for too many consecutive blank lines."))
 

@@ -30,7 +30,7 @@
   (:default-initargs
    :name :interned-package-symbol
    :description "Use uninterned symbols (#:symbol) in package definitions"
-   :severity :warning
+   :severity :info
    :category :style
    :type :form))
 
@@ -238,7 +238,8 @@ Returns one of :keyword, :qualified, :uninterned, :bare, :string-literal, or :un
   (:default-initargs
    :name :unused-local-nicknames
    :description "Local nicknames in :local-nicknames should be used"
-   :severity :info
+   :severity :warning
+   :category :cleanliness
    :type :form))
 
 (defmethod base:check-form ((rule unused-local-nicknames-rule) form file)
@@ -443,7 +444,8 @@ Preserves comments, formatting, and structural close parens."
   (:default-initargs
    :name :unused-imported-symbols
    :description "Imported symbols from :import-from should be used or re-exported"
-   :severity :info
+   :severity :warning
+   :category :cleanliness
    :type :form))
 
 (defmethod base:check-form ((rule unused-imported-symbols-rule) form file)
@@ -630,6 +632,7 @@ Preserves comments, formatting, and structural close parens."
    :name :no-package-use
    :description "Using :use in defpackage imports all exported symbols, making it hard to tell which symbols are actually used and risking symbol conflicts when the used package exports new symbols."
    :severity :warning
+   :category :style
    :type :form))
 
 (defparameter *exempt-packages*
