@@ -144,11 +144,25 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
   (unless (eq (first sexp) :mallet-config)
     (error "Config must start with :mallet-config"))
 
+  ;; Pre-pass: collect all :set-severity overrides before the main loop so that
+  ;; :for-paths blocks are always processed with the complete override set, regardless
+  ;; of ordering within the config file.
+  (let ((set-severity-overrides
+          (loop for item in (rest sexp)
+                when (and (consp item) (eq (first item) :set-severity))
+                  collect (let ((category (second item))
+                                (severity (third item)))
+                            (unless (member severity '(:error :warning :info))
+                              (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
+                            (unless (member category '(:correctness :suspicious :cleanliness
+                                                       :style :format :metrics))
+                              (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :format :metrics), but got: ~S" category))
+                            (cons category severity)))))
+
   (let ((rule-specs '())
         (disabled-rules '())
         (ignore-patterns '())
         (path-rules '())
-        (set-severity-overrides '())
         (extends nil))
 
     ;; Parse top-level options
@@ -173,12 +187,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                     (let ((rule-name (second item)))
                       (push rule-name disabled-rules)))
                    (:set-severity
-                    ;; Set severity for all rules in a category: (:set-severity :category :severity)
-                    (let ((category (second item))
-                          (severity (third item)))
-                      (unless (member severity '(:error :warning :info))
-                        (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
-                      (push (cons category severity) set-severity-overrides)))
+                    ;; Already collected in pre-pass above; skip here.
+                    nil)
                    (:ignore
                     ;; Ignore patterns: (:ignore "pattern1" "pattern2" ...)
                     (setf ignore-patterns (rest item)))
@@ -253,7 +263,7 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
         (make-config :rules final-rules
                      :disabled-rules disabled-rules
                      :path-rules (nreverse path-rules)
-                     :ignore ignore-patterns)))))
+                     :ignore ignore-patterns))))))
 
 ;;; Config file loading
 
@@ -473,10 +483,15 @@ CLI-RULES is a plist with:
              (explicitly-enabled (assoc rule-name enable-rules))
              (explicitly-disabled (member rule-name disable-rules)))
         (cond
-          ;; Explicitly enabled: recreate with new options (highest priority)
+          ;; Explicitly enabled: recreate with new options (highest priority).
+          ;; Preserve config-applied severity (e.g. from :set-severity) unless the
+          ;; CLI explicitly provides a :severity override.
           (explicitly-enabled
-           (let ((options (cdr explicitly-enabled)))
-             (push (apply #'rules:make-rule rule-name options) result-rules)))
+           (let* ((options (cdr explicitly-enabled))
+                  (new-rule (apply #'rules:make-rule rule-name options)))
+             (unless (getf options :severity)
+               (setf (rules:rule-severity new-rule) (rules:rule-severity rule)))
+             (push new-rule result-rules)))
 
           ;; Explicitly disabled: add to disabled list
           (explicitly-disabled

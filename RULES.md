@@ -8,11 +8,11 @@ Rules are organized by severity level. See README.md for severity meanings.
 
 - [ERROR](#error)
   - [`:wrong-otherwise`](#wrong-otherwise) - `ecase`/`etypecase` with `otherwise`/`t` clause
+  - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
 - [WARNING](#warning)
   - [`:unused-variables`](#unused-variables) - Variables that are never used
   - [`:unused-local-functions`](#unused-local-functions) - Local functions that are never called
   - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
-  - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
   - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
   - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
   - [`:no-package-use`](#no-package-use) - Use of `:use` in `defpackage` or `uiop:define-package`
@@ -55,6 +55,22 @@ Rules are organized by severity level. See README.md for severity meanings.
 (ecase type
   (:a 1)
   (:b 2))
+```
+
+**Default**: enabled
+
+### `:mixed-optional-and-key`
+
+Don't mix `&optional` and `&key` in lambda lists.
+
+```lisp
+;; Bad: ambiguous parameter binding
+(defun foo (x &optional y &key z)
+  ...)
+
+;; Good: use only one
+(defun foo (x &key y z)
+  ...)
 ```
 
 **Default**: enabled
@@ -115,22 +131,6 @@ Local functions defined in `flet` or `labels` should be used.
 ```
 
 **Default**: disabled
-
-### `:mixed-optional-and-key`
-
-Don't mix `&optional` and `&key` in lambda lists.
-
-```lisp
-;; Bad: ambiguous parameter binding
-(defun foo (x &optional y &key z)
-  ...)
-
-;; Good: use only one
-(defun foo (x &key y z)
-  ...)
-```
-
-**Default**: enabled
 
 ### `:eval-usage`
 

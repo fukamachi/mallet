@@ -16,105 +16,99 @@
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
-(defun make-rule (name &rest options &key severity category &allow-other-keys)
+(defun make-rule (name &rest options)
   "Create a rule instance based on NAME and OPTIONS.
 Always returns a rule object - enabled/disabled state is handled by config.
 Severity and category defaults are defined in each rule class's :default-initargs."
-  (let ((initargs (append
-                   (and severity
-                        `(:severity ,severity))
-                   (and category
-                        `(:category ,category))
-                   options)))
-    ;; Create rule instance based on name
-    (case name
+  ;; Create rule instance based on name
+  (case name
       ;; Text rules
       (:line-length
        (apply #'make-instance 'line-length-rule
-              initargs))
+              options))
       (:trailing-whitespace
        (apply #'make-instance 'trailing-whitespace-rule
-              initargs))
+              options))
       (:no-tabs
        (apply #'make-instance 'no-tabs-rule
-              initargs))
+              options))
       (:final-newline
        (apply #'make-instance 'final-newline-rule
-              initargs))
+              options))
       (:consecutive-blank-lines
        (apply #'make-instance 'consecutive-blank-lines-rule
-              initargs))
+              options))
 
       ;; Token rules
       (:bare-float-literal
        (apply #'make-instance 'bare-float-literal-rule
-              initargs))
+              options))
 
       ;; Form rules
       (:if-without-else
        (apply #'make-instance 'if-without-else-rule
-              initargs))
+              options))
       (:bare-progn-in-if
        (apply #'make-instance 'bare-progn-in-if-rule
-              initargs))
+              options))
       (:missing-otherwise
        (apply #'make-instance 'missing-otherwise-rule
-              initargs))
+              options))
       (:wrong-otherwise
        (apply #'make-instance 'wrong-otherwise-rule
-              initargs))
+              options))
       (:needless-let*
        (apply #'make-instance 'needless-let*-rule
-              initargs))
+              options))
       (:unused-variables
        (apply #'make-instance 'unused-variables-rule
-              initargs))
+              options))
       (:unused-loop-variables
        (apply #'make-instance 'unused-loop-variables-rule
-              initargs))
+              options))
       (:unused-local-functions
        (apply #'make-instance 'unused-local-functions-rule
-              initargs))
+              options))
       (:interned-package-symbol
        (apply #'make-instance 'interned-package-symbol-rule
-              initargs))
+              options))
       (:unused-local-nicknames
        (apply #'make-instance 'unused-local-nicknames-rule
-              initargs))
+              options))
       (:unused-imported-symbols
        (apply #'make-instance 'unused-imported-symbols-rule
-              initargs))
+              options))
       (:no-package-use
        (apply #'make-instance 'no-package-use-rule
-              initargs))
+              options))
       (:special-variable-naming
        (apply #'make-instance 'special-variable-naming-rule
-              initargs))
+              options))
       (:constant-naming
        (apply #'make-instance 'constant-naming-rule
-              initargs))
+              options))
       (:mixed-optional-and-key
        (apply #'make-instance 'mixed-optional-and-key-rule
-              initargs))
+              options))
       (:asdf-component-strings
        (apply #'make-instance 'asdf-component-strings-rule
-              initargs))
+              options))
 
       ;; Safety rules
       (:eval-usage
        (apply #'make-instance 'eval-usage-rule
-              initargs))
+              options))
       (:runtime-intern
        (apply #'make-instance 'runtime-intern-rule
-              initargs))
+              options))
 
       ;; Metric rules
       (:function-length
        (apply #'make-instance 'function-length-rule
-              initargs))
+              options))
       (:cyclomatic-complexity
        (apply #'make-instance 'cyclomatic-complexity-rule
-              initargs))
+              options))
 
       (otherwise
-       (error "Unknown rule name: ~A" name)))))
+       (error "Unknown rule name: ~A" name))))
