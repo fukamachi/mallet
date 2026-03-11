@@ -339,10 +339,10 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                 violations))
 
         (let ((*suppression-state* (suppression:make-suppression-state))
-              (pending-next-form-suppression nil)
               ;; Comment directive integration — use the already-parsed directives
               (pending-directives all-directives)
               ;; :suppress records: list of (id line rules reason). Not in registered-suppressions.
+              ;; Used for both comment :suppress and declaim suppress-next directives.
               (pending-suppress-records nil)
               (stale-suppress-entries nil)
               (prev-end-line 0))
@@ -359,30 +359,26 @@ If ignored-p is T, the file was ignored and violations will be NIL."
               (cond
                 ((and (suppression:mallet-declaim-p form-expr)
                       (suppression:mallet-suppress-next-p form-expr))
-                 (let ((next-rules (suppression:extract-suppress-next-rules form-expr)))
-                   (setf pending-next-form-suppression
-                         (if pending-next-form-suppression
-                             (union pending-next-form-suppression next-rules :test #'eq)
-                             next-rules))))
+                 (let* ((next-rules (suppression:extract-suppress-next-rules form-expr))
+                        (id (suppression:register-suppression
+                              *suppression-state* form-start-line next-rules nil :declaim)))
+                   ;; Remove from registered-suppressions: stale tracking is done via
+                   ;; pending-suppress-records + filter-suppress-violations, not rule-suppressed-p.
+                   (setf (suppression:registered-suppressions *suppression-state*)
+                         (delete id (suppression:registered-suppressions *suppression-state*)
+                                 :key #'car))
+                   ;; Add to pending records for post-form violation filtering
+                   (push (list id form-start-line next-rules nil) pending-suppress-records)))
 
                 ((suppression:mallet-declaim-p form-expr)
                  (suppression:update-suppression-for-declaim form-expr *suppression-state*))
 
                 (t
                  ;; Run form, collecting violations
-                 (let ((form-violations nil))
-                   (unwind-protect
-                        (progn
-                          (when pending-next-form-suppression
-                            (suppression:push-scope-suppression *suppression-state*
-                                                                pending-next-form-suppression))
-                          (setf form-violations
-                                (process-single-form form rules file file-type nil)))
-                     (when pending-next-form-suppression
-                       (suppression:pop-scope-suppression *suppression-state*)
-                       (setf pending-next-form-suppression nil)))
+                 (let ((form-violations (process-single-form form rules file file-type nil)))
 
                    ;; Filter violations against pending :suppress records
+                   ;; (includes both comment :suppress and declaim suppress-next)
                    (when pending-suppress-records
                      (multiple-value-setq (form-violations stale-suppress-entries)
                        (filter-suppress-violations form-violations pending-suppress-records

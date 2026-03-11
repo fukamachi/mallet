@@ -149,3 +149,40 @@
       ;; The suppress for suppressed-foo (line 9) should NOT be stale
       (ok (null iwe-stale)
           "No stale violation for the suppress that actually suppressed a violation"))))
+
+;;; Declaim suppress-next stale detection tests
+
+(deftest declaim-suppress-next-stale-when-no-violation
+  (testing "Stale #+mallet suppress-next generates a stale-suppression violation"
+    (let* ((file (fixture-path "declaim-stale.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config))
+           (stale-violations (remove-if-not
+                               (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                               violations))
+           (needless-violations (remove-if-not
+                                  (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                                  violations)))
+
+      ;; clean-function has a suppress-next but no needless-let* → stale
+      (ok (= 1 (length stale-violations))
+          "Exactly 1 stale-suppression violation for the unused suppress-next")
+
+      ;; suppressed-function has a suppress-next that matches a real violation → not stale
+      ;; no needless-let* violations should appear (they are suppressed)
+      (ok (null needless-violations)
+          "No needless-let* violations (suppressed-function's violation is suppressed)"))))
+
+(deftest declaim-suppress-next-not-stale-when-used
+  (testing "Used #+mallet suppress-next does not generate stale-suppression"
+    (let* ((file (fixture-path "declaim-stale.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config))
+           (stale-violations (remove-if-not
+                               (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                               violations)))
+
+      ;; Only 1 stale violation (for clean-function), not 2
+      ;; The suppress-next for suppressed-function was used → not stale
+      (ok (= 1 (length stale-violations))
+          "Only 1 stale-suppression violation (suppressed-function's suppress-next is used)"))))
