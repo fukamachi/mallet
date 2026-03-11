@@ -63,21 +63,17 @@ mallet --enable line-length:max=80 --enable cyclomatic-complexity:max=10 src/
 # Disable specific rules (override config/preset)
 mallet --disable unused-variables tests/
 
-# Enable/disable rule groups (by severity)
-mallet --enable-group metrics src/        # Enable all metrics rules
-mallet --disable-group warning tests/     # Disable all warning-level rules
+# Fail on warnings and above (useful for CI)
+mallet --fail-on warning src/
 
-# Mix and match
-mallet --all --disable-group info src/    # All rules except info-level
+# Fail on any violation (equivalent to --strict)
+mallet --fail-on info src/
 ```
 
-**Rule groups** (by severity level):
-- `error` - Code that is objectively wrong
-- `warning` - Code that is likely wrong or dangerous
-- `convention` - Idiom suggestions
-- `format` - Consensus formatting rules
-- `info` - Subjective preferences
-- `metrics` - Code quality measurements
+**Severity levels** (for `--fail-on`):
+- `error` - Objectively wrong code (exit 1 by default)
+- `warning` - Likely bugs or dangerous patterns
+- `info` - Style preferences, metrics, and formatting suggestions
 
 ### Auto-Fix
 
@@ -114,8 +110,14 @@ Create `.mallet.lisp` in your project root:
  (:enable :line-length :max 100)
  (:enable :consecutive-blank-lines :max 2)
 
+ ;; Enable a rule with a custom severity override
+ (:enable :cyclomatic-complexity :severity :warning)
+
  ;; Disable specific rules
  (:disable :constant-naming)
+
+ ;; Override severity for all rules in a category
+ (:set-severity :metrics :info)
 
  ;; Path-specific overrides
  (:for-paths ("tests")
