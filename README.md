@@ -75,6 +75,25 @@ mallet --fail-on info src/
 - `warning` - Likely bugs or dangerous patterns
 - `info` - Style preferences, metrics, and formatting suggestions
 
+**Exit codes:**
+- `0` - No violations at or above the `--fail-on` threshold
+- `1` - One or more violations at or above the threshold
+- `3` - CLI usage error (unknown flag, missing argument, invalid file)
+
+> **Migration note:** Previous versions used exit code 2 for `:error`-level violations
+> and exit code 1 for `:warning`-level violations. Both now exit 1. If your CI pipeline
+> distinguished between exit 2 and exit 1, replace that logic with `--fail-on`:
+>
+> ```bash
+> # Old: exit 2 for errors only
+> # New equivalent:
+> mallet --fail-on error src/   # exit 1 if any :error violation found
+>
+> # Old: exit 1 for warnings, exit 2 for errors
+> # New equivalent (treat warnings as failures too):
+> mallet --fail-on warning src/
+> ```
+
 ### Auto-Fix
 
 Mallet can automatically fix many common violations:
