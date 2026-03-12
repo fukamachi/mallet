@@ -72,7 +72,13 @@
   (testing "asdf: prefix in argument position — 1 violation"
     (let ((violations (check-form-rule 'rules:asdf-redundant-package-prefix-rule
                                        "(some-func asdf:run-tests)")))
-      (ok (= (length violations) 1)))))
+      (ok (= (length violations) 1))))
+
+  (testing "asdf:: double-colon prefix — 1 violation"
+    (let ((violations (check-form-rule 'rules:asdf-redundant-package-prefix-rule
+                                       "(asdf::defsystem \"foo\")")))
+      (ok (= (length violations) 1))
+      (ok (search "asdf:" (violation:violation-message (first violations)))))))
 
 ;;; asdf-operate-in-perform tests
 
@@ -135,6 +141,19 @@
   ((:module \"mod\"
     :components ((:file \"main\"))
     :perform (test-op (o c) (asdf:load-system \"bar\")))))")))
+      (ok (= (length violations) 1))))
+
+  (testing "asdf::load-system with double-colon in :perform — 1 violation"
+    (let ((violations (check-form-rule 'rules:asdf-operate-in-perform-rule
+                                       "(defsystem \"foo\"
+  :perform (test-op (o c) (asdf::load-system \"bar\")))")))
+      (ok (= (length violations) 1))
+      (ok (search "symbol-call" (violation:violation-message (first violations))))))
+
+  (testing "asdf::test-system with double-colon in :perform — 1 violation"
+    (let ((violations (check-form-rule 'rules:asdf-operate-in-perform-rule
+                                       "(defsystem \"foo\"
+  :perform (test-op (o c) (asdf::test-system \"foo\")))")))
       (ok (= (length violations) 1)))))
 
 ;;; asdf-secondary-system-name tests

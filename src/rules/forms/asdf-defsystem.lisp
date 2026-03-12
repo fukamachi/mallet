@@ -13,6 +13,12 @@
 
 ;;; Shared helpers
 
+(defun skip-colons (str colon-pos)
+  "Return the index of the first character after consecutive colons starting at COLON-POS in STR."
+  (loop for i from colon-pos below (length str)
+        while (char= (char str i) #\:)
+        finally (return i)))
+
 (defun make-violation-at-value (value form file rule-name severity message)
   "Create a violation for VALUE at its position in FORM."
   (let ((position-map (parser:form-position-map form)))
@@ -127,7 +133,8 @@ infinite loops or unexpected behavior. Use symbol-call instead."))
              (not (utils:keyword-string-p str)))
     (let* ((colon-pos (position #\: str :test #'char=))
            (pkg-part (string-upcase (subseq str 0 colon-pos)))
-           (name-part (string-upcase (subseq str (1+ colon-pos)))))
+           (name-start (skip-colons str colon-pos))
+           (name-part (string-upcase (subseq str name-start))))
       (and (or (string= pkg-part "ASDF")
                ;; sub-package like asdf/operate
                (let ((slash-pos (position #\/ pkg-part :test #'char=)))
