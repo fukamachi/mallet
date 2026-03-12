@@ -38,9 +38,11 @@
    ;; Rule system
    (:module "rules-impl"
     :pathname "rules"
+    :serial t
     :components
     ((:file "base")
      (:file "text")
+     (:file "forms/package-exports")
      (:module "tokens"
       :pathname "tokens"
       :components
@@ -49,8 +51,7 @@
      (:module "forms"
       :pathname "forms"
       :components
-      ((:file "package-exports")
-       (:file "control-flow")
+      ((:file "control-flow")
        (:file "variables")
        (:file "local-functions")
        (:file "package")
