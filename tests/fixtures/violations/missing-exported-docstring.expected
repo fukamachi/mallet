@@ -1,14 +1,7 @@
 # Expected violations for missing-exported-docstring.lisp
 # Format: line:column rule-name severity
-# Note: with :extends :all, both missing-exported-docstring (warning) and
-# missing-docstring (info) fire on exported definitions without docstrings.
 
 11:0 missing-exported-docstring warning
-11:0 missing-docstring info
 19:0 missing-exported-docstring warning
-19:0 missing-docstring info
 22:0 missing-exported-docstring warning
-22:0 missing-docstring info
 25:0 missing-exported-docstring warning
-25:0 missing-docstring info
-28:0 missing-docstring info

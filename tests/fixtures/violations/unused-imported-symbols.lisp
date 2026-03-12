@@ -10,4 +10,5 @@
 (in-package #:test-unused-imports)
 
 (defun load-config ()
+  "Load configuration."
   (hash-table-keys (make-hash-table)))
