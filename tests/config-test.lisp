@@ -82,7 +82,11 @@
         (ok (member :trailing-whitespace rule-names))
         (ok (member :no-tabs rule-names))
         (ok (member :unused-variables rule-names))
-        (ok (member :if-without-else rule-names)))
+        (ok (member :if-without-else rule-names))
+        ;; missing-exported-docstring is in the default preset
+        (ok (member :missing-exported-docstring rule-names))
+        ;; missing-docstring is opt-in only; must not be in default
+        (ok (not (member :missing-docstring rule-names))))
       ;; Check that some rules are disabled
       (let ((disabled (config:config-disabled-rules cfg)))
         (ok (member :line-length disabled))
@@ -98,7 +102,10 @@
       (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
         (ok (member :line-length rule-names))
         (ok (member :trailing-whitespace rule-names))
-        (ok (member :if-without-else rule-names)))))
+        (ok (member :if-without-else rule-names))
+        ;; Both docstring rules are in the all preset
+        (ok (member :missing-exported-docstring rule-names))
+        (ok (member :missing-docstring rule-names)))))
 
   (testing "Load none config"
     (let ((cfg (config:get-built-in-config :none)))
