@@ -371,6 +371,45 @@ else
     test_fail "Expected :comment-ratio entry with options in RULES.md"
 fi
 
+# Cross-file test-package detection
+echo ""
+echo "Testing cross-file test-package detection..."
+echo ""
+
+CROSSFILE_TMPDIR=$(mktemp -d)
+cat > "$CROSSFILE_TMPDIR/package.lisp" <<'EOF'
+(defpackage #:my-project/tests
+  (:use #:cl #:rove))
+EOF
+cat > "$CROSSFILE_TMPDIR/tests.lisp" <<'EOF'
+(in-package #:my-project/tests)
+(deftest my-test
+  (testing "internal access is fine in test files"
+    (ok (some-lib::internal-fn 42))))
+EOF
+
+test_start "Cross-file: test package (package.lisp+tests.lisp) reports no double-colon violations"
+CROSSFILE_OUTPUT=$("$CLI" --none --enable double-colon-access "$CROSSFILE_TMPDIR/tests.lisp" 2>&1)
+if echo "$CROSSFILE_OUTPUT" | grep -q "No problems found"; then
+    test_pass
+else
+    test_fail "Expected no violations for test-package ::access. Got: $CROSSFILE_OUTPUT"
+fi
+
+cat > "$CROSSFILE_TMPDIR/src.lisp" <<'EOF'
+(in-package #:my-project/tests)
+(defun bad-fn () some-lib::internal-fn)
+EOF
+test_start "Cross-file: test package file with :: reports violation when include-tests=t"
+VIOLATION_COUNT=$("$CLI" --none --enable "double-colon-access:include-tests=t" "$CROSSFILE_TMPDIR/src.lisp" 2>&1 | grep -c "double-colon-access" || true)
+if [ "$VIOLATION_COUNT" -ge 1 ]; then
+    test_pass
+else
+    test_fail "Expected double-colon-access violation when include-tests=t, but found none"
+fi
+
+rm -rf "$CROSSFILE_TMPDIR"
+
 # Summary
 echo ""
 echo "========================================="

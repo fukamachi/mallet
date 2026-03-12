@@ -96,6 +96,7 @@
    (:file "comment-directives")
    (:file "engine-integration-test")
    (:file "engine-comment-suppression")
+   (:file "engine-cross-file-integration-test")
 
    (:module "parser"
     :pathname "parser"
