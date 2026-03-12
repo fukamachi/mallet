@@ -239,7 +239,6 @@ Rule names are case-insensitive. A `; mallet:suppress` on its own line suppresse
 > **Note:** Trailing same-line suppress is reliable only for single-line forms. For multi-line forms, place the `; mallet:suppress` on a standalone line immediately before the form.
 
 > **Note:** Stale suppressions (directives that don't match any actual violation) are flagged by the `:stale-suppression` rule. See [RULES.md](RULES.md) for details.
->>>>>>> worktree-agent-affa4bb1
 
 ## Rules
 
