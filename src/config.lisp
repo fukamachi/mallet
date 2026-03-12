@@ -386,6 +386,10 @@ Style preferences are disabled to keep output clean."
             :unused-local-nicknames
             :unused-imported-symbols
             :asdf-component-strings
+            :asdf-redundant-package-prefix
+            :asdf-operate-in-perform
+            :asdf-secondary-system-name
+            :asdf-if-feature-keyword
             :mixed-optional-and-key
             :if-without-else
             :eval-usage
@@ -407,7 +411,9 @@ Style preferences are disabled to keep output clean."
             :special-variable-naming
             :missing-docstring
             ;; LOOP variables - disabled
-            :unused-loop-variables)))
+            :unused-loop-variables
+            ;; ASDF practice - disabled by default (reader conditionals are sometimes intentional)
+            :asdf-reader-conditional)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
@@ -419,9 +425,12 @@ Useful for exploration and discovering what rules exist."
           '(;; Correctness
             :wrong-otherwise
             :mixed-optional-and-key
+            :asdf-if-feature-keyword
             ;; Practice
             :allow-other-keys
             :missing-exported-docstring
+            :asdf-operate-in-perform
+            :asdf-reader-conditional
             ;; Suspicious
             :eval-usage
             :runtime-intern
@@ -441,6 +450,8 @@ Useful for exploration and discovering what rules exist."
             :special-variable-naming
             :constant-naming
             :asdf-component-strings
+            :asdf-redundant-package-prefix
+            :asdf-secondary-system-name
             :needless-let*
             :no-package-use
             :bare-float-literal

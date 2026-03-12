@@ -11,6 +11,7 @@
                  #:mallet/rules/forms/naming
                  #:mallet/rules/forms/lambda-list
                  #:mallet/rules/forms/asdf
+                 #:mallet/rules/forms/asdf-defsystem
                  #:mallet/rules/forms/metrics
                  #:mallet/rules/forms/eval-usage
                  #:mallet/rules/forms/runtime-intern
@@ -18,7 +19,8 @@
                  #:mallet/rules/forms/ignore-errors-usage
                  #:mallet/rules/forms/error-usage
                  #:mallet/rules/forms/docstring
-                 #:mallet/rules/stale-suppression)
+                 #:mallet/rules/stale-suppression
+                 #:mallet/rules/asdf-reader-conditional)
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
@@ -83,6 +85,16 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'allow-other-keys-rule options))
     (:asdf-component-strings
      (apply #'make-instance 'asdf-component-strings-rule options))
+    (:asdf-redundant-package-prefix
+     (apply #'make-instance 'asdf-redundant-package-prefix-rule options))
+    (:asdf-operate-in-perform
+     (apply #'make-instance 'asdf-operate-in-perform-rule options))
+    (:asdf-secondary-system-name
+     (apply #'make-instance 'asdf-secondary-system-name-rule options))
+    (:asdf-if-feature-keyword
+     (apply #'make-instance 'asdf-if-feature-keyword-rule options))
+    (:asdf-reader-conditional
+     (apply #'make-instance 'asdf-reader-conditional-rule options))
 
     ;; Safety rules
     (:eval-usage
