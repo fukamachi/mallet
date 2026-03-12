@@ -290,7 +290,7 @@ Plain symbols are evaluated as variables and will likely cause errors."))
 (defun collect-feature-expr-violations (feat-expr form file severity violations)
   "Recursively check FEAT-EXPR for non-keyword feature symbols.
 Handles compound expressions: (:and ...), (:or ...), (:not ...).
-Pushes violations onto the VIOLATIONS list (by side effect via nconc).
+Prepends violations onto VIOLATIONS via cons for O(1) accumulation.
 Returns the (possibly extended) violations list."
   (cond
     ;; NIL or non-string atom - skip
@@ -312,13 +312,13 @@ Returns the (possibly extended) violations list."
     ((stringp feat-expr)
      (if (feature-symbol-valid-p feat-expr)
          violations
-         (append violations
-                 (list (make-violation-at-value
-                        feat-expr form file :asdf-if-feature-keyword severity
-                        (format nil
-                                "Feature symbol ~S should be a keyword (e.g., :~A)"
-                                (string-downcase (utils:symbol-name-from-string feat-expr))
-                                (string-downcase (utils:symbol-name-from-string feat-expr))))))))
+         (cons (make-violation-at-value
+                feat-expr form file :asdf-if-feature-keyword severity
+                (format nil
+                        "Feature symbol ~S should be a keyword (e.g., :~A)"
+                        (string-downcase (utils:symbol-name-from-string feat-expr))
+                        (string-downcase (utils:symbol-name-from-string feat-expr))))
+               violations)))
 
     (t violations)))
 
