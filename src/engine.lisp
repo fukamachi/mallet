@@ -167,7 +167,15 @@ Returns updated violations list."
 
    :suppress directives are tracked in PENDING-SUPPRESS-RECORDS as (id line rules reason).
    :disable directives are registered + applied to region.
-   :enable directives are applied immediately."
+   :enable directives are applied immediately.
+
+   KNOWN LIMITATION (U-4): A trailing ; mallet:suppress comment on the LAST line of a
+   multi-line form is not applied to that form. Because this function only consumes
+   directives with D.line <= FORM-START-LINE, a directive on e.g. line 9 of a form
+   spanning lines 5-9 is not consumed here (9 > 5). After the form, prev-end-line
+   becomes 9, and on the next iteration the directive passes the discard check and is
+   consumed for the NEXT form instead. Trailing ; mallet:suppress is therefore reliable
+   only for single-line forms."
   ;; Discard directives that fall inside the previous form
   (loop while (and pending-directives
                    (< (first (first pending-directives)) prev-end-line))
@@ -389,9 +397,39 @@ If ignored-p is T, the file was ignored and violations will be NIL."
 
               (setf prev-end-line (parser:form-end-line form))))
 
-          ;; After all forms: generate stale-suppression violations
+          ;; U-2: Flush any remaining pending-suppress-records and unconsumed
+          ;; pending-directives as stale.  Two cases arise when a ; mallet:suppress
+          ;; comment appears after the last top-level form:
+          ;;
+          ;;  (a) The directive was consumed into pending-suppress-records by an earlier
+          ;;      consume-comment-directives call but no subsequent real form ever ran
+          ;;      filter-suppress-violations for it.
+          ;;
+          ;;  (b) The directive was never consumed at all because its line number
+          ;;      exceeds the start line of every form (e.g. it follows the last form).
+          ;;      These are still sitting in pending-directives.
+
+          ;; Case (a): records already registered but never filtered
+          (dolist (record pending-suppress-records)
+            (destructuring-bind (id d-line d-rules d-reason) record
+              (declare (ignore id))
+              (push (cons nil (list :line d-line :rules d-rules :reason d-reason))
+                    stale-suppress-entries)))
+
+          ;; Case (b): :suppress directives that were never consumed (after last form)
+          (dolist (directive pending-directives)
+            (destructuring-bind (d-line d-type d-rules d-reason) directive
+              (when (eq d-type :suppress)
+                (push (cons nil (list :line d-line :rules d-rules :reason d-reason))
+                      stale-suppress-entries))))
+
+          ;; After all forms: generate stale-suppression violations.
+          ;; U-1: also collect stale entries from text-token-suppression-state so that
+          ;; :disable regions for text/token rules that suppressed zero violations are reported.
           (let ((all-stale (append stale-suppress-entries
-                                   (suppression:collect-stale-suppressions *suppression-state*))))
+                                   (suppression:collect-stale-suppressions *suppression-state*)
+                                   (suppression:collect-stale-suppressions
+                                     text-token-suppression-state))))
             (setf violations
                   (generate-stale-suppression-violations all-stale rules file violations))))))
 

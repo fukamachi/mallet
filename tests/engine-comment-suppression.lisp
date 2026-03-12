@@ -38,6 +38,11 @@
    :rules (list (rules:make-rule :if-without-else)
                 (rules:make-rule :stale-suppression))))
 
+(defun make-line-length-and-stale-config ()
+  (config:make-config
+   :rules (list (rules:make-rule :line-length)
+                (rules:make-rule :stale-suppression))))
+
 ;;; Test 1: Stale suppression — comment with no matching violation
 
 (deftest comment-suppress-stale-no-violation
@@ -165,3 +170,45 @@
           (ok (< (violation:violation-line (first iwe-violations))
                  (violation:violation-line (second iwe-violations)))
               "First violation precedes second violation in source order"))))))
+
+;;; Test: U-1 — Stale text/token :disable region with no matching violations
+
+(deftest stale-text-disable-region
+  (testing "Stale :disable for text/token rule generates stale-suppression violation"
+    (let* ((file (violations-fixture "stale-text-disable.lisp"))
+           (config (make-line-length-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      ;; No line-length violations expected (all lines are short)
+      (let ((ll-violations (remove-if-not
+                             (lambda (v) (eq :line-length (violation:violation-rule v)))
+                             violations)))
+        (ok (null ll-violations) "No line-length violations in fixture"))
+
+      ;; Exactly one stale-suppression violation for the unused :disable
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (= 1 (length stale-violations))
+            "Exactly 1 stale-suppression violation for unused :line-length disable region")))))
+
+;;; Test: U-2 — Suppress comment after the last top-level form
+
+(deftest suppress-after-last-form
+  (testing "; mallet:suppress after the last form is reported as stale"
+    (let* ((file (violations-fixture "suppress-after-last-form.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      ;; No needless-let* violations (the defun body has no let*)
+      (let ((let*-violations (remove-if-not
+                               (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                               violations)))
+        (ok (null let*-violations) "No needless-let* violations in fixture"))
+
+      ;; The dangling suppress comment must be reported as stale
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (= 1 (length stale-violations))
+            "Exactly 1 stale-suppression violation for suppress after last form")))))
