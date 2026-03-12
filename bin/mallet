@@ -25,5 +25,6 @@ fi
 # Run with SBCL
 exec sbcl --noinform --non-interactive \
     --load "$SETUP_FILE" \
+    --eval "(when (find-package '#:qlot/local-init/setup) (setf (symbol-value (find-symbol \"*PROJECT-ROOT*\" '#:qlot/local-init/setup)) #p\"$PROJECT_DIR/\"))" \
     --eval '(let ((*standard-output* (make-broadcast-stream)) (*error-output* (make-broadcast-stream)) (*trace-output* (make-broadcast-stream))) (asdf:load-system :mallet))' \
     --eval "(mallet:main)" -- "$@"

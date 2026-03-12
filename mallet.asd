@@ -57,7 +57,8 @@
        (:file "asdf")
        (:file "metrics")
        (:file "eval-usage")
-       (:file "runtime-intern")))))
+       (:file "runtime-intern")))
+     (:file "stale-suppression")))
    (:file "rules")
 
    ;; Configuration
@@ -85,6 +86,9 @@
    (:file "suppression")
    (:file "suppression-declarations")
    (:file "suppression-integration")
+   (:file "comment-directives")
+   (:file "engine-integration-test")
+   (:file "engine-comment-suppression")
 
    (:module "parser"
     :pathname "parser"
@@ -118,6 +122,7 @@
      (:file "eval-usage-test")
      (:file "runtime-intern-test")
      (:file "no-package-use-test")
-     (:file "rule-type-system-test"))))
+     (:file "rule-type-system-test")
+     (:file "stale-suppression-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

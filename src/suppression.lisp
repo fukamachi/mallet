@@ -25,7 +25,16 @@
            ;; Form processing
            #:update-suppression-for-declaim
            #:mallet-suppress-next-p
-           #:extract-suppress-next-rules))
+           #:extract-suppress-next-rules
+           ;; Comment directive parsing
+           #:parse-comment-directives
+           ;; Suppression registration and stale detection
+           #:register-suppression
+           #:mark-suppression-used
+           #:collect-stale-suppressions
+           ;; State accessors needed by engine for lifecycle management
+           #:registered-suppressions
+           #:used-suppression-ids))
 (in-package #:mallet/suppression)
 
 (defclass suppression-state ()
@@ -33,6 +42,10 @@
     :initform nil
     :accessor region-disabled-rules
     :documentation "Rules disabled for current region (via disable/enable)")
+   (region-disable-counts
+    :initform (make-hash-table :test 'eq)
+    :accessor region-disable-counts
+    :documentation "Hash table rule -> nesting depth for region disable/enable tracking")
    (next-form-suppressions
     :initform nil
     :accessor next-form-suppressions
@@ -44,7 +57,20 @@
    (scope-stack
     :initform nil
     :accessor scope-stack
-    :documentation "Stack of scope-level suppressions (via declare)"))
+    :documentation "Stack of scope-level suppressions (via declare)")
+   (registered-suppressions
+    :initform nil
+    :accessor registered-suppressions
+    :documentation "Alist of registered suppression entries: ((ID :line LINE :rules RULES :reason REASON :type TYPE) ...)
+    Each entry is a cons of (INTEGER-ID . PLIST) as created by REGISTER-SUPPRESSION.")
+   (used-suppression-ids
+    :initform (make-hash-table :test 'eql)
+    :accessor used-suppression-ids
+    :documentation "Hash table (test 'eql) used as a set of used suppression IDs")
+   (next-suppression-id
+    :initform 0
+    :accessor next-suppression-id
+    :documentation "Counter for generating unique suppression IDs"))
   (:documentation "Tracks suppression state during parsing of a single file"))
 
 (defun make-suppression-state ()
@@ -67,18 +93,31 @@
 ;;; Region-Based Suppression
 
 (defun set-region-disabled (state rules)
-  "Add rules to the currently disabled set for the region."
+  "Add rules to the currently disabled set for the region.
+   Nested disable/enable pairs for the same rule are tracked by nesting depth —
+   a rule remains disabled until enable-region-rules is called as many times as
+   set-region-disabled was called for it."
   (check-type state suppression-state)
   (check-type rules list)
-  (setf (region-disabled-rules state)
-        (union (region-disabled-rules state) rules :test #'eq)))
+  (dolist (rule rules)
+    (let ((count (gethash rule (region-disable-counts state) 0)))
+      (when (zerop count)
+        (push rule (region-disabled-rules state)))
+      (setf (gethash rule (region-disable-counts state)) (1+ count)))))
 
 (defun enable-region-rules (state rules)
-  "Remove rules from the currently disabled set for the region."
+  "Remove rules from the currently disabled set for the region.
+   For rules tracked with nesting depth, only removes the rule when depth reaches zero."
   (check-type state suppression-state)
   (check-type rules list)
-  (setf (region-disabled-rules state)
-        (set-difference (region-disabled-rules state) rules :test #'eq)))
+  (dolist (rule rules)
+    (let ((count (gethash rule (region-disable-counts state) 0)))
+      (when (> count 0)
+        (let ((new-count (1- count)))
+          (setf (gethash rule (region-disable-counts state)) new-count)
+          (when (zerop new-count)
+            (setf (region-disabled-rules state)
+                  (remove rule (region-disabled-rules state) :test #'eq))))))))
 
 ;;; Function-Specific Suppression
 
@@ -105,30 +144,81 @@
     (setf (next-form-suppressions state) nil)
     rules))
 
+;;; Suppression Registration and Stale Detection
+
+(defun register-suppression (state line rules reason type)
+  "Register an inline suppression. Returns a unique integer ID.
+
+   LINE: source line number where the suppression was found
+   RULES: list of rule keywords (or '(:all))
+   REASON: optional reason string or NIL
+   TYPE: suppression type keyword (e.g., :inline-comment)
+
+   The entry is stored as (ID :line LINE :rules RULES :reason REASON :type TYPE)."
+  (check-type state suppression-state)
+  (check-type rules list)
+  (let ((id (incf (next-suppression-id state))))
+    (push (cons id (list :line line :rules rules :reason reason :type type))
+          (registered-suppressions state))
+    id))
+
+(defun mark-suppression-used (state id)
+  "Mark the suppression with the given ID as used."
+  (check-type state suppression-state)
+  (setf (gethash id (used-suppression-ids state)) t))
+
+(defun collect-stale-suppressions (state)
+  "Return list of registered suppression entries that were never used.
+
+   Each entry is a cons (ID . PLIST) where PLIST has :line, :rules, :reason, :type.
+   Entries are returned in reverse-registration order (newest first), because
+   suppressions are stored newest-first via PUSH."
+  (check-type state suppression-state)
+  (remove-if (lambda (entry)
+               (gethash (car entry) (used-suppression-ids state)))
+             (registered-suppressions state)))
+
 ;;; Suppression Checking
 
 (defun rule-suppressed-p (state rule-name &key form-type function-name)
   "Check if a rule is currently suppressed.
 
+   Returns the suppression ID (integer) when matched by a registered suppression,
+   T when matched by region/function/scope suppression, or NIL when not suppressed.
+   As a side effect, marks the first matching registered suppression as used.
+   When multiple registered suppressions match the same rule, only the most recently
+   registered one is consumed (suppressions are stored newest-first internally).
+
    form-type: :top-level, :function-body, :lexical-scope
    function-name: If form-type is :function-body, the function name"
   (check-type state suppression-state)
   (or
-   ;; 1. Check region-level suppression
-   (member rule-name (region-disabled-rules state) :test #'eq)
-   (member :all (region-disabled-rules state) :test #'eq)
+   ;; 1. Check registered suppressions (inline comment suppressions)
+   (loop for entry in (registered-suppressions state)
+         when (let ((rules (getf (cdr entry) :rules)))
+                (or (member rule-name rules :test #'eq)
+                    (member :all rules :test #'eq)))
+           do (mark-suppression-used state (car entry))
+              (return (car entry)))
 
-   ;; 2. Check function-specific suppression
+   ;; 2. Check region-level suppression
+   (and (or (member rule-name (region-disabled-rules state) :test #'eq)
+            (member :all (region-disabled-rules state) :test #'eq))
+        t)
+
+   ;; 3. Check function-specific suppression
    (when (and function-name (eq form-type :function-body))
      (let ((suppressed (gethash function-name (function-suppressions state))))
-       (or (member rule-name suppressed :test #'eq)
-           (member :all suppressed :test #'eq))))
+       (and (or (member rule-name suppressed :test #'eq)
+                (member :all suppressed :test #'eq))
+            t)))
 
-   ;; 3. Check scope stack (any parent scope)
-   (some (lambda (scope-rules)
-           (or (member rule-name scope-rules :test #'eq)
-               (member :all scope-rules :test #'eq)))
-         (scope-stack state))))
+   ;; 4. Check scope stack (any parent scope)
+   (and (some (lambda (scope-rules)
+                (or (member rule-name scope-rules :test #'eq)
+                    (member :all scope-rules :test #'eq)))
+              (scope-stack state))
+        t)))
 
 ;;; Declaration Recognition
 
@@ -347,3 +437,115 @@
       (let ((sym (intern symbol-name pkg)))
         (export sym pkg)))
     pkg))
+
+;;; Comment Directive Parsing
+
+(defun %count-block-comment-delimiters (line)
+  "Return (values openers closers) — counts of #| and |# in LINE."
+  (let ((openers 0)
+        (closers 0)
+        (i 0)
+        (len (length line)))
+    (loop while (< i len)
+          do (cond
+               ((and (< (1+ i) len)
+                     (char= (char line i) #\#)
+                     (char= (char line (1+ i)) #\|))
+                (incf openers)
+                (incf i 2))
+               ((and (< (1+ i) len)
+                     (char= (char line i) #\|)
+                     (char= (char line (1+ i)) #\#))
+                (incf closers)
+                (incf i 2))
+               (t (incf i))))
+    (values openers closers)))
+
+(defun %semicolon-in-string-p (line semi-pos)
+  "Return T if the character at SEMI-POS in LINE is inside a double-quoted string.
+   Counts unescaped double-quote characters before SEMI-POS; odd count = inside string."
+  (let ((quote-count 0)
+        (i 0))
+    (loop while (< i semi-pos)
+          do (cond
+               ((and (char= (char line i) #\\) (< (1+ i) semi-pos))
+                (incf i 2))
+               ((char= (char line i) #\")
+                (incf quote-count)
+                (incf i))
+               (t (incf i))))
+    (oddp quote-count)))
+
+(defun parse-comment-directives (source-text)
+  "Parse mallet comment directives from SOURCE-TEXT.
+
+   Scans each line for patterns like:
+     ; mallet:suppress rule1 rule2 -- optional reason
+     ;; mallet:disable rule1
+     ;;; mallet:enable rule1
+     (form ...) ; mallet:suppress rule1   (trailing same-line comment)
+
+   Returns a list of (line-number type rules reason) sorted by line-number, where:
+   - line-number is 1-based
+   - type is :suppress, :disable, or :enable
+   - rules is a list of keyword symbols (e.g., :needless-let*)
+   - reason is a string or NIL (parsed from text after '--')
+
+   LIMITATIONS:
+   - Lines inside #| ... |# block comments are skipped. A directive on the same
+     line as a #| opener is only skipped if the #| precedes the semicolon.
+   - A directive-like pattern inside a double-quoted string literal is not matched
+     (unescaped double-quotes before the semicolon are counted)."
+  (let ((result nil)
+        (line-number 0)
+        (block-comment-depth 0))
+    (with-input-from-string (stream source-text)
+      (loop for line = (read-line stream nil nil)
+            while line
+            do (incf line-number)
+               (let ((depth-at-start block-comment-depth))
+                 ;; Update block-comment-depth for this line
+                 (multiple-value-bind (openers closers)
+                     (%count-block-comment-delimiters line)
+                   (incf block-comment-depth openers)
+                   (setf block-comment-depth (max 0 (- block-comment-depth closers))))
+                 ;; Skip lines inside a block comment
+                 (when (zerop depth-at-start)
+                   (let ((semi-pos (cl-ppcre:scan
+                                    ";+\\s*mallet:(suppress|disable|enable)"
+                                    line)))
+                     (when (and semi-pos
+                                (not (%semicolon-in-string-p line semi-pos)))
+                       (multiple-value-bind (matched groups)
+                           (cl-ppcre:scan-to-strings
+                            ";+\\s*mallet:(suppress|disable|enable)\\s*(.*)"
+                            line)
+                         (when matched
+                           (let* ((type-str (aref groups 0))
+                                  (rest-str (string-trim " " (aref groups 1)))
+                                  (type (intern (string-upcase type-str) :keyword))
+                                  (reason nil)
+                                  (rules-str rest-str))
+                             ;; Split out optional reason after " -- " (space-bounded to avoid
+                             ;; matching "--" embedded within rule names like "my--rule")
+                             (let ((sep-pos (cl-ppcre:scan "\\s+--(?:\\s|$)" rules-str)))
+                               (when sep-pos
+                                 (let ((reason-part (string-trim " "
+                                                      (cl-ppcre:regex-replace "^.*?\\s+--\\s*" rules-str ""))))
+                                   (setf reason (if (string= reason-part "") nil reason-part)))
+                                 (setf rules-str (string-trim " " (subseq rules-str 0 sep-pos)))))
+                             ;; Split rules by whitespace, filtering empty strings
+                             (let ((rule-strings
+                                     (remove-if #'(lambda (s) (string= s ""))
+                                                (cl-ppcre:split "\\s+" rules-str))))
+                               ;; Silently ignore directives with no rules
+                               (when rule-strings
+                                 (let ((rules (mapcar (lambda (r)
+                                                       (let ((name (string-upcase r)))
+                                                         (intern (if (utils:keyword-string-p name)
+                                                                     (subseq name 1)
+                                                                     name)
+                                                                 :keyword)))
+                                                     rule-strings)))
+                                   (push (list line-number type rules reason) result)))))))))))))
+    (sort result #'< :key #'first)))

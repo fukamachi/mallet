@@ -33,6 +33,7 @@ test: test-unit test-cli
 test-unit:
 	@echo "Running unit tests..."
 	@qlot exec sbcl --noinform --non-interactive \
+		--eval "(when (find-package '#:qlot/local-init/setup) (setf (symbol-value (find-symbol \"*PROJECT-ROOT*\" '#:qlot/local-init/setup)) #p\"$(CURDIR)/\"))" \
 		--eval '(asdf:load-system :mallet/tests)' \
 		--eval '(or (rove:run :mallet/tests) (uiop:quit -1))'
 

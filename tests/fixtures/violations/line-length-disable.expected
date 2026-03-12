@@ -1,0 +1,5 @@
+# Expected violations for line-length-disable.lisp
+# Lines inside mallet:disable/enable region are suppressed; others are reported
+
+7:0 line-length info
+14:0 line-length info
