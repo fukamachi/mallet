@@ -77,21 +77,24 @@ return :unknown-reader-macro after consuming the following form."
   (handler-case
       (call-next-method)
     (eclector.readtable:unknown-macro-sub-character (condition)
-      (cond
-        ;; cl-interpol #?"..." — extract interpolated references
-        ((char= (slot-value condition '%sub-char) #\?)
-         (let ((str (handler-case (cl:read input-stream)
-                      (error () nil))))
-           (if (stringp str)
-               (let ((forms (extract-interpolation-forms str)))
-                 (if forms
-                     (list* "PROGN" forms)
-                     ':unknown-reader-macro))
-               ':unknown-reader-macro)))
-        ;; Other unknown dispatch macros — consume and return placeholder
-        (t
-         (handler-case (cl:read input-stream) (error () nil))
-         ':unknown-reader-macro)))))
+      (let ((sub (slot-value condition
+                              (load-time-value
+                               (find-symbol "%SUB-CHAR" "ECLECTOR.READTABLE")))))
+        (cond
+          ;; cl-interpol #?"..." — extract interpolated references
+          ((char= sub #\?)
+           (let ((str (handler-case (cl:read input-stream)
+                        (error () nil))))
+             (if (stringp str)
+                 (let ((forms (extract-interpolation-forms str)))
+                   (if forms
+                       (list* "PROGN" forms)
+                       ':unknown-reader-macro))
+                 ':unknown-reader-macro)))
+          ;; Other unknown dispatch macros — consume and return placeholder
+          (t
+           (handler-case (cl:read input-stream) (error () nil))
+           ':unknown-reader-macro))))))
 
 (defmethod eclector.reader:find-character ((client string-parse-result-client) (designator string))
   "Find character by name, supporting SBCL character name extensions.
