@@ -3,6 +3,7 @@
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
+   (#:config #:mallet/config)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/rules/redundant-progn)
@@ -141,3 +142,23 @@
       (ok (= (length violations) 1))
       (ok (= (violation:violation-line (first violations)) 1))
       (ok (= (violation:violation-column (first violations)) 0)))))
+
+;;; Registration tests — rule in presets and make-rule dispatch
+
+(deftest redundant-progn-in-default-config
+  (testing ":redundant-progn is in default config"
+    (let* ((cfg (config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+      (ok (member :redundant-progn rule-names)))))
+
+(deftest redundant-progn-in-all-config
+  (testing ":redundant-progn is in :all config"
+    (let* ((cfg (config:get-built-in-config :all))
+           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+      (ok (member :redundant-progn rule-names)))))
+
+(deftest redundant-progn-make-rule
+  (testing "make-rule dispatches :redundant-progn"
+    (let ((rule (rules:make-rule :redundant-progn)))
+      (ok (typep rule 'rules:redundant-progn-rule))
+      (ok (eq (rules:rule-name rule) :redundant-progn)))))
