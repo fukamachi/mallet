@@ -393,7 +393,9 @@ Style preferences are disabled to keep output clean."
             :no-package-use
             :needless-let*
             :double-colon-access
-            :stale-suppression))
+            :stale-suppression
+            ;; Documentation rules
+            :missing-exported-docstring))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
             :line-length
@@ -405,9 +407,7 @@ Style preferences are disabled to keep output clean."
             :special-variable-naming
             :missing-docstring
             ;; LOOP variables - disabled
-            :unused-loop-variables
-            ;; Practice rules - opt-in (requires project-wide scanning)
-            :missing-exported-docstring)))
+            :unused-loop-variables)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
