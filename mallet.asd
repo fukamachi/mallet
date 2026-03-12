@@ -49,7 +49,8 @@
      (:module "forms"
       :pathname "forms"
       :components
-      ((:file "control-flow")
+      ((:file "package-exports")
+       (:file "control-flow")
        (:file "variables")
        (:file "local-functions")
        (:file "package")
@@ -61,7 +62,8 @@
        (:file "runtime-intern")
        (:file "runtime-unintern")
        (:file "ignore-errors-usage")
-       (:file "error-usage")))
+       (:file "error-usage")
+       (:file "docstring")))
      (:file "stale-suppression")))
    (:file "rules")
 
@@ -132,7 +134,11 @@
      (:file "double-colon-access-test")
      (:file "test-framework-detection-test")
      (:file "error-with-string-only-test")
+     (:file "docstring-utilities-test")
+     (:file "missing-docstring-test")
+     (:file "missing-exported-docstring-test")
      (:file "rule-type-system-test")
-     (:file "stale-suppression-test"))))
+     (:file "stale-suppression-test")
+     (:file "package-exports-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

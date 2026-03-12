@@ -393,7 +393,9 @@ Style preferences are disabled to keep output clean."
             :no-package-use
             :needless-let*
             :double-colon-access
-            :stale-suppression))
+            :stale-suppression
+            ;; Documentation rules
+            :missing-exported-docstring))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
             :line-length
@@ -403,6 +405,7 @@ Style preferences are disabled to keep output clean."
             :missing-otherwise
             :constant-naming
             :special-variable-naming
+            :missing-docstring
             ;; LOOP variables - disabled
             :unused-loop-variables)))
     (make-config
@@ -418,6 +421,7 @@ Useful for exploration and discovering what rules exist."
             :mixed-optional-and-key
             ;; Practice
             :allow-other-keys
+            :missing-exported-docstring
             ;; Suspicious
             :eval-usage
             :runtime-intern
@@ -442,6 +446,7 @@ Useful for exploration and discovering what rules exist."
             :bare-float-literal
             :double-colon-access
             :error-with-string-only
+            :missing-docstring
             :stale-suppression
             ;; Format
             :no-tabs
