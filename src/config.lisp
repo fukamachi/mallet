@@ -405,7 +405,9 @@ Style preferences are disabled to keep output clean."
             :special-variable-naming
             :missing-docstring
             ;; LOOP variables - disabled
-            :unused-loop-variables)))
+            :unused-loop-variables
+            ;; Practice rules - opt-in (requires project-wide scanning)
+            :missing-exported-docstring)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
@@ -419,6 +421,7 @@ Useful for exploration and discovering what rules exist."
             :mixed-optional-and-key
             ;; Practice
             :allow-other-keys
+            :missing-exported-docstring
             ;; Suspicious
             :eval-usage
             :runtime-intern

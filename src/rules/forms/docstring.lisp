@@ -2,15 +2,17 @@
   (:use #:cl)
   (:local-nicknames
    (#:base #:mallet/rules/base)
-   (#:parser #:mallet/parser)
    (#:utils #:mallet/utils)
-   (#:violation #:mallet/violation))
+   (#:parser #:mallet/parser)
+   (#:violation #:mallet/violation)
+   (#:pkg-exports #:mallet/rules/forms/package-exports))
   (:export
    #:definition-form-p
    #:checkable-definition-p
    #:has-docstring-p
    #:definition-name
-   #:missing-docstring-rule))
+   #:missing-docstring-rule
+   #:missing-exported-docstring-rule))
 (in-package #:mallet/rules/forms/docstring)
 
 ;;; Docstring Detection Utilities
@@ -170,3 +172,106 @@ which inherits its documentation from the generic function."))
                                :message (format nil "~A ~A is missing a docstring"
                                                 form-type name)
                                :fix nil)))))))
+
+;;; --- missing-exported-docstring-rule ---
+
+(defun in-package-form-p (expr)
+  "Return T if EXPR is an (in-package ...) form."
+  (and (consp expr)
+       (stringp (first expr))
+       (base:symbol-matches-p (first expr) "IN-PACKAGE")))
+
+(defun find-project-root-for-file (file)
+  "Walk up from FILE's directory to find the project root directory.
+Recognizes roots by presence of .git/, .hg/, .qlot/ directories or qlfile.
+Returns the project root pathname, or FILE's own directory if none found."
+  (let ((start-dir (uiop:pathname-directory-pathname file)))
+    (labels ((root-marker-p (dir)
+               (or (some (lambda (d)
+                           (uiop:directory-exists-p (merge-pathnames d dir)))
+                         '(".git/" ".hg/" ".qlot/"))
+                   (uiop:file-exists-p (merge-pathnames "qlfile" dir))))
+             (walk (dir)
+               (cond
+                 ((root-marker-p dir) dir)
+                 (t
+                  (let ((parent (uiop:pathname-parent-directory-pathname dir)))
+                    (if (or (null parent) (equal parent dir))
+                        start-dir
+                        (walk parent)))))))
+      (walk start-dir))))
+
+(defun export-lookup-name (name)
+  "Return the symbol name to use for export lookup from a definition name.
+For setf names like \"(setf foo)\", returns \"foo\".
+For plain names, returns NAME unchanged."
+  (cond
+    ((null name) nil)
+    ((and (> (length name) 7)
+          (string-equal (subseq name 0 6) "(setf "))
+     (string-right-trim ")" (subseq name 6)))
+    (t name)))
+
+(defclass missing-exported-docstring-rule (base:rule)
+  ((current-file
+    :initform nil
+    :accessor rule-current-file
+    :documentation "Last file seen, for detecting file transitions.")
+   (current-package
+    :initform nil
+    :accessor rule-current-package
+    :documentation "Package name from the most recent in-package form."))
+  (:default-initargs
+   :name :missing-exported-docstring
+   :description "Exported definitions should have docstrings"
+   :severity :warning
+   :category :practice
+   :type :form)
+  (:documentation "Rule to detect exported definitions lacking docstrings.
+Only checks definitions whose symbol is in the :export list of the current
+package. Uses a cross-file package export index for accurate lookup.
+Tracks the current package via in-package forms during traversal."))
+
+(defmethod base:check-form ((rule missing-exported-docstring-rule) form file)
+  "Emit a violation when an exported definition is missing a docstring."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  ;; Reset package tracking on file transitions
+  (unless (equal file (rule-current-file rule))
+    (setf (rule-current-file rule) file
+          (rule-current-package rule) nil))
+
+  (let ((expr (parser:form-expr form)))
+    (cond
+      ;; Track current package from in-package forms
+      ((in-package-form-p expr)
+       (let ((pkg-arg (second expr)))
+         (when pkg-arg
+           (setf (rule-current-package rule)
+                 (utils:symbol-name-from-string pkg-arg))))
+       nil)
+
+      ;; Check definition forms when inside a known package
+      ((and (checkable-definition-p expr)
+            (rule-current-package rule)
+            (base:should-create-violation-p rule))
+       (let ((name (definition-name expr)))
+         (when (and name (not (has-docstring-p expr)))
+           (let ((project-root (find-project-root-for-file file))
+                 (lookup-name (export-lookup-name name)))
+             (when (and lookup-name
+                        (pkg-exports:exported-symbol-p
+                         project-root (rule-current-package rule) lookup-name))
+               (let ((form-head (string-upcase
+                                 (utils:symbol-name-from-string (first expr)))))
+                 (list (make-instance 'violation:violation
+                                      :rule (base:rule-name rule)
+                                      :file file
+                                      :line (parser:form-line form)
+                                      :column (parser:form-column form)
+                                      :severity (base:rule-severity rule)
+                                      :message (format nil "Exported ~A ~A is missing a docstring"
+                                                       form-head name)
+                                      :fix nil))))))))
+      (t nil))))
