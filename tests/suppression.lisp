@@ -43,6 +43,22 @@
       (ok (suppression:rule-suppressed-p state :any-rule))
       (ok (suppression:rule-suppressed-p state :everything)))))
 
+(deftest suppression-state-region-nesting
+  (testing "Region-based disable/enable with nesting depth"
+    (let ((state (suppression:make-suppression-state)))
+      ;; Two nested disables for the same rule
+      (suppression:set-region-disabled state '(:line-length))
+      (suppression:set-region-disabled state '(:line-length))
+      (ok (suppression:rule-suppressed-p state :line-length))
+
+      ;; First enable does not re-enable — depth goes from 2 to 1
+      (suppression:enable-region-rules state '(:line-length))
+      (ok (suppression:rule-suppressed-p state :line-length))
+
+      ;; Second enable brings depth to 0 — rule is re-enabled
+      (suppression:enable-region-rules state '(:line-length))
+      (ng (suppression:rule-suppressed-p state :line-length)))))
+
 (deftest suppression-state-scope-stack
   (testing "Scope-based suppressions with stack"
     (let ((state (suppression:make-suppression-state)))

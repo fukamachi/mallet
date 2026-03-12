@@ -62,7 +62,7 @@ Returns updated violations list."
    extends from S to LAST-LINE. Nested :disable/:enable for the same rule are
    handled by tracking the nesting depth.
 
-   Returns an alist mapping rule keywords to lists of (start . end) conses."
+   Returns a hash table mapping rule keywords to lists of (start . end) conses."
   (let ((open-starts (make-hash-table :test 'eq))   ; rule -> list of start lines
         (intervals (make-hash-table :test 'eq)))     ; rule -> list of (start . end)
     (dolist (directive directives)
@@ -90,7 +90,7 @@ Returns updated violations list."
 (defun violation-in-disabled-interval-p (violation intervals)
   "Return T if VIOLATION's line falls within a disabled interval for its rule.
 
-   INTERVALS is the alist built by BUILD-DISABLE-INTERVALS, mapping rule keywords
+   INTERVALS is the hash table built by BUILD-DISABLE-INTERVALS, mapping rule keywords
    to lists of (start . end) conses."
   (let* ((rule (violation:violation-rule violation))
          (line (violation:violation-line violation))
@@ -430,6 +430,13 @@ If ignored-p is T, the file was ignored and violations will be NIL."
           ;; consumed; generate-stale-suppression-violations ignores the car.
           (dolist (directive pending-directives)
             (destructuring-bind (d-line d-type d-rules d-reason) directive
+              ;; NOTE: Only :suppress is flagged here. :disable directives in
+              ;; pending-directives at EOF may have been processed by the text/token
+              ;; pipeline (filter-text-token-violations), which registers them in
+              ;; text-token-suppression-state. Flagging them here would double-count.
+              ;; Text/token-level stale :disable regions are reported via
+              ;; collect-stale-suppressions on text-token-suppression-state below.
+              ;; Form-level :disable stale detection is a known TODO (see docstring).
               (when (eq d-type :suppress)
                 (push (cons nil (list :line d-line :rules d-rules :reason d-reason))
                       stale-suppress-entries))))

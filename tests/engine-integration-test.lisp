@@ -40,9 +40,11 @@
 
       ;; suppressed-foo should NOT produce a violation
       (let ((foo-violations (remove-if-not
-                              (lambda (v) (search "suppressed-foo" (format nil "~A" (violation:violation-file v))))
-                              violations)))
-        (declare (ignore foo-violations)))
+                              (lambda (v) (eq :if-without-else (violation:violation-rule v)))
+                              (remove-if-not
+                                (lambda (v) (< (violation:violation-line v) 15))
+                                violations))))
+        (ok (null foo-violations) "suppressed-foo produces no if-without-else violation"))
 
       ;; Exactly 1 if-without-else violation: the unsuppressed-bar function
       (let ((iwe-violations (remove-if-not

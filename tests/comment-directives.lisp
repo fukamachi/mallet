@@ -132,3 +132,35 @@
       (let ((rules (third (first result))))
         (ok (member :needless-let* rules :test #'eq))
         (ok (member :line-length rules :test #'eq))))))
+
+(deftest parse-comment-directives-block-comment
+  (testing "Directive inside #| |# block comment is not matched"
+    ;; A ; mallet:suppress inside a block comment should be ignored
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#|~%; mallet:suppress needless-let*~%|#~%(defun foo () nil)"))))
+      (ok (null result) "no directives matched inside block comment")))
+
+  (testing "Multi-line block comment spanning directive is skipped"
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#| opened~%; mallet:disable line-length~%still inside |#~%real code"))))
+      (ok (null result) "directive inside multi-line block comment is ignored")))
+
+  (testing "Directive after block comment is matched"
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#| comment |#~%; mallet:suppress needless-let*~%(defun foo () nil)"))))
+      (ok (= 1 (length result)))
+      (ok (= 2 (first (first result))) "directive on line 2 is matched"))))
+
+(deftest parse-comment-directives-string-literal
+  (testing "Directive-like pattern inside a string literal is not matched"
+    ;; The semicolon is preceded by an odd number of double-quotes, so it is
+    ;; inside a string and should not be treated as a comment directive.
+    (let ((result (suppression:parse-comment-directives
+                    "(format t \"; mallet:suppress needless-let*\")")))
+      (ok (null result) "directive inside string literal is not matched")))
+
+  (testing "Directive after a closed string on the same line is matched"
+    (let ((result (suppression:parse-comment-directives
+                    "(foo \"bar\") ; mallet:suppress rule1")))
+      (ok (= 1 (length result)) "directive after closed string is matched")
+      (ok (eq :suppress (second (first result)))))))
