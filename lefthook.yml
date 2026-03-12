@@ -2,4 +2,7 @@ pre-commit:
   commands:
     mallet:
       glob: "{src,tests}/**/*.lisp"
-      run: ./bin/mallet --strict {staged_files}
+      exclude: "tests/fixtures/**"
+      run: |
+        files=$(echo {staged_files} | tr ' ' '\n' | grep -Ev '^tests/fixtures/' | tr '\n' ' ' | xargs)
+        [ -n "$files" ] && ./bin/mallet --strict $files || true

@@ -21,6 +21,7 @@ Rules are organized by category. Each rule shows its severity and default preset
   - [`:allow-other-keys`](#allow-other-keys) - Use of `&allow-other-keys` in lambda lists
   - [`:double-colon-access`](#double-colon-access) - Accessing internal symbols via `::`
   - [`:error-with-string-only`](#error-with-string-only) - Calling `error` with only a format string
+  - [`:missing-exported-docstring`](#missing-exported-docstring) - Exported definitions missing docstrings
 - [Cleanliness](#cleanliness) — Dead code and unused definitions
   - [`:unused-variables`](#unused-variables) - Variables that are never used
   - [`:unused-local-functions`](#unused-local-functions) - Local functions that are never called
@@ -37,6 +38,7 @@ Rules are organized by category. Each rule shows its severity and default preset
   - [`:constant-naming`](#constant-naming) - Constants should be named `+foo+`
   - [`:asdf-component-strings`](#asdf-component-strings) - ASDF components should use strings
   - [`:bare-float-literal`](#bare-float-literal) - Float literals should have explicit type markers
+  - [`:missing-docstring`](#missing-docstring) - Top-level definitions missing docstrings
 - [Format](#format) — Whitespace and file formatting
   - [`:trailing-whitespace`](#trailing-whitespace) - Lines should not have trailing whitespace
   - [`:no-tabs`](#no-tabs) - Use spaces instead of tab characters
@@ -247,6 +249,28 @@ Avoid calling `error` with only a format string. Signaling a string creates a `s
 ```
 
 **Severity**: warning | **Default**: disabled
+
+### `:missing-exported-docstring`
+
+Exported definitions should have docstrings. Exported symbols form the public API of a package; without docstrings, users and tools like `describe` have no documentation to show. Applies to `defun`, `defmacro`, `defgeneric`, and `defclass` forms whose name appears in the package's `:export` list. `defmethod` is exempt because methods inherit documentation from the generic function.
+
+```lisp
+;; Bad: exported function with no docstring
+(defpackage #:my-lib
+  (:use #:cl)
+  (:export #:connect))
+(in-package #:my-lib)
+
+(defun connect (host port)
+  (open-connection host port))
+
+;; Good: docstring added
+(defun connect (host port)
+  "Open a connection to HOST on PORT."
+  (open-connection host port))
+```
+
+**Severity**: warning | **Default**: enabled
 
 ## Cleanliness
 
@@ -491,6 +515,32 @@ Float literals should have explicit type markers (`f`, `d`, `s`, `l`). Without a
 
 ;; Good: explicit double-float
 (defvar *threshold* 0.5d0)
+```
+
+**Severity**: info | **Default**: disabled
+
+### `:missing-docstring`
+
+Top-level definitions should have docstrings. Applies to `defun`, `defmacro`, `defgeneric`, and `defclass` forms. `defmethod` is exempt because methods inherit documentation from the generic function.
+
+```lisp
+;; Bad: no docstring
+(defun add (x y)
+  (+ x y))
+
+(defclass point ()
+  ((x :initarg :x)
+   (y :initarg :y)))
+
+;; Good: docstrings present
+(defun add (x y)
+  "Return the sum of X and Y."
+  (+ x y))
+
+(defclass point ()
+  ((x :initarg :x)
+   (y :initarg :y))
+  (:documentation "A two-dimensional point."))
 ```
 
 **Severity**: info | **Default**: disabled

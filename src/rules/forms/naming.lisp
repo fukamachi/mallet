@@ -18,7 +18,10 @@
    :description "Special variables should be named *foo*"
    :severity :info
    :category :style
-   :type :form))
+   :type :form)
+  (:documentation "Rule to enforce *earmuff* naming for special variables.
+Flags defvar, defparameter, and defconstant forms whose name does not
+follow the *name* convention for dynamic/special variables."))
 
 (defmethod base:check-form ((rule special-variable-naming-rule) form file)
   "Check that special variables follow *foo* naming convention."
@@ -86,7 +89,9 @@
    :description "Constants should be named +foo+"
    :severity :info
    :category :style
-   :type :form))
+   :type :form)
+  (:documentation "Rule to enforce +plusmark+ naming for constants.
+Flags defconstant forms whose name does not follow the +name+ convention."))
 
 (defmethod base:check-form ((rule constant-naming-rule) form file)
   "Check that constants follow +foo+ naming convention."

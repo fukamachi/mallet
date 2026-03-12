@@ -18,7 +18,10 @@
    :description "Don't mix &optional and &key in lambda lists"
    :severity :error
    :category :correctness
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect lambda lists mixing &optional and &key.
+Mixing these two parameter types leads to confusing calling conventions
+and is explicitly flagged in the CLHS as problematic."))
 
 (defmethod base:check-form ((rule mixed-optional-and-key-rule) form file)
   "Check that lambda lists don't mix &optional and &key."
@@ -202,7 +205,10 @@ Returns (line column message) if violation found, NIL otherwise."
    :description "Avoid &allow-other-keys in lambda lists (silently ignores unknown keywords)"
    :severity :warning
    :category :practice
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect &allow-other-keys in lambda lists.
+Using &allow-other-keys silently discards unknown keyword arguments,
+which can hide bugs. Prefer explicit key validation or documented interfaces."))
 
 (defmethod base:check-form ((rule allow-other-keys-rule) form file)
   "Check that lambda lists don't use &allow-other-keys."

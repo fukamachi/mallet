@@ -10,6 +10,7 @@
 (in-package #:test1/config)
 
 (defun load-config ()
+  "Load configuration."
   (glob:glob "*.conf"))
 
 ;; Case 2: Multiple unused nicknames
@@ -23,4 +24,5 @@
 (in-package #:test2/config)
 
 (defun load-config ()
+  "Load configuration."
   (glob:glob "*.conf"))

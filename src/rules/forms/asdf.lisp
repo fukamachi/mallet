@@ -18,7 +18,9 @@
    :severity :warning
    :category :style
    :type :form
-   :file-types '(:asd)))
+   :file-types '(:asd))
+  (:documentation "Rule to check that ASDF defsystem uses strings for component names,
+system names, and dependencies rather than symbols or keywords."))
 
 (defmethod base:check-form ((rule asdf-component-strings-rule) form file)
   "Check that defsystem uses strings for names."

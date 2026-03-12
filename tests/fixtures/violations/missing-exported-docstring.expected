@@ -1,0 +1,7 @@
+# Expected violations for missing-exported-docstring.lisp
+# Format: line:column rule-name severity
+
+11:0 missing-exported-docstring warning
+19:0 missing-exported-docstring warning
+22:0 missing-exported-docstring warning
+25:0 missing-exported-docstring warning
