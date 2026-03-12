@@ -128,7 +128,17 @@
   (testing "defclass without :documentation returns NIL"
     (ok (null (utils:has-docstring-p
                (parse-expr "(defclass point ()
-  ((x :initarg :x)))"))))))
+  ((x :initarg :x)))")))))
+
+  (testing "defclass with non-empty superclass list and :documentation returns T"
+    (ok (utils:has-docstring-p
+         (parse-expr "(defclass child (parent)
+  ()
+  (:documentation \"A child class.\"))"))))
+
+  (testing "defclass with non-empty superclass list without :documentation returns NIL"
+    (ok (null (utils:has-docstring-p
+               (parse-expr "(defclass child (parent) () ())")))))
 
 ;;; has-docstring-p for defmethod
 

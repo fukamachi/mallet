@@ -164,7 +164,7 @@ which inherits its documentation from the generic function."))
             (name (definition-name expr)))
         (when (and form-type name)
           (list (make-instance 'violation:violation
-                               :rule :missing-docstring
+                               :rule (base:rule-name rule)
                                :file file
                                :line (parser:form-line form)
                                :column (parser:form-column form)
