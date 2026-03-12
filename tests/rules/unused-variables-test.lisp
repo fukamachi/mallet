@@ -1294,10 +1294,12 @@
           "Outer name used in inner loop should not be unused"))))
 
 ;; Helper macro for testing suppression with the engine
-(defmacro with-temp-lint-file ((code rule-name &optional (file-name "test-suppression.lisp")) &body body)
-  `(let* ((test-file (merge-pathnames ,file-name (uiop:temporary-directory)))
-          (config (mallet/config:make-config
-                   :rules (list (rules:make-rule ,rule-name)))))
+(defmacro with-temp-lint-file ((code rule-name
+                                &optional (file-name "test-suppression.lisp"))
+                               &body body)
+  `(let ((test-file (merge-pathnames ,file-name (uiop:temporary-directory)))
+         (config (mallet/config:make-config
+                  :rules (list (rules:make-rule ,rule-name)))))
      (unwind-protect
           (progn
             (with-open-file (out test-file :direction :output :if-exists :supersede)
@@ -1523,13 +1525,14 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Suppression should work for LOOP inside LET"))))
-;; Add these tests to the end of unused-variables-test.lisp
 
 ;; Helper macro for testing suppression with the engine
-(defmacro with-temp-lint-file ((code rule-name &optional (file-name "test-suppression.lisp")) &body body)
-  `(let* ((test-file (merge-pathnames ,file-name (uiop:temporary-directory)))
-          (config (mallet/config:make-config
-                   :rules (list (rules:make-rule ,rule-name)))))
+(defmacro with-temp-lint-file ((code rule-name
+                                &optional (file-name "test-suppression.lisp"))
+                               &body body)
+  `(let ((test-file (merge-pathnames ,file-name (uiop:temporary-directory)))
+         (config (mallet/config:make-config
+                  :rules (list (rules:make-rule ,rule-name)))))
      (unwind-protect
           (progn
             (with-open-file (out test-file :direction :output :if-exists :supersede)
@@ -2039,4 +2042,40 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (search "Variable 'new-text' is unused"
+                  (violation:violation-message (first violations)))))))
+
+(deftest cl-interpol-string-interpolation
+  (testing "Valid: let binding used in cl-interpol string interpolation"
+    ;; (let ((name "world")) #?"Hello ${name}") — name is referenced in the string
+    (let* ((code (format nil "(let ((name ~S)) #?~S)" "world" "Hello ${name}"))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: only the interpolated variable is used, genuinely unused is caught"
+    ;; (let ((name "world") (unused 1)) #?"Hello ${name}") — unused is not in the string
+    (let* ((code (format nil "(let ((name ~S) (unused 1)) #?~S)" "world" "Hello ${name}"))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= 1 (length violations)))
+      (ok (search "unused" (violation:violation-message (first violations))))))
+
+  (testing "Valid: defun parameters used inside cl-interpol expression"
+    ;; (defun f (x y) #?"${(+ x y)}") — x and y are referenced in interpolated expr
+    (let* ((code (format nil "(defun f (x y) #?~S)" "${(+ x y)}"))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Invalid: genuinely unused variable alongside cl-interpol string"
+    ;; (defun f (x y) #?"${x}") — y is not in the string
+    (let* ((code (format nil "(defun f (x y) #?~S)" "${x}"))
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= 1 (length violations)))
+      (ok (search "Variable 'y' is unused"
                   (violation:violation-message (first violations)))))))

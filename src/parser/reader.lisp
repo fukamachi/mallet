@@ -55,11 +55,8 @@ Delegates to default implementation."
    For most features, returns T to include all conditional code during linting.
    However, #+mallet is special - it should only be included when :mallet is in *features*,
    so suppression declarations don't affect normal code loading."
-  ;; For :mallet feature, actually check *features*
-  ;; This allows #+mallet declarations to be invisible during normal code loading
   (if (eq feature-expression :mallet)
       (member :mallet *features*)
-      ;; For all other features, return T to lint all code paths
       t))
 
 (defmethod eclector.reader:evaluate-expression ((client string-parse-result-client) expression)
@@ -67,26 +64,44 @@ Delegates to default implementation."
 Returns a placeholder list since we cannot evaluate expressions with string-based symbols.
 Returns a list to ensure it can be safely processed by recursive form-checking code."
   (declare (ignore expression))
-  ;; Return a placeholder list for read-time evaluated expressions
-  ;; We can't actually evaluate since symbols are strings
-  ;; Using a list ensures it won't cause type errors when embedded in parent forms
   '(:read-time-eval-placeholder))
 
 (defmethod eclector.reader:call-reader-macro :around ((client string-parse-result-client) input-stream char readtable)
-  "Wrap reader macro calls to handle unknown reader macros gracefully."
+  "Wrap reader macro calls to handle unknown reader macros gracefully.
+
+For #? (cl-interpol), reads the following string and extracts interpolation
+references, returning a synthetic (PROGN ref1 ref2 ...) form so downstream
+rules can see variable references. For plain strings with no interpolation,
+returns :unknown-reader-macro. All other unknown dispatch characters also
+return :unknown-reader-macro after consuming the following form."
   (handler-case
       (call-next-method)
-    (eclector.readtable:unknown-macro-sub-character ()
-      ;; Unknown dispatch reader macro (e.g., #?"..." from cl-interpol)
-      ;; The stream is after the dispatch char (#) but we need to consume the sub-char
-      ;; Then consume what follows using standard read
-      (handler-case
-          (cl:read input-stream)
-        ;; If that also fails, just continue
-        (error ()
-          nil))
-      ;; Return a placeholder
-      ':unknown-reader-macro)))
+    (eclector.readtable:unknown-macro-sub-character (condition)
+      ;; Extract sub-char from eclector-internal slot.  This accesses
+      ;; an implementation detail (%SUB-CHAR) that may change across
+      ;; eclector versions.  If the slot lookup fails, fall back to
+      ;; consuming the next form and returning :unknown-reader-macro.
+      (let ((sub (handler-case
+                     (slot-value condition
+                                (load-time-value
+                                 (find-symbol "%SUB-CHAR" "ECLECTOR.READTABLE")))
+                   (error () nil))))
+        (cond
+          ;; cl-interpol #?"..." — extract interpolated references
+          ((and sub (char= sub #\?))
+           (let ((str (handler-case (cl:read input-stream)
+                        (error () nil))))
+             (if (stringp str)
+                 (let ((forms (extract-interpolation-forms str)))
+                   (if forms
+                       (list* "PROGN" forms)
+                       ':unknown-reader-macro))
+                 ':unknown-reader-macro)))
+          ;; Other unknown dispatch macros (or failed sub-char extraction)
+          ;; — consume and return placeholder
+          (t
+           (handler-case (cl:read input-stream) (error () nil))
+           ':unknown-reader-macro))))))
 
 (defmethod eclector.reader:find-character ((client string-parse-result-client) (designator string))
   "Find character by name, supporting SBCL character name extensions.
@@ -293,6 +308,119 @@ Returns the character position of the unmatched opener, or NIL if balanced."
                            :line line
                            :column column)
             parse-errors))))
+
+;;; cl-interpol interpolation extractor
+
+(defun find-matching-brace (text start)
+  "Find the position of the matching closing brace in TEXT starting after START.
+START should be the position right after the opening '{'.
+Handles nested braces and string literals (braces inside strings are ignored).
+Returns the position of the matching '}', or NIL if not found."
+  (let ((depth 1)
+        (i start)
+        (len (length text))
+        (in-string nil)
+        (escape-next nil))
+    (loop while (and (< i len) (plusp depth))
+          do (let ((ch (char text i)))
+               (cond
+                 (escape-next
+                  (setf escape-next nil))
+                 ((and (char= ch #\\) in-string)
+                  (setf escape-next t))
+                 ((char= ch #\")
+                  (setf in-string (not in-string)))
+                 ((not in-string)
+                  (cond
+                    ((char= ch #\{) (incf depth))
+                    ((char= ch #\}) (decf depth))))))
+          do (incf i))
+    (when (zerop depth)
+      (1- i))))
+
+(defun parse-one-form-from-string (content)
+  "Parse one Lisp form from CONTENT string using eclector.
+Returns the parsed expression (just the :expr part), or NIL on failure."
+  (when (and content (> (length (string-trim '(#\Space #\Tab #\Newline) content)) 0))
+    (handler-case
+        (let* ((client (make-instance 'string-parse-result-client))
+               (stream (make-string-input-stream content))
+               (result (eclector.parse-result:read client stream nil :eof)))
+          (when (and result (not (eq result :eof)))
+            (getf result :expr)))
+      (error () nil))))
+
+(defun parse-all-forms-from-string (content)
+  "Parse all Lisp forms from CONTENT string using eclector.
+Returns a list of parsed expressions (just :expr parts), skipping errors."
+  (when (and content (> (length (string-trim '(#\Space #\Tab #\Newline) content)) 0))
+    (let ((client (make-instance 'string-parse-result-client))
+          (stream (make-string-input-stream content))
+          (forms '()))
+      (loop
+        (handler-case
+            (let ((result (eclector.parse-result:read client stream nil :eof)))
+              (if (eq result :eof)
+                  (return)
+                  (let ((expr (getf result :expr)))
+                    (when expr
+                      (push expr forms)))))
+          (error () (return))))
+      (nreverse forms))))
+
+(defun extract-interpolation-forms (string-body)
+  "Scan STRING-BODY (contents of a cl-interpol #?\"...\" string) for ${...} and @{...}
+patterns and parse each into Lisp forms.
+
+Handles:
+- ${expr}: parse one form
+- @{func args...}: parse all forms
+- Nested braces inside interpolation blocks
+- Empty interpolation or parse errors: skip
+
+Note: cl:read has already consumed one level of backslash escaping before
+this function sees the string contents, so we do NOT apply any manual
+escape handling for \\$ or \\@ here.
+
+Returns a flat list of all parsed expressions."
+  (let ((forms '())
+        (i 0)
+        (len (length string-body)))
+    (loop while (< i len)
+          do (let ((ch (char string-body i)))
+               (cond
+                 ;; ${...} expression interpolation
+                 ((and (char= ch #\$)
+                       (< (1+ i) len)
+                       (char= (char string-body (1+ i)) #\{))
+                  (let* ((content-start (+ i 2))
+                         (close-pos (find-matching-brace string-body content-start)))
+                    (if close-pos
+                        (let* ((content (subseq string-body content-start close-pos))
+                               (expr (parse-one-form-from-string content)))
+                          (when expr
+                            (push expr forms))
+                          (setf i (1+ close-pos)))
+                        ;; No matching brace: skip the $ and continue
+                        (incf i))))
+
+                 ;; @{...} function-call interpolation
+                 ((and (char= ch #\@)
+                       (< (1+ i) len)
+                       (char= (char string-body (1+ i)) #\{))
+                  (let* ((content-start (+ i 2))
+                         (close-pos (find-matching-brace string-body content-start)))
+                    (if close-pos
+                        (let* ((content (subseq string-body content-start close-pos))
+                               (exprs (parse-all-forms-from-string content)))
+                          (dolist (expr exprs)
+                            (push expr forms))
+                          (setf i (1+ close-pos)))
+                        ;; No matching brace: skip the @ and continue
+                        (incf i))))
+
+                 (t (incf i)))))
+    (nreverse forms)))
 
 ;;; Main parsing function
 

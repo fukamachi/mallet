@@ -102,7 +102,8 @@
     ((:file "tokenizer-test")
      (:file "reader-test")
      (:file "loop-test")
-     (:file "unknown-reader-macros")))
+     (:file "unknown-reader-macros")
+     (:file "interpolation-extractor-test")))
 
    (:module "rules"
     :pathname "rules"

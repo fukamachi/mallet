@@ -28,6 +28,8 @@
            ;; Reader
            #:parse-forms
            #:find-position
+           ;; cl-interpol support
+           #:extract-interpolation-forms
            ;; Parse errors
            #:parse-error-info
            #:parse-error-info-message
