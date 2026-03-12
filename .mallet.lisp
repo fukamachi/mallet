@@ -11,6 +11,7 @@
  (:for-paths ("/src/parser.lisp")
   (:disable :unused-local-nicknames))
  (:for-paths ("src/main.lisp")
-  (:enable :cyclomatic-complexity :max 25))
+  (:enable :cyclomatic-complexity :max 25)
+  (:enable :no-package-use :allow ("mallet/violation" "mallet/parser" "mallet/rules")))
  (:for-paths ("tests/rules/text-formatting-test.lisp")
   (:disable :consecutive-blank-lines)))

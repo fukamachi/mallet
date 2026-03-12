@@ -2,6 +2,7 @@
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
+   (#:parser #:mallet/parser)
    (#:utils #:mallet/utils)
    (#:violation #:mallet/violation)
    (#:suppression #:mallet/suppression))
@@ -31,6 +32,10 @@
            #:should-create-violation-p
            #:find-actual-position
            #:collect-violations-from-subexprs
+           ;; Test framework detection
+           #:*known-test-frameworks*
+           #:defpackage-uses-test-framework-p
+           #:tokens-use-test-framework-p
            ;; Auto-fix helpers
            #:find-clause-boundaries
            #:find-clause-line-range
@@ -531,6 +536,109 @@ Example usage:
                (return-from ,block-name nil)))
 
            ,@body)))))
+
+;;; Test Framework Detection
+
+(defparameter *known-test-frameworks*
+  '("ROVE" "FIVEAM" "5AM" "FIASCO" "PARACHUTE" "COALTON-TESTING" "LISP-UNIT2" "CLUNIT" "TRY")
+  "List of known Common Lisp test framework package names (uppercase, without package prefix).")
+
+(defun normalize-framework-name (pkg)
+  "Extract and uppercase the package name from PKG, stripping any package prefix.
+Handles strings like \"#:ROVE\", \":CL\", \"CURRENT:CL\", \"rove\"."
+  (let* ((str (string-upcase (if (stringp pkg) pkg (string pkg))))
+         (colon-pos (position #\: str :from-end t)))
+    (if colon-pos
+        (subseq str (1+ colon-pos))
+        str)))
+
+(defun framework-name-p (name known extra)
+  "Return T if NAME (already normalized/uppercased) is in KNOWN or EXTRA framework lists."
+  (or (member name known :test #'string=)
+      (and extra
+           (member name extra :test #'string-equal))))
+
+(defun defpackage-uses-test-framework-p (clauses &optional extra-frameworks)
+  "Return T if CLAUSES contains a :USE or :IMPORT-FROM clause referencing a known test framework.
+CLAUSES is the list of clauses from a parsed defpackage expression (i.e., cddr of the defpackage).
+EXTRA-FRAMEWORKS is an optional list of additional framework names (strings, case-insensitive)."
+  (dolist (clause clauses)
+    (when (and (consp clause)
+               (stringp (first clause))
+               (or (string-equal (first clause) ":use")
+                   (string-equal (first clause) ":import-from")))
+      (let ((packages (if (string-equal (first clause) ":import-from")
+                          ;; :import-from has the package name as first arg, rest are symbols
+                          (list (second clause))
+                          ;; :use has all args as package names
+                          (rest clause))))
+        (dolist (pkg packages)
+          (when (stringp pkg)
+            (let ((name (normalize-framework-name pkg)))
+              (when (framework-name-p name *known-test-frameworks* extra-frameworks)
+                (return-from defpackage-uses-test-framework-p t))))))))
+  nil)
+
+(defun defpackage-token-p (tok)
+  "Return T if TOK is a DEFPACKAGE or DEFINE-PACKAGE symbol token."
+  (and (eq (parser:token-type tok) :symbol)
+       (let ((name (symbol-name-from-string (parser:token-raw tok))))
+         (or (string-equal name "DEFPACKAGE")
+             (string-equal name "DEFINE-PACKAGE")))))
+
+(defun tokens-use-test-framework-p (tokens)
+  "Return T if TOKENS contain a DEFPACKAGE or DEFINE-PACKAGE form that :USE or :IMPORT-FROM
+a known test framework. Scans until the form's closing paren (tracked via paren depth)."
+  (let ((toks (coerce tokens 'vector))
+        (n (length tokens)))
+    ;; Find DEFPACKAGE / DEFINE-PACKAGE token
+    (loop for i from 0 below n
+          for tok = (aref toks i)
+          when (defpackage-token-p tok)
+            do (let ((clause-state nil) ; NIL, :use, :import-from, or :skip
+                     (depth 0)
+                     (started nil))
+                 (loop for j from (1+ i) below n
+                       for t2 = (aref toks j)
+                       for ttype = (parser:token-type t2)
+                       do (cond
+                            ;; Track paren depth to know when defpackage form ends
+                            ((eq ttype :open-paren)
+                             (incf depth)
+                             (setf started t))
+                            ((eq ttype :close-paren)
+                             (decf depth)
+                             ;; If we were inside the form and depth drops below 0,
+                             ;; the defpackage form has ended.
+                             (when (and started (minusp depth))
+                               (return)))
+                            ;; :use keyword starts a :use clause (check all symbols)
+                            ((and (eq ttype :symbol)
+                                  (string-equal (parser:token-raw t2) ":use"))
+                             (setf clause-state :use))
+                            ;; :import-from keyword starts an :import-from clause
+                            ;; (check only first symbol = the package name)
+                            ((and (eq ttype :symbol)
+                                  (string-equal (parser:token-raw t2) ":import-from"))
+                             (setf clause-state :import-from))
+                            ;; Another keyword (like :export, :local-nicknames) resets
+                            ((and (eq ttype :symbol)
+                                  (utils:keyword-string-p (parser:token-raw t2)))
+                             (setf clause-state nil))
+                            ;; Check package name tokens when inside :use or :import-from
+                            ((and (member clause-state '(:use :import-from))
+                                  (eq ttype :symbol)
+                                  (not (utils:keyword-string-p (parser:token-raw t2))))
+                             (let ((name (normalize-framework-name (parser:token-raw t2))))
+                               (when (framework-name-p name *known-test-frameworks* nil)
+                                 (return-from tokens-use-test-framework-p t)))
+                             ;; For :import-from, only the first symbol is the package name.
+                             ;; After checking it, skip remaining symbols in this clause.
+                             (when (eq clause-state :import-from)
+                               (setf clause-state :skip)))))
+                 ;; Reset for next DEFPACKAGE if any
+                 (setf clause-state nil))))
+  nil)
 
 ;;; Auto-Fix Helpers
 

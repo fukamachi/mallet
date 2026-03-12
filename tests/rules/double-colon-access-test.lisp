@@ -9,8 +9,8 @@
 
 (defun check-double-colon (code)
   "Check CODE for double-colon-access violations."
-  (let* ((tokens (parser:tokenize code #p"test.lisp"))
-         (rule (make-instance 'rules:double-colon-access-rule)))
+  (let ((tokens (parser:tokenize code #p"test.lisp"))
+        (rule (make-instance 'rules:double-colon-access-rule)))
     (rules:check-tokens rule tokens #p"test.lisp")))
 
 ;;; Valid cases (no violations)
@@ -100,8 +100,8 @@
     ;; The tokenizer produces symbol tokens with trailing backslash from escaped
     ;; quotes inside string literals, e.g. \"PKG::NAME\" in a docstring.
     ;; These are not real double-colon accesses and must not be flagged.
-    (let* ((rule (make-instance 'rules:double-colon-access-rule))
-           (tokens (parser:tokenize "(defun f () \"like \\\"foo::bar\\\" text\")" #p"test.lisp")))
+    (let ((rule (make-instance 'rules:double-colon-access-rule))
+          (tokens (parser:tokenize "(defun f () \"like \\\"foo::bar\\\" text\")" #p"test.lisp")))
       (ok (null (rules:check-tokens rule tokens #p"test.lisp"))))))
 
 ;;; Registration tests
@@ -120,3 +120,101 @@
   (testing ":double-colon-access rule has :practice category"
     (let ((rule (rules:make-rule :double-colon-access)))
       (ok (eq :practice (rules:rule-category rule))))))
+
+;;; Test file skipping
+
+(deftest test-file-skipping
+  (testing "File with rove defpackage is skipped"
+    (let* ((test-code "(defpackage #:my-tests
+  (:use #:cl #:rove))
+(in-package #:my-tests)
+(deftest foo
+  (ok (null pkg::internal)))")
+           (violations (check-double-colon test-code)))
+      (ok (null violations)
+          "Test file with rove usage should have no violations")))
+
+  (testing "File with fiveam defpackage is skipped"
+    (let* ((test-code "(defpackage #:my-tests
+  (:use #:cl #:fiveam))
+(in-package #:my-tests)
+(def-test foo ()
+  (is (null pkg::internal)))")
+           (violations (check-double-colon test-code)))
+      (ok (null violations)
+          "Test file with fiveam usage should have no violations")))
+
+  (testing "File with import-from test framework is skipped"
+    (let* ((test-code "(defpackage #:my-tests
+  (:use #:cl)
+  (:import-from #:rove #:ok #:deftest))
+(in-package #:my-tests)
+(deftest bar
+  (ok (null pkg::internal)))")
+           (violations (check-double-colon test-code)))
+      (ok (null violations)
+          "Test file importing from rove should have no violations")))
+
+  (testing "Regular non-test file is not skipped"
+    (let* ((normal-code "(defpackage #:my-pkg
+  (:use #:cl))
+(in-package #:my-pkg)
+(defun foo ()
+  other-pkg::internal-fn)")
+           (violations (check-double-colon normal-code)))
+      (ok (= 1 (length violations))
+          "Non-test file should report violations")))
+
+  (testing "Defpackage with :export #:rove does not trigger test-file skipping"
+    (let* ((code "(defpackage #:foo (:export #:rove))
+(in-package #:foo)
+(defun bar () pkg::sym)")
+           (violations (check-double-colon code)))
+      (ok (= 1 (length violations))
+          "Export clause with framework name should not suppress violations"))))
+
+;;; define-package test file skipping
+
+(deftest test-file-skipping-define-package
+  (testing "File with uiop:define-package using rove is skipped"
+    (let* ((test-code "(uiop:define-package #:my-tests
+  (:use #:cl #:rove))
+(in-package #:my-tests)
+(deftest foo
+  (ok (null pkg::internal)))")
+           (violations (check-double-colon test-code)))
+      (ok (null violations)
+          "Test file using define-package with rove should have no violations")))
+
+  (testing "File with define-package using fiveam is skipped"
+    (let* ((test-code "(uiop:define-package #:my-tests
+  (:import-from #:fiveam #:is))
+(in-package #:my-tests)
+(defun foo () pkg::internal)")
+           (violations (check-double-colon test-code)))
+      (ok (null violations)
+          "Test file using define-package with fiveam should have no violations")))
+
+  (testing "define-package without test framework is not skipped"
+    (let* ((code "(uiop:define-package #:my-pkg
+  (:use #:cl))
+(in-package #:my-pkg)
+(defun foo () pkg::internal)")
+           (violations (check-double-colon code)))
+      (ok (= 1 (length violations))
+          "Non-test define-package file should report violations"))))
+
+;;; :include-tests option
+
+(deftest include-tests
+  (testing "With :include-tests t, test files are still checked"
+    (let* ((rule (make-instance 'rules:double-colon-access-rule
+                                :include-tests t))
+           (test-code "(defpackage #:test-pkg (:use #:cl #:rove))
+(in-package #:test-pkg)
+(deftest foo
+  (ok (null pkg::internal-sym)))")
+           (tokens (parser:tokenize test-code #p"test.lisp"))
+           (violations (rules:check-tokens rule tokens #p"test.lisp")))
+      (ok (= 1 (length violations))
+          "Violations should be reported when include-tests is t"))))
