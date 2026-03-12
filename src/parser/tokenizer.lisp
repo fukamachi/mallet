@@ -43,6 +43,18 @@ Matches:
   (and (not (whitespace-char-p char))
        (not (member char '(#\( #\) #\; #\" #\' #\` #\,)))))
 
+(defun scan-constituent (text pos len)
+  "Advance POS past a constituent token in TEXT, handling single escapes.
+Returns the new position."
+  (loop while (and (< pos len)
+                   (constituent-char-p (char text pos)))
+        do (cond
+             ((char= (char text pos) #\\)
+              (incf pos)
+              (when (< pos len) (incf pos)))
+             (t (incf pos))))
+  pos)
+
 (defun tokenize (text file)
   "Tokenize TEXT from FILE, preserving comments and positions.
 Returns a list of TOKEN objects."
@@ -114,7 +126,11 @@ Returns a list of TOKEN objects."
           ((char= ch #\")
            (let* ((start-pos pos)
                   (start-column column)
-                  (end-pos (position #\" text :start (1+ pos)))
+                  (end-pos (loop for i from (1+ pos) below len
+                                do (let ((c (char text i)))
+                                     (cond
+                                       ((char= c #\\) (incf i))
+                                       ((char= c #\") (return i))))))
                   (raw
                     (if end-pos
                         (subseq text start-pos (1+ end-pos))
@@ -126,11 +142,9 @@ Returns a list of TOKEN objects."
 
           ;; Symbols and numbers
           ((constituent-char-p ch)
-           (let* ((start-pos pos)
-                  (start-column column))
-             (loop while (and (< pos len)
-                              (constituent-char-p (char text pos)))
-                   do (incf pos))
+           (let ((start-pos pos)
+                 (start-column column))
+             (setf pos (scan-constituent text pos len))
              (let* ((raw (subseq text start-pos pos))
                     (type (if (ppcre:scan *number-pattern* raw)
                               :number

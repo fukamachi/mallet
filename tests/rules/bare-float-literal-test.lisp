@@ -131,3 +131,13 @@
 
   (testing "Float in comment - no violation"
     (ok (null (check-bare-floats "; 1.0")))))
+
+(deftest character-literals-not-flagged
+  (testing "Character literal for double-quote does not cause false positive"
+    (ok (null (check-bare-floats "(char= ch #\\\")"))))
+
+  (testing "Character literal for open-paren"
+    (ok (null (check-bare-floats "(char= ch #\\()"))))
+
+  (testing "Regular character literals are fine"
+    (ok (null (check-bare-floats "(char= ch #\\a)")))))
