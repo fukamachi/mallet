@@ -49,7 +49,8 @@
      (:module "forms"
       :pathname "forms"
       :components
-      ((:file "control-flow")
+      ((:file "package-exports")
+       (:file "control-flow")
        (:file "variables")
        (:file "local-functions")
        (:file "package")
@@ -135,6 +136,7 @@
      (:file "error-with-string-only-test")
      (:file "docstring-utilities-test")
      (:file "rule-type-system-test")
-     (:file "stale-suppression-test"))))
+     (:file "stale-suppression-test")
+     (:file "package-exports-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
