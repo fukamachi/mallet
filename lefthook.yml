@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    mallet:
+      glob: "{src,tests}/**/*.lisp"
+      run: ./bin/mallet --strict {staged_files}
