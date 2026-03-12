@@ -307,7 +307,7 @@
 (deftest feature-flag-reading
   (testing "#+mallet feature flag works with *features*"
     ;; Create test file with #+mallet declarations
-    (let ((file "/tmp/test-mallet-feature.lisp")
+    (let ((file (merge-pathnames "test-mallet-feature.lisp" (uiop:temporary-directory)))
           (content "#+mallet
 (declaim (mallet:suppress-next line-length))
 

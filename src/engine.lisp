@@ -166,8 +166,14 @@ Returns updated violations list."
    Directives with D.line < PREV-END-LINE are silently discarded (inside a previous form).
 
    :suppress directives are tracked in PENDING-SUPPRESS-RECORDS as (id line rules reason).
-   :disable directives are registered + applied to region.
+   :disable directives are applied to the region only (NOT registered for stale tracking).
    :enable directives are applied immediately.
+
+   TODO: Stale detection for form-level :disable regions is not yet implemented.
+   Unlike :suppress directives, :disable regions bypass register-suppression and are
+   never checked for staleness. When stale detection for disable regions is added,
+   each :disable directive should call register-suppression and track whether any
+   violation was suppressed by the region.
 
    KNOWN LIMITATION (U-4): A trailing ; mallet:suppress comment on the LAST line of a
    multi-line form is not applied to that form. Because this function only consumes
