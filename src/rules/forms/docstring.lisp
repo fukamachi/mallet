@@ -220,7 +220,13 @@ For plain names, returns NAME unchanged."
    (current-package
     :initform nil
     :accessor rule-current-package
-    :documentation "Package name from the most recent in-package form."))
+    :documentation "Package name from the most recent in-package form.")
+   (cached-project-root
+    :initform nil
+    :accessor rule-cached-project-root
+    :documentation "Project root pathname, cached on the first file transition to avoid
+repeated filesystem walks. find-project-root-for-file performs directory traversal
+on every call; caching it reduces cost from O(violations) to O(unique files)."))
   (:default-initargs
    :name :missing-exported-docstring
    :description "Exported definitions should have docstrings"
@@ -237,10 +243,11 @@ Tracks the current package via in-package forms during traversal."))
   (check-type form parser:form)
   (check-type file pathname)
 
-  ;; Reset package tracking on file transitions
+  ;; Reset package tracking on file transitions; update cached project root
   (unless (equal file (rule-current-file rule))
     (setf (rule-current-file rule) file
-          (rule-current-package rule) nil))
+          (rule-current-package rule) nil
+          (rule-cached-project-root rule) (find-project-root-for-file file)))
 
   (let ((expr (parser:form-expr form)))
     (cond
@@ -258,7 +265,7 @@ Tracks the current package via in-package forms during traversal."))
             (base:should-create-violation-p rule))
        (let ((name (definition-name expr)))
          (when (and name (not (has-docstring-p expr)))
-           (let ((project-root (find-project-root-for-file file))
+           (let ((project-root (rule-cached-project-root rule))
                  (lookup-name (export-lookup-name name)))
              (when (and lookup-name
                         (pkg-exports:exported-symbol-p
