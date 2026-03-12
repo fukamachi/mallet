@@ -650,4 +650,4 @@ Enable this rule to catch outdated suppression comments left behind after code c
 
 **Category**: `:cleanliness`
 **Severity**: `:warning`
-**Default**: disabled (must be explicitly enabled; not included in `:default` or `:all` presets)
+**Default**: enabled (`:warning` severity; included in `:default` and `:all` presets)

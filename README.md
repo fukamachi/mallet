@@ -210,7 +210,7 @@ Mallet also supports lightweight inline comment directives as an alternative to 
 
 **Suppress the next form** (trailing same-line or standalone comment):
 ```lisp
-(let* ((x (foo))) ; mallet:suppress needless-let*
+(let* ((x (foo))) x) ; mallet:suppress needless-let*
 
 ; mallet:suppress if-without-else
 (if condition (do-something))
@@ -218,7 +218,7 @@ Mallet also supports lightweight inline comment directives as an alternative to 
 
 **Suppress with a reason** (using `--`):
 ```lisp
-(let* ((x (foo))) ; mallet:suppress needless-let* -- legacy API shape
+(let* ((x (foo))) x) ; mallet:suppress needless-let* -- legacy API shape
 ```
 
 **Suppress a region** (disable/enable pair):
@@ -236,7 +236,10 @@ Mallet also supports lightweight inline comment directives as an alternative to 
 
 Rule names are case-insensitive. A `; mallet:suppress` on its own line suppresses violations on the immediately following form. When placed as a trailing comment on a line of code, it suppresses violations on that same line/form.
 
-> **Note:** Stale suppressions (directives that don't match any actual violation) are flagged by the optional `:stale-suppression` rule. See [RULES.md](RULES.md) for details.
+> **Note:** Trailing same-line suppress is reliable only for single-line forms. For multi-line forms, place the `; mallet:suppress` on a standalone line immediately before the form.
+
+> **Note:** Stale suppressions (directives that don't match any actual violation) are flagged by the `:stale-suppression` rule. See [RULES.md](RULES.md) for details.
+>>>>>>> worktree-agent-affa4bb1
 
 ## Rules
 
