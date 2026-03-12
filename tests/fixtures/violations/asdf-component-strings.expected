@@ -1,13 +1,13 @@
 # Expected violations for asdf-component-strings.asd
 # Format: line:column rule-name severity
 
-4:12 asdf-component-strings warning
-13:16 asdf-component-strings warning
-14:16 asdf-component-strings warning
-23:23 asdf-component-strings warning
-24:23 asdf-component-strings warning
-32:12 asdf-component-strings warning
-33:16 asdf-component-strings warning
-35:23 asdf-component-strings warning
+4:11 asdf-component-strings warning
+13:15 asdf-component-strings warning
+14:15 asdf-component-strings warning
+23:22 asdf-component-strings warning
+24:22 asdf-component-strings warning
+32:11 asdf-component-strings warning
+33:15 asdf-component-strings warning
+35:22 asdf-component-strings warning
 40:15 asdf-component-strings warning
 40:27 asdf-component-strings warning
