@@ -109,7 +109,7 @@
     :components
     ((:file "line-length-test")
      (:file "if-without-else-test")
-     (:file "bare-progn-in-if-test")
+     (:file "bare-progn-test")
      (:file "missing-otherwise-test")
      (:file "wrong-otherwise-test")
      (:file "unused-variables-test")

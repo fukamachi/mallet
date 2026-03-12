@@ -6,7 +6,7 @@
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation))
   (:export #:if-without-else-rule
-           #:bare-progn-in-if-rule
+           #:bare-progn-rule
            #:missing-otherwise-rule
            #:wrong-otherwise-rule))
 (in-package #:mallet/rules/forms/control-flow)
@@ -86,20 +86,20 @@ Suppressions are handled automatically by the :around method."
 
     violations))
 
-;;; Bare-progn-in-if rule
+;;; Bare-progn rule
 
-(defclass bare-progn-in-if-rule (base:rule)
+(defclass bare-progn-rule (base:rule)
   ()
   (:default-initargs
-   :name :bare-progn-in-if
-   :description "Use 'cond' instead of 'if' with bare 'progn'"
+   :name :bare-progn
+   :description "Bare 'progn' in 'if', 'and', or 'or' can be simplified"
    :severity :info
    :category :style
    :type :form)
-  (:documentation "Rule to detect bare 'progn' in 'if' clauses."))
+  (:documentation "Rule to detect bare 'progn' in 'if', 'and', or 'or' clauses."))
 
-(defmethod base:check-form ((rule bare-progn-in-if-rule) form file)
-  "Check that IF forms don't have bare PROGN in then/else clauses."
+(defmethod base:check-form ((rule bare-progn-rule) form file)
+  "Check that IF/AND/OR forms don't have bare PROGN in key positions."
   (check-type form parser:form)
   (check-type file pathname)
 
@@ -113,8 +113,8 @@ Suppressions are handled automatically by the :around method."
                              nil  ; function-name
                              (parser:form-position-map form)))
 
-(defmethod base:check-form-recursive ((rule bare-progn-in-if-rule) expr file line column &optional function-name position-map)
-  "Recursively check for bare PROGN in IF clauses.
+(defmethod base:check-form-recursive ((rule bare-progn-rule) expr file line column &optional function-name position-map)
+  "Recursively check for bare PROGN in IF/AND/OR clauses.
 Suppressions are handled automatically by the :around method."
   (declare (ignore function-name))
 
@@ -127,7 +127,7 @@ Suppressions are handled automatically by the :around method."
                     (base:symbol-matches-p (first form-expr) "PROGN")))
 
              (check-expr (current-expr fallback-line fallback-column)
-               "Recursively check expression for bare progn in if."
+               "Recursively check expression for bare progn in if/and/or."
                (base:with-safe-code-expr (current-expr visited)
                  ;; Look up the actual position of this expression if position-map is available
                  (multiple-value-bind (actual-line actual-column)
@@ -147,7 +147,7 @@ Suppressions are handled automatically by the :around method."
                                           (is-progn-p else-clause))
                                       (base:should-create-violation-p rule))
                              (push (make-instance 'violation:violation
-                                                  :rule :bare-progn-in-if
+                                                  :rule :bare-progn
                                                   :file file
                                                   :line actual-line
                                                   :column actual-column
@@ -156,6 +156,38 @@ Suppressions are handled automatically by the :around method."
                                                   "Use 'cond' instead of 'if' with bare 'progn'"
                                                   :fix nil)
                                    violations)))))
+
+                     ;; Check if this is an AND form with progn as last argument
+                     (when (base:symbol-matches-p head "AND")
+                       (when (and (>= (length rest-args) 2)
+                                  (is-progn-p (car (last rest-args)))
+                                  (base:should-create-violation-p rule))
+                         (push (make-instance 'violation:violation
+                                              :rule :bare-progn
+                                              :file file
+                                              :line actual-line
+                                              :column actual-column
+                                              :severity (base:rule-severity rule)
+                                              :message
+                                              "Use 'when' instead of 'and' with bare 'progn'"
+                                              :fix nil)
+                               violations)))
+
+                     ;; Check if this is an OR form with progn as last argument
+                     (when (base:symbol-matches-p head "OR")
+                       (when (and (>= (length rest-args) 2)
+                                  (is-progn-p (car (last rest-args)))
+                                  (base:should-create-violation-p rule))
+                         (push (make-instance 'violation:violation
+                                              :rule :bare-progn
+                                              :file file
+                                              :line actual-line
+                                              :column actual-column
+                                              :severity (base:rule-severity rule)
+                                              :message
+                                              "Use 'unless' instead of 'or' with bare 'progn'"
+                                              :fix nil)
+                               violations)))
 
                      ;; Recursively check nested forms
                      (a:nconcf violations

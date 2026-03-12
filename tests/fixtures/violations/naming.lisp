@@ -23,3 +23,9 @@
 
 ;; Good: define-constant with plus signs
 (alexandria:define-constant +max-size+ 1000)
+
+;; Bad: sb-ext:defglobal without earmuffs
+(sb-ext:defglobal global-state nil)
+
+;; Good: sb-ext:defglobal with earmuffs
+(sb-ext:defglobal *global-state* nil)

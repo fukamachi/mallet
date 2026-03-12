@@ -400,7 +400,7 @@ Style preferences are disabled to keep output clean."
           '(;; Style preferences - disabled (too noisy, no consensus)
             :line-length
             :consecutive-blank-lines
-            :bare-progn-in-if
+            :bare-progn
             :interned-package-symbol
             :missing-otherwise
             :constant-naming
@@ -435,7 +435,7 @@ Useful for exploration and discovering what rules exist."
             :unused-loop-variables
             ;; Style
             :if-without-else
-            :bare-progn-in-if
+            :bare-progn
             :missing-otherwise
             :interned-package-symbol
             :special-variable-naming

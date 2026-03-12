@@ -14,7 +14,7 @@
 
 ;; Suppress multiple violations at once
 #+mallet
-(declaim (mallet:suppress-next :if-without-else :bare-progn-in-if))
+(declaim (mallet:suppress-next :if-without-else :bare-progn))
 (defun complex-conditional (x y)
   (if (and x y)
       (progn
@@ -25,7 +25,7 @@
 #+mallet
 (declaim (mallet:suppress-next :if-without-else))
 #+mallet
-(declaim (mallet:suppress-next :bare-progn-in-if))
+(declaim (mallet:suppress-next :bare-progn))
 (defun another-conditional (x)
   (if x
       (progn
