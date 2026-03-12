@@ -2,4 +2,5 @@ pre-commit:
   commands:
     mallet:
       glob: "{src,tests}/**/*.lisp"
+      exclude: "tests/fixtures/**"
       run: ./bin/mallet --strict {staged_files}

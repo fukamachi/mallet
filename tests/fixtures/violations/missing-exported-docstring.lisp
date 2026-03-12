@@ -4,8 +4,7 @@
   (:export #:exported-fn
            #:exported-macro
            #:exported-generic
-           #:exported-class
-           #:internal-fn))
+           #:exported-class))
 (in-package #:mallet-fixture/missing-exported-docstring)
 
 ;; Bad: exported defun without docstring
