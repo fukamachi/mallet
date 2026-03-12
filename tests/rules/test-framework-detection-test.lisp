@@ -133,6 +133,19 @@
     (let ((tokens (tokenize-code "(defpackage #:foo (:local-nicknames (#:r #:rove)))")))
       (ok (null (base:tokens-use-test-framework-p tokens))))))
 
+(deftest tokens-use-test-framework-p-import-from-symbol-names
+  (testing "(:import-from #:my-utils #:try) → NIL (try is an imported symbol, not the package)"
+    (let ((tokens (tokenize-code "(defpackage #:foo (:import-from #:my-utils #:try))")))
+      (ok (null (base:tokens-use-test-framework-p tokens)))))
+
+  (testing "(:import-from #:my-utils #:rove) → NIL (rove is an imported symbol, not the package)"
+    (let ((tokens (tokenize-code "(defpackage #:foo (:import-from #:my-utils #:rove))")))
+      (ok (null (base:tokens-use-test-framework-p tokens)))))
+
+  (testing "(:import-from #:rove #:deftest) still detects rove as framework"
+    (let ((tokens (tokenize-code "(defpackage #:foo (:import-from #:rove #:deftest))")))
+      (ok (base:tokens-use-test-framework-p tokens)))))
+
 (deftest tokens-use-test-framework-p-multiline
   (testing "Multiline defpackage with rove on separate line"
     (let ((tokens (tokenize-code

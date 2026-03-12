@@ -595,7 +595,7 @@ a known test framework. Scans until the form's closing paren (tracked via paren 
     (loop for i from 0 below n
           for tok = (aref toks i)
           when (defpackage-token-p tok)
-            do (let ((in-use-or-import nil)
+            do (let ((clause-state nil) ; NIL, :use, :import-from, or :skip
                      (depth 0)
                      (started nil))
                  (loop for j from (1+ i) below n
@@ -612,26 +612,32 @@ a known test framework. Scans until the form's closing paren (tracked via paren 
                              ;; the defpackage form has ended.
                              (when (and started (minusp depth))
                                (return)))
-                            ;; :use or :import-from keyword starts a relevant clause
+                            ;; :use keyword starts a :use clause (check all symbols)
                             ((and (eq ttype :symbol)
-                                  (or (string-equal (parser:token-raw t2) ":use")
-                                      (string-equal (parser:token-raw t2) ":import-from")))
-                             (setf in-use-or-import t))
+                                  (string-equal (parser:token-raw t2) ":use"))
+                             (setf clause-state :use))
+                            ;; :import-from keyword starts an :import-from clause
+                            ;; (check only first symbol = the package name)
+                            ((and (eq ttype :symbol)
+                                  (string-equal (parser:token-raw t2) ":import-from"))
+                             (setf clause-state :import-from))
                             ;; Another keyword (like :export, :local-nicknames) resets
                             ((and (eq ttype :symbol)
-                                  (utils:keyword-string-p (parser:token-raw t2))
-                                  (not (string-equal (parser:token-raw t2) ":use"))
-                                  (not (string-equal (parser:token-raw t2) ":import-from")))
-                             (setf in-use-or-import nil))
+                                  (utils:keyword-string-p (parser:token-raw t2)))
+                             (setf clause-state nil))
                             ;; Check package name tokens when inside :use or :import-from
-                            ((and in-use-or-import
+                            ((and (member clause-state '(:use :import-from))
                                   (eq ttype :symbol)
                                   (not (utils:keyword-string-p (parser:token-raw t2))))
                              (let ((name (normalize-framework-name (parser:token-raw t2))))
                                (when (framework-name-p name *known-test-frameworks* nil)
-                                 (return-from tokens-use-test-framework-p t))))))
+                                 (return-from tokens-use-test-framework-p t)))
+                             ;; For :import-from, only the first symbol is the package name.
+                             ;; After checking it, skip remaining symbols in this clause.
+                             (when (eq clause-state :import-from)
+                               (setf clause-state :skip)))))
                  ;; Reset for next DEFPACKAGE if any
-                 (setf in-use-or-import nil))))
+                 (setf clause-state nil))))
   nil)
 
 ;;; Auto-Fix Helpers
