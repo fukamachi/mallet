@@ -627,7 +627,14 @@ Preserves comments, formatting, and structural close parens."
 ;;; No Package Use Rule
 
 (defclass no-package-use-rule (base:rule)
-  ()
+  ((allow
+    :initarg :allow
+    :initform '()
+    :reader no-package-use-rule-allow
+    :type list
+    :documentation "Additional package names exempt from this rule.
+Accepts string designators: strings, symbols, keywords, or uninterned symbols.
+All values are normalized to uppercase strings at initialization."))
   (:default-initargs
    :name :no-package-use
    :description "Using :use in defpackage imports all exported symbols, making it hard to tell which symbols are actually used and risking symbol conflicts when the used package exports new symbols."
@@ -635,9 +642,22 @@ Preserves comments, formatting, and structural close parens."
    :category :practice
    :type :form))
 
-(defparameter *exempt-packages*
+(defmethod initialize-instance :after ((rule no-package-use-rule) &key)
+  (setf (slot-value rule 'allow)
+        (mapcar (lambda (x) (string-upcase (string x)))
+                (slot-value rule 'allow))))
+
+(defparameter *always-exempt-packages*
   '("CL" "COMMON-LISP" "COALTON" "COALTON-PRELUDE")
-  "Package names that are exempt from the no-package-use rule.")
+  "Package names that are always exempt from the no-package-use rule.")
+
+(defun package-exempt-p (pkg-name rule)
+  "Return T if PKG-NAME (already normalized/uppercased) is exempt from the no-package-use rule.
+A package is exempt if it is in *always-exempt-packages*, *known-test-frameworks*, or the
+rule's :allow list."
+  (or (member pkg-name *always-exempt-packages* :test #'string=)
+      (member pkg-name base:*known-test-frameworks* :test #'string=)
+      (member pkg-name (no-package-use-rule-allow rule) :test #'string=)))
 
 (defmethod base:check-form ((rule no-package-use-rule) form file)
   "Detect :use of non-exempt packages in defpackage forms.
@@ -653,7 +673,7 @@ Emits one violation per :use clause listing all non-exempt packages found."
             (let ((non-exempt
                     (loop for pkg in (rest clause)
                           for pkg-name = (string-upcase (base:symbol-name-from-string pkg))
-                          unless (member pkg-name *exempt-packages* :test #'string=)
+                          unless (package-exempt-p pkg-name rule)
                             collect pkg)))
               (when non-exempt
                 ;; Position at the first non-exempt package in the clause.

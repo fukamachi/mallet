@@ -2,6 +2,7 @@
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
+   (#:parser #:mallet/parser)
    (#:utils #:mallet/utils)
    (#:violation #:mallet/violation)
    (#:suppression #:mallet/suppression))
@@ -31,6 +32,10 @@
            #:should-create-violation-p
            #:find-actual-position
            #:collect-violations-from-subexprs
+           ;; Test framework detection
+           #:*known-test-frameworks*
+           #:defpackage-uses-test-framework-p
+           #:tokens-use-test-framework-p
            ;; Auto-fix helpers
            #:find-clause-boundaries
            #:find-clause-line-range
@@ -531,6 +536,87 @@ Example usage:
                (return-from ,block-name nil)))
 
            ,@body)))))
+
+;;; Test Framework Detection
+
+(defparameter *known-test-frameworks*
+  '("ROVE" "FIVEAM" "5AM" "FIASCO" "PARACHUTE" "COALTON-TESTING" "LISP-UNIT2" "CLUNIT" "TRY")
+  "List of known Common Lisp test framework package names (uppercase, without package prefix).")
+
+(defun normalize-framework-name (pkg)
+  "Extract and uppercase the package name from PKG, stripping any package prefix.
+Handles strings like \"#:ROVE\", \":CL\", \"CURRENT:CL\", \"rove\"."
+  (let* ((str (string-upcase (if (stringp pkg) pkg (string pkg))))
+         (colon-pos (position #\: str :from-end t)))
+    (if colon-pos
+        (subseq str (1+ colon-pos))
+        str)))
+
+(defun framework-name-p (name known extra)
+  "Return T if NAME (already normalized/uppercased) is in KNOWN or EXTRA framework lists."
+  (or (member name known :test #'string=)
+      (and extra
+           (member name extra :test #'string-equal))))
+
+(defun defpackage-uses-test-framework-p (clauses &optional extra-frameworks)
+  "Return T if CLAUSES contains a :USE or :IMPORT-FROM clause referencing a known test framework.
+CLAUSES is the list of clauses from a parsed defpackage expression (i.e., cddr of the defpackage).
+EXTRA-FRAMEWORKS is an optional list of additional framework names (strings, case-insensitive)."
+  (dolist (clause clauses)
+    (when (and (consp clause)
+               (stringp (first clause))
+               (or (string-equal (first clause) ":use")
+                   (string-equal (first clause) ":import-from")))
+      (let ((packages (if (string-equal (first clause) ":import-from")
+                          ;; :import-from has the package name as first arg, rest are symbols
+                          (list (second clause))
+                          ;; :use has all args as package names
+                          (rest clause))))
+        (dolist (pkg packages)
+          (when (stringp pkg)
+            (let ((name (normalize-framework-name pkg)))
+              (when (framework-name-p name *known-test-frameworks* extra-frameworks)
+                (return-from defpackage-uses-test-framework-p t))))))))
+  nil)
+
+(defun tokens-use-test-framework-p (tokens)
+  "Return T if TOKENS contain a DEFPACKAGE form that :USE or :IMPORT-FROM a known test framework.
+Scans token stream looking for DEFPACKAGE, then inspects up to 200 following tokens for
+:USE or :IMPORT-FROM keywords followed by framework package names."
+  (let ((toks (coerce tokens 'vector))
+        (n (length tokens)))
+    ;; Find DEFPACKAGE token
+    (loop for i from 0 below n
+          for tok = (aref toks i)
+          when (and (eq (parser:token-type tok) :symbol)
+                    (string-equal (symbol-name-from-string (parser:token-raw tok))
+                                  "DEFPACKAGE"))
+            do (let ((end (min n (+ i 201)))
+                     (in-use-or-import nil))
+                 (loop for j from (1+ i) below end
+                       for t2 = (aref toks j)
+                       do (cond
+                            ;; :use or :import-from keyword starts a relevant clause
+                            ((and (eq (parser:token-type t2) :symbol)
+                                  (or (string-equal (parser:token-raw t2) ":use")
+                                      (string-equal (parser:token-raw t2) ":import-from")))
+                             (setf in-use-or-import t))
+                            ;; Another keyword (like :export, :local-nicknames) resets
+                            ((and (eq (parser:token-type t2) :symbol)
+                                  (utils:keyword-string-p (parser:token-raw t2))
+                                  (not (string-equal (parser:token-raw t2) ":use"))
+                                  (not (string-equal (parser:token-raw t2) ":import-from")))
+                             (setf in-use-or-import nil))
+                            ;; Check package name tokens when inside :use or :import-from
+                            ((and in-use-or-import
+                                  (eq (parser:token-type t2) :symbol)
+                                  (not (utils:keyword-string-p (parser:token-raw t2))))
+                             (let ((name (normalize-framework-name (parser:token-raw t2))))
+                               (when (framework-name-p name *known-test-frameworks* nil)
+                                 (return-from tokens-use-test-framework-p t))))))
+                 ;; Reset for next DEFPACKAGE if any
+                 (setf in-use-or-import nil))))
+  nil)
 
 ;;; Auto-Fix Helpers
 

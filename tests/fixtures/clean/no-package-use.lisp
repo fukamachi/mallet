@@ -16,3 +16,10 @@
 ;; OK: :use of multiple exempt packages together
 (defpackage #:my-mixed-exempt-package
   (:use #:cl #:coalton-prelude))
+
+;; OK: :use of test frameworks (exempt by default)
+(defpackage #:my-test-package
+  (:use #:cl #:rove))
+
+(defpackage #:my-fiveam-package
+  (:use #:cl #:fiveam))

@@ -130,6 +130,7 @@
      (:file "ignore-errors-usage-test")
      (:file "no-package-use-test")
      (:file "double-colon-access-test")
+     (:file "test-framework-detection-test")
      (:file "error-with-string-only-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test"))))

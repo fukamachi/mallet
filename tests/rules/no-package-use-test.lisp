@@ -11,8 +11,8 @@
 ;;; Helper
 
 (defun check-no-package-use (code)
-  (let* ((forms (parser:parse-forms code #p"test.lisp"))
-         (rule (make-instance 'rules:no-package-use-rule)))
+  (let ((forms (parser:parse-forms code #p"test.lisp"))
+        (rule (make-instance 'rules:no-package-use-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
@@ -50,6 +50,85 @@
   (testing "define-package with only :cl is exempt"
     (ok (null (check-no-package-use
                "(uiop:define-package #:foo (:use #:cl))")))))
+
+;;; Test framework exemption
+
+(deftest no-package-use-test-framework-exempt
+  (testing ":use of rove is exempt (known test framework)"
+    (ok (null (check-no-package-use
+               "(defpackage #:foo (:use #:cl #:rove))"))))
+
+  (testing ":use of fiveam is exempt"
+    (ok (null (check-no-package-use
+               "(defpackage #:foo (:use #:fiveam))"))))
+
+  (testing ":use of parachute is exempt"
+    (ok (null (check-no-package-use
+               "(defpackage #:foo (:use #:parachute))"))))
+
+  (testing "non-framework :use alongside rove still emits violation for the non-framework"
+    (let ((violations (check-no-package-use
+                       "(defpackage #:foo (:use #:cl #:rove #:some-random-pkg))")))
+      (ok (= (length violations) 1))
+      (ok (search "SOME-RANDOM-PKG" (string-upcase (violation:violation-message (first violations)))))
+      ;; rove should NOT appear in the violation message
+      (ok (not (search "ROVE" (string-upcase (violation:violation-message (first violations))))))))
+
+  (testing "lack/test is NOT exempt (not a known test framework)"
+    (let ((violations (check-no-package-use
+                       "(defpackage #:foo (:use #:lack/test))")))
+      (ok (= (length violations) 1)))))
+
+;;; :allow option
+
+(defun check-no-package-use-with-allow (code &rest allow)
+  (let ((forms (parser:parse-forms code #p"test.lisp"))
+        (rule (make-instance 'rules:no-package-use-rule :allow allow)))
+    (mapcan (lambda (form)
+              (rules:check-form rule form #p"test.lisp"))
+            forms)))
+
+(deftest no-package-use-allow-option
+  (testing ":allow (\"cffi\") exempts cffi"
+    (ok (null (check-no-package-use-with-allow
+               "(defpackage #:foo (:use #:cffi))" "cffi"))))
+
+  (testing ":allow is case-insensitive"
+    (ok (null (check-no-package-use-with-allow
+               "(defpackage #:foo (:use #:CFFI))" "cffi")))
+    (ok (null (check-no-package-use-with-allow
+               "(defpackage #:foo (:use #:cffi))" "CFFI"))))
+
+  (testing ":allow only exempts the listed package, not others"
+    (let ((violations (check-no-package-use-with-allow
+                       "(defpackage #:foo (:use #:cffi #:other-pkg))" "cffi")))
+      (ok (= (length violations) 1))
+      (ok (search "OTHER-PKG" (string-upcase (violation:violation-message (first violations)))))))
+
+  (testing ":allow with no extra packages still applies test-framework exemption"
+    (ok (null (check-no-package-use-with-allow
+               "(defpackage #:foo (:use #:rove))"))))
+
+  (testing ":allow accepts keyword symbols"
+    (ok (null (let ((forms (parser:parse-forms "(defpackage #:foo (:use #:cffi))" #p"test.lisp"))
+                    (rule (make-instance 'rules:no-package-use-rule :allow '(:cffi))))
+               (mapcan (lambda (form)
+                         (rules:check-form rule form #p"test.lisp"))
+                       forms)))))
+
+  (testing ":allow accepts uninterned symbols"
+    (ok (null (let ((forms (parser:parse-forms "(defpackage #:foo (:use #:cffi))" #p"test.lisp"))
+                    (rule (make-instance 'rules:no-package-use-rule :allow '(#:cffi))))
+               (mapcan (lambda (form)
+                         (rules:check-form rule form #p"test.lisp"))
+                       forms)))))
+
+  (testing ":allow accepts plain symbols"
+    (ok (null (let ((forms (parser:parse-forms "(defpackage #:foo (:use #:cffi))" #p"test.lisp"))
+                    (rule (make-instance 'rules:no-package-use-rule :allow '(cffi))))
+               (mapcan (lambda (form)
+                         (rules:check-form rule form #p"test.lisp"))
+                       forms))))))
 
 ;;; Registration
 
