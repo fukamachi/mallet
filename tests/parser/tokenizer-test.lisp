@@ -62,3 +62,35 @@
     (let* ((text ";;; Section\n(defun foo ())")
            (tokens (parser:tokenize text #P"test.lisp")))
       (ok (find :comment-section tokens :key #'parser:token-type)))))
+
+(deftest tokenize-single-escape
+  (testing "Character literal #\\\" is a single token"
+    (let* ((text "(char= ch #\\\")")
+           (tokens (parser:tokenize text #P"test.lisp"))
+           (types (mapcar #'parser:token-type tokens)))
+      (ok (equal types '(:open-paren :symbol :symbol :symbol :close-paren)))
+      (ok (string= "#\\\"" (parser:token-raw (fourth tokens))))))
+
+  (testing "Character literal #\\( is a single token"
+    (let* ((text "(char= ch #\\()")
+           (tokens (parser:tokenize text #P"test.lisp"))
+           (types (mapcar #'parser:token-type tokens)))
+      (ok (equal types '(:open-paren :symbol :symbol :symbol :close-paren)))
+      (ok (string= "#\\(" (parser:token-raw (fourth tokens)))))))
+
+(deftest tokenize-escaped-quotes-in-strings
+  (testing "Escaped quote within string"
+    (let* ((text "(format nil \"hello \\\"world\\\"\")")
+           (tokens (parser:tokenize text #P"test.lisp"))
+           (string-tokens (remove-if-not (lambda (tok)
+                                           (eq (parser:token-type tok) :string))
+                                         tokens)))
+      (ok (= 1 (length string-tokens)))))
+
+  (testing "Escaped backslash before closing quote"
+    (let* ((text "(print \"ends with backslash\\\\\")")
+           (tokens (parser:tokenize text #P"test.lisp"))
+           (string-tokens (remove-if-not (lambda (tok)
+                                           (eq (parser:token-type tok) :string))
+                                         tokens)))
+      (ok (= 1 (length string-tokens))))))
