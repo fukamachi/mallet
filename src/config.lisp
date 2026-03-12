@@ -89,8 +89,8 @@ PATH-RULES, IGNORE patterns, and SET-SEVERITY-OVERRIDES (alist of (category . se
 (defun create-rule-from-spec (rule-spec)
   "Create a rule instance from a rule specification.
 RULE-SPEC is a cons of (rule-name . options-plist)."
-  (let* ((rule-name (car rule-spec))
-         (options (cdr rule-spec)))
+  (let ((rule-name (car rule-spec))
+        (options (cdr rule-spec)))
     (apply #'rules:make-rule rule-name options)))
 
 (defun parse-override-rules (override-forms base-rules base-disabled)
@@ -112,8 +112,8 @@ Returns (values rules disabled-rules explicit-severity-names) where:
           (let ((key (first form)))
             (case key
               (:enable
-               (let* ((rule-name (second form))
-                      (options (cddr form)))
+               (let ((rule-name (second form))
+                     (options (cddr form)))
                  (push (cons rule-name options) override-specs)))
               (:disable
                (let ((rule-name (second form)))
@@ -146,7 +146,7 @@ Returns (values rules disabled-rules explicit-severity-names) where:
 
         (values (nreverse result-rules) result-disabled explicit-severity-names)))))
 
-(defun parse-config (sexp &key preset-override)
+(defun parse-config (sexp &key preset-override) ; mallet:suppress cyclomatic-complexity
   "Parse S-expression SEXP into a config object.
 Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...), and (:for-paths ...).
 If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file."
@@ -197,8 +197,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                                         (load-config extends-value)))))
                    (:enable
                     ;; New syntax: (:enable :rule-name :option value ...)
-                    (let* ((rule-name (second item))
-                           (options (cddr item)))
+                    (let ((rule-name (second item))
+                          (options (cddr item)))
                       (push (cons rule-name options) rule-specs)
                       ;; Track rules with explicit :severity — they take precedence
                       ;; over :set-severity category overrides.
@@ -216,8 +216,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                     (setf ignore-patterns (rest item)))
                    (:for-paths
                     ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
-                    (let* ((patterns (second item))
-                           (override-forms (cddr item)))
+                    (let ((patterns (second item))
+                          (override-forms (cddr item)))
                       ;; Build base for :for-paths by merging extends + project-wide settings
                       ;; This ensures :for-paths inherits project-wide :enable/:disable
                       (let* ((extends-rules (if extends (config-rules extends) '()))
@@ -324,7 +324,7 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
   (let* ((root-dir (or (config-root-dir config) #P"/"))
          (file-namestring (namestring file-path))
          ;; Convert file path to project-relative format (like in file-ignored-p)
-         (match-path (let* ((root-namestring (namestring root-dir)))
+         (match-path (let ((root-namestring (namestring root-dir)))
                        (cond
                          ((equal root-namestring "/")
                           file-namestring)
@@ -394,6 +394,7 @@ Style preferences are disabled to keep output clean."
             :needless-let*
             :double-colon-access
             :stale-suppression
+            :redundant-progn
             ;; Documentation rules
             :missing-exported-docstring))
         (disabled-rules
@@ -436,6 +437,7 @@ Useful for exploration and discovering what rules exist."
             ;; Style
             :if-without-else
             :bare-progn
+            :redundant-progn
             :missing-otherwise
             :interned-package-symbol
             :special-variable-naming
@@ -486,8 +488,8 @@ Returns T if the file matches any ignore pattern, NIL otherwise."
          (ignore-patterns (config-ignore config))
          ;; If we have a root-dir, make file-path relative to it for matching
          ;; This allows patterns like **/file.lisp to match file.lisp at any level
-         (match-path (let* ((file-namestring (namestring file-path))
-                            (root-namestring (namestring root-dir)))
+         (match-path (let ((file-namestring (namestring file-path))
+                           (root-namestring (namestring root-dir)))
                        ;; If file is under root-dir, make it relative
                        (cond
                          ((equal root-namestring "/")

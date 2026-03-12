@@ -7,6 +7,7 @@
    (#:violation #:mallet/violation))
   (:export #:if-without-else-rule
            #:bare-progn-rule
+           #:redundant-progn-rule
            #:missing-otherwise-rule
            #:wrong-otherwise-rule))
 (in-package #:mallet/rules/forms/control-flow)
@@ -186,6 +187,76 @@ Suppressions are handled automatically by the :around method."
                                               :severity (base:rule-severity rule)
                                               :message
                                               "Use 'unless' instead of 'or' with bare 'progn'"
+                                              :fix nil)
+                               violations)))
+
+                     ;; Recursively check nested forms
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule head file
+                                                                      actual-line actual-column
+                                                                      position-map))
+                     (a:nconcf violations
+                               (base:collect-violations-from-subexprs rule rest-args file
+                                                                      actual-line actual-column
+                                                                      position-map)))))))
+
+      ;; Start checking from the provided expression
+      (check-expr expr line column))
+
+    violations))
+
+;;; Redundant-progn rule
+
+(defclass redundant-progn-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :redundant-progn
+   :description "PROGN with a single body form is redundant"
+   :severity :info
+   :category :style
+   :type :form)
+  (:documentation "Rule to detect PROGN forms with exactly one body form."))
+
+(defmethod base:check-form ((rule redundant-progn-rule) form file)
+  "Check that PROGN forms have more than one body form."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  (base:check-form-recursive rule
+                             (parser:form-expr form)
+                             file
+                             (parser:form-line form)
+                             (parser:form-column form)
+                             nil  ; function-name
+                             (parser:form-position-map form)))
+
+(defmethod base:check-form-recursive ((rule redundant-progn-rule) expr file line column &optional function-name position-map)
+  "Recursively check for PROGN forms with exactly one body form.
+Suppressions are handled automatically by the :around method."
+  (declare (ignore function-name))
+
+  (let ((violations '())
+        (visited (make-hash-table :test 'eq)))
+
+    (labels ((check-expr (current-expr fallback-line fallback-column)
+               "Recursively check expression for redundant progn."
+               (base:with-safe-code-expr (current-expr visited)
+                 (multiple-value-bind (actual-line actual-column)
+                     (base:find-actual-position current-expr position-map fallback-line fallback-column)
+                   (let ((head (first current-expr))
+                         (rest-args (rest current-expr)))
+                     ;; Check if this is a PROGN form with exactly one body form
+                     (when (base:symbol-matches-p head "PROGN")
+                       (when (and (= (length rest-args) 1)
+                                  (base:should-create-violation-p rule))
+                         (push (make-instance 'violation:violation
+                                              :rule :redundant-progn
+                                              :file file
+                                              :line actual-line
+                                              :column actual-column
+                                              :severity (base:rule-severity rule)
+                                              :message
+                                              "PROGN with a single body form is redundant"
                                               :fix nil)
                                violations)))
 
