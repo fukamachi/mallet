@@ -410,6 +410,9 @@ If ignored-p is T, the file was ignored and violations will be NIL."
           ;;      These are still sitting in pending-directives.
 
           ;; Case (a): records already registered but never filtered
+          ;; The car is nil (no registered ID) because these entries were never
+          ;; matched against a real form.  generate-stale-suppression-violations
+          ;; only reads (cdr entry), so nil does not overlap with any live ID.
           (dolist (record pending-suppress-records)
             (destructuring-bind (id d-line d-rules d-reason) record
               (declare (ignore id))
@@ -417,6 +420,8 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                     stale-suppress-entries)))
 
           ;; Case (b): :suppress directives that were never consumed (after last form)
+          ;; Same nil-car convention: no ID exists for directives that were never
+          ;; consumed; generate-stale-suppression-violations ignores the car.
           (dolist (directive pending-directives)
             (destructuring-bind (d-line d-type d-rules d-reason) directive
               (when (eq d-type :suppress)

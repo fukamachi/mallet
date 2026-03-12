@@ -116,7 +116,7 @@
         (ok (null stale-violations)
             "No stale-suppression violation when trailing suppress was used")))))
 
-;;; Test 3: Active suppression — comment suppresses real violation, no output
+;;; Test 4: Active suppression — comment suppresses real violation, no output
 
 (deftest comment-suppress-active-no-output
   (testing "; mallet:suppress :needless-let* suppresses the annotated form"
@@ -139,7 +139,7 @@
         (ok (null stale-violations)
             "No stale-suppression violation when suppress was used")))))
 
-;;; Test 3: disable/enable region for form-level rule
+;;; Test 5: disable/enable region for form-level rule
 
 (deftest comment-disable-enable-region
   (testing "; mallet:disable suppresses until :enable, leaving others intact"
