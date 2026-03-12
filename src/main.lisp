@@ -338,7 +338,7 @@ Examples:
   "Expand FILE-ARGS into a list of Lisp file pathnames.
 Handles wildcards and directories, excluding common non-source directories."
   (let ((files '())
-        (excluded-dirs '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build")))
+        (excluded-dirs '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".claude")))
     (labels ((should-exclude-p (path)
                "Check if PATH is in an excluded directory."
                (let ((path-string (namestring path)))
