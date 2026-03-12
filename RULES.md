@@ -461,15 +461,19 @@ Use `let` instead of `let*` when bindings don't depend on each other (including 
 
 ### `:special-variable-naming`
 
-Special variables should be named `*foo*`.
+Special variables should be named `*foo*`. Applies to `defvar`, `defparameter`, and `sb-ext:defglobal`.
 
 ```lisp
 ;; Bad
 (defvar config nil)
+(sb-ext:defglobal global-state nil)
 
 ;; Good
 (defvar *config* nil)
+(sb-ext:defglobal *global-state* nil)
 ```
+
+**Note**: Variables named with `+plus+` convention are also accepted (since `defglobal` is sometimes used for constants).
 
 **Severity**: info | **Default**: disabled
 

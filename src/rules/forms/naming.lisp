@@ -41,7 +41,8 @@
                  (when (stringp (first current-expr))
                    (let ((operator (first current-expr)))
                      (when (or (base:symbol-matches-p operator "DEFVAR")
-                               (base:symbol-matches-p operator "DEFPARAMETER"))
+                               (base:symbol-matches-p operator "DEFPARAMETER")
+                               (base:symbol-matches-p operator "DEFGLOBAL"))
                        ;; Found a defvar/defparameter - check naming
                        (when (>= (length current-expr) 2)
                          (let* ((var-name-expr (second current-expr))

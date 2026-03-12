@@ -75,6 +75,37 @@
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1)))))))
 
+;;; Special variable naming — defglobal tests
+
+(deftest special-variable-naming-defglobal-valid
+  (testing "sb-ext:defglobal with earmuffs is valid"
+    (let ((rule (make-instance 'rules:special-variable-naming-rule))
+          (file (uiop:parse-native-namestring "test.lisp")))
+
+      (testing "*name* pattern is valid"
+        (let* ((text "(sb-ext:defglobal *foo* 42)")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations))))
+
+      (testing "+name+ pattern is valid (plus-signs allowed)"
+        (let* ((text "(sb-ext:defglobal +foo+ 42)")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations)))))))
+
+(deftest special-variable-naming-defglobal-invalid
+  (testing "sb-ext:defglobal without earmuffs violates"
+    (let ((rule (make-instance 'rules:special-variable-naming-rule))
+          (file (uiop:parse-native-namestring "test.lisp")))
+
+      (testing "bare name violates"
+        (let* ((text "(sb-ext:defglobal foo 42)")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations)) :special-variable-naming)))))))
+
 ;;; Constant naming tests
 
 (deftest constant-naming-valid
