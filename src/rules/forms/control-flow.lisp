@@ -246,8 +246,15 @@ Suppressions are handled automatically by the :around method."
                    (let ((head (first current-expr))
                          (rest-args (rest current-expr)))
                      ;; Check if this is a PROGN form with exactly one body form
+                     ;; Skip when the single element is ,@splice (UNQUOTE-SPLICING) —
+                     ;; at expansion time it may produce multiple forms.
                      (when (base:symbol-matches-p head "PROGN")
                        (when (and (= (length rest-args) 1)
+                                  (let ((single (first rest-args)))
+                                    (not (and (consp single)
+                                              (symbolp (first single))
+                                              (string= (symbol-name (first single))
+                                                       "UNQUOTE-SPLICING"))))
                                   (base:should-create-violation-p rule))
                          (push (make-instance 'violation:violation
                                               :rule :redundant-progn

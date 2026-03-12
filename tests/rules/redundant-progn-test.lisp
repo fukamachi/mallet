@@ -51,6 +51,14 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:redundant-progn-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: progn with ,@body splice in macro is not flagged"
+    (let* ((code "(defmacro my-when (test &body body)
+  `(when ,test (progn ,@body)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)))))
 
 ;;; Invalid cases — violations expected
