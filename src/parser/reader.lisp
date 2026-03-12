@@ -67,15 +67,31 @@ Returns a list to ensure it can be safely processed by recursive form-checking c
   '(:read-time-eval-placeholder))
 
 (defmethod eclector.reader:call-reader-macro :around ((client string-parse-result-client) input-stream char readtable)
-  "Wrap reader macro calls to handle unknown reader macros gracefully."
+  "Wrap reader macro calls to handle unknown reader macros gracefully.
+
+For #? (cl-interpol), reads the following string and extracts interpolation
+references, returning a synthetic (PROGN ref1 ref2 ...) form so downstream
+rules can see variable references. For plain strings with no interpolation,
+returns :unknown-reader-macro. All other unknown dispatch characters also
+return :unknown-reader-macro after consuming the following form."
   (handler-case
       (call-next-method)
-    (eclector.readtable:unknown-macro-sub-character ()
-      (handler-case
-          (cl:read input-stream)
-        (error ()
-          nil))
-      ':unknown-reader-macro)))
+    (eclector.readtable:unknown-macro-sub-character (condition)
+      (cond
+        ;; cl-interpol #?"..." — extract interpolated references
+        ((char= (slot-value condition '%sub-char) #\?)
+         (let ((str (handler-case (cl:read input-stream)
+                      (error () nil))))
+           (if (stringp str)
+               (let ((forms (extract-interpolation-forms str)))
+                 (if forms
+                     (list* "PROGN" forms)
+                     ':unknown-reader-macro))
+               ':unknown-reader-macro)))
+        ;; Other unknown dispatch macros — consume and return placeholder
+        (t
+         (handler-case (cl:read input-stream) (error () nil))
+         ':unknown-reader-macro)))))
 
 (defmethod eclector.reader:find-character ((client string-parse-result-client) (designator string))
   "Find character by name, supporting SBCL character name extensions.
