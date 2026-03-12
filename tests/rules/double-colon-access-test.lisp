@@ -4,7 +4,8 @@
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
-   (#:violation #:mallet/violation)))
+   (#:violation #:mallet/violation)
+   (#:pkg-exports #:mallet/rules/forms/package-exports)))
 (in-package #:mallet/tests/rules/double-colon-access)
 
 (defun check-double-colon (code)
@@ -218,3 +219,68 @@
            (violations (rules:check-tokens rule tokens #p"test.lisp")))
       (ok (= 1 (length violations))
           "Violations should be reported when include-tests is t"))))
+
+;;; Helpers for cross-file tests
+
+(defun make-temp-dir ()
+  "Create a temporary directory for test files."
+  (let ((path (uiop:ensure-directory-pathname
+               (pathname (format nil "/tmp/mallet-dca-test-~A/" (random 1000000))))))
+    (ensure-directories-exist path)
+    path))
+
+(defun write-temp-file (dir name content)
+  "Write CONTENT to a file NAME under DIR, returning the pathname."
+  (let ((path (merge-pathnames name dir)))
+    (with-open-file (out path :direction :output :if-exists :supersede)
+      (write-string content out))
+    path))
+
+(defun cleanup-temp-dir (dir)
+  "Remove temporary directory and its contents."
+  (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))
+
+;;; Cross-file test-package detection
+
+(deftest cross-file-test-package-detection
+  (testing "Package defined in another file with rove suppresses violations"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (ensure-directories-exist (merge-pathnames ".git/" dir))
+             (write-temp-file dir "package.lisp"
+                              "(defpackage #:my-tests (:use #:cl #:rove))")
+             (let* ((tests-path
+                      (write-temp-file dir "tests.lisp"
+                                       "(in-package #:my-tests)
+(defun foo () pkg::internal-fn)"))
+                    (rule (make-instance 'rules:double-colon-access-rule))
+                    (tokens (parser:tokenize
+                             (uiop:read-file-string tests-path)
+                             tests-path)))
+               (pkg-exports:clear-package-export-cache)
+               (ok (null (rules:check-tokens rule tokens tests-path))
+                   "Cross-file test package should suppress violations")))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir))))
+
+  (testing "Non-test package defined in another file still reports violations"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (ensure-directories-exist (merge-pathnames ".git/" dir))
+             (write-temp-file dir "package.lisp"
+                              "(defpackage #:my-lib (:use #:cl))")
+             (let* ((src-path
+                      (write-temp-file dir "src.lisp"
+                                       "(in-package #:my-lib)
+(defun foo () pkg::internal-fn)"))
+                    (rule (make-instance 'rules:double-colon-access-rule))
+                    (tokens (parser:tokenize
+                             (uiop:read-file-string src-path)
+                             src-path)))
+               (pkg-exports:clear-package-export-cache)
+               (ok (= 1 (length (rules:check-tokens rule tokens src-path)))
+                   "Non-test package should still report violations")))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir)))))
