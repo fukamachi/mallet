@@ -11,6 +11,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 - [Correctness](#correctness) — Objectively wrong code
   - [`:wrong-otherwise`](#wrong-otherwise) - `ecase`/`etypecase` with `otherwise`/`t` clause
   - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
+  - [`:asdf-if-feature-keyword`](#asdf-if-feature-keyword) - Feature expressions must use keywords in defsystem
 - [Suspicious](#suspicious) — Likely wrong or dangerous patterns
   - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
   - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
@@ -22,6 +23,8 @@ Rules are organized by category. Each rule shows its severity and default preset
   - [`:double-colon-access`](#double-colon-access) - Accessing internal symbols via `::`
   - [`:error-with-string-only`](#error-with-string-only) - Calling `error` with only a format string
   - [`:missing-exported-docstring`](#missing-exported-docstring) - Exported definitions missing docstrings
+  - [`:asdf-operate-in-perform`](#asdf-operate-in-perform) - Calling `asdf:operate` and friends inside `:perform`
+  - [`:asdf-reader-conditional`](#asdf-reader-conditional) - Using `#+`/`#-` reader conditionals in defsystem
 - [Cleanliness](#cleanliness) — Dead code and unused definitions
   - [`:unused-variables`](#unused-variables) - Variables that are never used
   - [`:unused-local-functions`](#unused-local-functions) - Local functions that are never called
@@ -37,6 +40,8 @@ Rules are organized by category. Each rule shows its severity and default preset
   - [`:special-variable-naming`](#special-variable-naming) - Special variables should be named `*foo*`
   - [`:constant-naming`](#constant-naming) - Constants should be named `+foo+`
   - [`:asdf-component-strings`](#asdf-component-strings) - ASDF components should use strings
+  - [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) - Redundant package prefixes in `.asd` files
+  - [`:asdf-secondary-system-name`](#asdf-secondary-system-name) - Secondary system names must follow `primary/suffix` convention
   - [`:bare-float-literal`](#bare-float-literal) - Float literals should have explicit type markers
   - [`:missing-docstring`](#missing-docstring) - Top-level definitions missing docstrings
 - [Format](#format) — Whitespace and file formatting
@@ -91,6 +96,26 @@ Don't mix `&optional` and `&key` in lambda lists.
 ```
 
 **Severity**: error | **Default**: enabled
+
+### `:asdf-if-feature-keyword`
+
+Feature expressions in `:if-feature` and `(:feature ...)` dependency forms must use keywords. Plain symbols are evaluated as variables at read time and will likely cause errors. Applies only to `.asd` files. Handles compound feature expressions like `(:and ...)`, `(:or ...)`, and `(:not ...)`.
+
+```lisp
+;; Bad: plain symbols instead of keywords
+(defsystem "my-system"
+  :depends-on ((:feature unix "cl-cffi-gtk"))
+  :components ((:file "main" :if-feature sbcl)
+               (:file "other" :if-feature (:and unix linux))))
+
+;; Good: keywords
+(defsystem "my-system"
+  :depends-on ((:feature :unix "cl-cffi-gtk"))
+  :components ((:file "main" :if-feature :sbcl)
+               (:file "other" :if-feature (:and :unix :linux))))
+```
+
+**Severity**: warning | **Default**: enabled
 
 ## Suspicious
 
@@ -271,6 +296,53 @@ Exported definitions should have docstrings. Exported symbols form the public AP
 ```
 
 **Severity**: warning | **Default**: enabled
+
+### `:asdf-operate-in-perform`
+
+Do not call `asdf:operate` or related functions inside `:perform` method bodies. These calls can cause infinite loops or unexpected build behavior. Use `symbol-call` instead. Applies only to `.asd` files.
+
+Detected functions: `operate`, `oos`, `load-system`, `test-system`, `clear-system`, `require-system`, `make`, `compile-system` (when qualified with `asdf:` or an ASDF sub-package prefix).
+
+```lisp
+;; Bad: direct asdf calls in :perform
+(defsystem "my-system"
+  :perform (test-op (o c)
+    (asdf:load-system "my-system/tests")
+    (asdf:test-system "my-system/tests")))
+
+;; Good: use symbol-call
+(defsystem "my-system"
+  :perform (test-op (o c)
+    (symbol-call :asdf :load-system "my-system/tests")
+    (symbol-call :asdf :test-system "my-system/tests")))
+```
+
+**Severity**: warning | **Default**: enabled
+
+### `:asdf-reader-conditional`
+
+Avoid `#+`/`#-` reader conditionals inside `defsystem` bodies in `.asd` files. Reader conditionals are processed at read time and cannot be controlled by ASDF, making them less portable. Use ASDF's built-in `:if-feature` (component option) and `(:feature ...)` (dependency modifier) instead.
+
+```lisp
+;; Bad: reader conditionals in defsystem
+(defsystem "my-system"
+  :components ((:file "main")
+               #+sbcl (:file "sbcl-support")
+               #-windows (:file "unix-support")))
+
+;; Good: use :if-feature
+(defsystem "my-system"
+  :components ((:file "main")
+               (:file "sbcl-support" :if-feature :sbcl)
+               (:file "unix-support" :if-feature (:not :windows))))
+```
+
+**Exclusions**:
+- Reader conditionals inside `:perform` bodies are not flagged (they are legitimate runtime CL code)
+- Reader conditionals outside `defsystem` forms are ignored
+- Comments, string literals, and character literals are not scanned
+
+**Severity**: warning | **Default**: disabled
 
 ## Cleanliness
 
@@ -527,6 +599,49 @@ ASDF systems, components, and dependencies should use strings not symbols. Appli
 ;; Good
 (defsystem "my-system"
   :depends-on ("alexandria"))
+```
+
+**Severity**: warning | **Default**: enabled
+
+### `:asdf-redundant-package-prefix`
+
+Package prefixes `asdf:`, `cl:`, `common-lisp:`, and `uiop:` are redundant in `.asd` files. These files run in the `asdf-user` package which already uses `asdf`, `cl`, and `uiop`, so qualifying symbols with those package names is unnecessary. Sub-package prefixes like `uiop/filesystem:` are also flagged.
+
+```lisp
+;; Bad: redundant package prefixes
+(asdf:defsystem "my-system"
+  :depends-on ("alexandria")
+  :description (cl:format nil "tests"))
+
+;; Good: no prefixes needed
+(defsystem "my-system"
+  :depends-on ("alexandria")
+  :description (format nil "tests"))
+```
+
+**Severity**: info | **Default**: enabled
+
+### `:asdf-secondary-system-name`
+
+Secondary system names in a `.asd` file must follow the `primary/suffix` convention. In a file named `foo.asd`, systems other than `"foo"` must be named `"foo/something"`. Arbitrary names like `"foo-tests"` or `"bar"` are not allowed by ASDF and may cause issues with system resolution.
+
+```lisp
+;; Bad: in my-system.asd
+(defsystem "my-system"
+  :depends-on ("alexandria"))
+
+(defsystem "my-system-tests"       ; should be "my-system/tests"
+  :depends-on ("my-system"))
+
+(defsystem "other-project"          ; unrelated name
+  :depends-on ("alexandria"))
+
+;; Good: follows primary/suffix convention
+(defsystem "my-system"
+  :depends-on ("alexandria"))
+
+(defsystem "my-system/tests"
+  :depends-on ("my-system"))
 ```
 
 **Severity**: warning | **Default**: enabled
