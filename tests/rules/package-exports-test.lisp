@@ -194,8 +194,8 @@
 
 ;;; Tests for test-package-p
 
-(deftest test-package-p-basic
-  (testing "package using rove is a test package"
+(deftest test-package-detection
+  (testing "package with (:use #:rove) is a test package"
     (let ((dir (make-temp-dir)))
       (unwind-protect
            (progn
@@ -206,7 +206,18 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "package using only cl is not a test package"
+  (testing "package with (:import-from #:fiveam ...) is a test package"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (write-temp-file dir "tests.lisp"
+                              "(defpackage #:my-5am-tests (:import-from #:fiveam #:def-suite))")
+             (pkg-exports:clear-package-export-cache)
+             (ok (pkg-exports:test-package-p dir "my-5am-tests")))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir))))
+
+  (testing "package with (:use #:cl) only is not a test package"
     (let ((dir (make-temp-dir)))
       (unwind-protect
            (progn
@@ -217,7 +228,7 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "unknown package is not a test package"
+  (testing "unknown package name returns NIL"
     (let ((dir (make-temp-dir)))
       (unwind-protect
            (progn
@@ -226,9 +237,8 @@
              (pkg-exports:clear-package-export-cache)
              (ok (null (pkg-exports:test-package-p dir "unknown-pkg"))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir)))))
+        (cleanup-temp-dir dir))))
 
-(deftest test-package-p-case-insensitive
   (testing "lookup is case-insensitive"
     (let ((dir (make-temp-dir)))
       (unwind-protect
