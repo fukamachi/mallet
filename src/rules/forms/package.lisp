@@ -32,7 +32,10 @@
    :description "Use uninterned symbols (#:symbol) in package definitions"
    :severity :info
    :category :style
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect interned symbols in package definitions.
+Flags :symbol where #:symbol should be used in defpackage :use, :export,
+:import-from, :shadow, :shadowing-import-from, and :nicknames clauses."))
 
 (defun extract-symbol-source-at (source-text line column)
   "Extract symbol source starting at LINE and COLUMN (0-based column)."
@@ -219,14 +222,14 @@ Returns one of :keyword, :qualified, :uninterned, :bare, :string-literal, or :un
   (check-type form parser:form)
   (check-type file pathname)
 
-  (let* ((expr (parser:form-expr form)))
+  (let ((expr (parser:form-expr form)))
     (cond
       ((defpackage-form-p expr)
        (let ((source-text (uiop:read-file-string file)))
          (check-defpackage-form expr form file rule source-text (parser:form-position-map form))))
       ((in-package-form-p expr)
-       (let* ((source-text (uiop:read-file-string file))
-              (position-map (parser:form-position-map form)))
+       (let ((source-text (uiop:read-file-string file))
+             (position-map (parser:form-position-map form)))
          (check-symbol-interned (second expr) "in-package"
                                 position-map source-text form file rule)))
       (t nil))))
@@ -240,7 +243,10 @@ Returns one of :keyword, :qualified, :uninterned, :bare, :string-literal, or :un
    :description "Local nicknames in :local-nicknames should be used"
    :severity :warning
    :category :cleanliness
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect unused local nicknames in package definitions.
+Flags nicknames declared in :local-nicknames that are never referenced
+in the package's source code."))
 
 (defmethod base:check-form ((rule unused-local-nicknames-rule) form file)
   "Check for unused local nicknames in defpackage/define-package forms."
@@ -446,7 +452,10 @@ Preserves comments, formatting, and structural close parens."
    :description "Imported symbols from :import-from should be used or re-exported"
    :severity :warning
    :category :cleanliness
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect imported symbols that are never used.
+Flags symbols declared in :import-from that are neither referenced in the
+package's code nor re-exported via :export."))
 
 (defmethod base:check-form ((rule unused-imported-symbols-rule) form file)
   "Check for unused imported symbols in defpackage/define-package forms."
@@ -530,9 +539,9 @@ Preserves comments, formatting, and structural close parens."
 (defun find-import-from-clause-line-range (text violation-line package-name)
   "Find the line range of the :import-from clause for PACKAGE-NAME containing VIOLATION-LINE.
 Returns a violation-fix for :delete-lines."
-  (let* ((lines (uiop:split-string text :separator '(#\Newline)))
-         (start-line nil)
-         (end-line nil))
+  (let ((lines (uiop:split-string text :separator '(#\Newline)))
+        (start-line nil)
+        (end-line nil))
 
     ;; Search backward to find the :import-from clause start for the correct package
     (loop for line-num from violation-line downto 1
@@ -640,7 +649,12 @@ All values are normalized to uppercase strings at initialization."))
    :description "Using :use in defpackage imports all exported symbols, making it hard to tell which symbols are actually used and risking symbol conflicts when the used package exports new symbols."
    :severity :warning
    :category :practice
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect :use clauses in package definitions.
+Using :use imports all exported symbols from a package, which can cause
+symbol conflicts and makes symbol provenance opaque. Use :local-nicknames
+and explicit qualified references instead. Allows :use of standard CL
+and test framework packages by default."))
 
 (defmethod initialize-instance :after ((rule no-package-use-rule) &key)
   (setf (slot-value rule 'allow)
@@ -839,8 +853,8 @@ Returns the modified defpackage form, or NIL if symbol not found."
                                        (stringp (first clause))
                                        (string-equal (first clause) ":import-from"))
                                   ;; This is an :import-from clause
-                                  (let* ((pkg-name (second clause))
-                                         (symbols (cddr clause)))
+                                  (let ((pkg-name (second clause))
+                                        (symbols (cddr clause)))
                                     (if (string-equal (string-trim "#:" pkg-name)
                                                       (string-trim "#:" package))
                                         ;; This is the package we're looking for

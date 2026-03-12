@@ -32,7 +32,10 @@
    :description "Function exceeds maximum length"
    :severity :info
    :category :metrics
-   :type :form))
+   :type :form)
+  (:documentation "Rule to enforce a maximum function body length.
+Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
+(default 50). Helps keep functions focused and testable."))
 
 (defmethod base:check-form ((rule function-length-rule) form file)
   "Check function length."
@@ -488,7 +491,10 @@
    :description "Function has high comment ratio"
    :severity :info
    :category :metrics
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect functions with an unusually high comment density.
+Flags functions where comment lines exceed :max ratio (default 0.3) of total lines,
+suggesting code may be over-commented or poorly expressed."))
 
 (defmethod base:check-form ((rule comment-ratio-rule) form file)
   "Check comment ratio."
@@ -626,11 +632,11 @@
      (let* ((forms (parser:parse-forms source-code file))
             (form (first forms)))
        (when form
-         (let* ((expr (parser:form-expr form))
-                (position-map (parser:form-position-map form))
-                (source-lines (parse-source-to-lines source-code))
-                (start-line (parser:form-line form))
-                (start-column (parser:form-column form)))
+         (let ((expr (parser:form-expr form))
+               (position-map (parser:form-position-map form))
+               (source-lines (parse-source-to-lines source-code))
+               (start-line (parser:form-line form))
+               (start-column (parser:form-column form)))
            (calculate-function-length-from-source
             expr position-map source-lines start-line start-column)))))
     (parser:form
@@ -670,11 +676,11 @@
      (let* ((forms (parser:parse-forms source-code file))
             (form (first forms)))
        (when form
-         (let* ((expr (parser:form-expr form))
-                (position-map (parser:form-position-map form))
-                (source-lines (parse-source-to-lines source-code))
-                (start-line (parser:form-line form))
-                (start-column (parser:form-column form)))
+         (let ((expr (parser:form-expr form))
+               (position-map (parser:form-position-map form))
+               (source-lines (parse-source-to-lines source-code))
+               (start-line (parser:form-line form))
+               (start-column (parser:form-column form)))
            (getf (calculate-comment-ratio-from-source
                   expr position-map source-lines start-line start-column
                   :include-docstrings include-docstrings
@@ -710,7 +716,10 @@
    :description "Function has high cyclomatic complexity"
    :severity :info
    :category :metrics
-   :type :form))
+   :type :form)
+  (:documentation "Rule to detect functions with high cyclomatic complexity.
+Flags defun/defmethod bodies whose complexity score exceeds :max (default 15).
+Supports :standard and :modified variants for case/cond counting."))
 
 (defmethod base:check-form ((rule cyclomatic-complexity-rule) form file)
   "Check cyclomatic complexity."
@@ -897,12 +906,10 @@
 
         ;; defmethod: (defmethod name [qualifiers] lambda-list . body)
         ((base:symbol-matches-p head "DEFMETHOD")
-         ;; Skip past name and qualifiers to find lambda-list
          (let ((rest (cddr expr)))
-           ;; Skip qualifiers (keywords or other non-list elements)
+           ;; Skip qualifiers (keywords or other non-list elements) to reach lambda-list
            (loop while (and rest (not (consp (first rest))))
                  do (setf rest (cdr rest)))
-           ;; Now rest starts with lambda-list, body follows
            (cdr rest)))
 
         ;; defgeneric: usually no body (just lambda-list and options)

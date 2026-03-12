@@ -8,6 +8,7 @@
  (:disable :missing-otherwise)
  (:disable :special-variable-naming)
  (:disable :constant-naming)
+ (:disable :missing-docstring)
  (:for-paths ("/src/parser.lisp")
   (:disable :unused-local-nicknames))
  (:for-paths ("src/main.lisp")
