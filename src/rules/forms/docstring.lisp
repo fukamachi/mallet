@@ -2,12 +2,15 @@
   (:use #:cl)
   (:local-nicknames
    (#:base #:mallet/rules/base)
-   (#:utils #:mallet/utils))
+   (#:parser #:mallet/parser)
+   (#:utils #:mallet/utils)
+   (#:violation #:mallet/violation))
   (:export
    #:definition-form-p
    #:checkable-definition-p
    #:has-docstring-p
-   #:definition-name))
+   #:definition-name
+   #:missing-docstring-rule))
 (in-package #:mallet/rules/forms/docstring)
 
 ;;; Docstring Detection Utilities
@@ -127,3 +130,43 @@ For setf functions like (defun (setf foo) ...), returns \"(setf foo)\"."
               (stringp (second name)))
          (format nil "(setf ~A)" (utils:symbol-name-from-string (second name))))
         (t nil)))))
+
+;;; --- missing-docstring Rule ---
+
+(defclass missing-docstring-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :missing-docstring
+   :description "Top-level definitions should have docstrings"
+   :severity :info
+   :category :style
+   :type :form)
+  (:documentation "Rule to detect top-level definitions lacking docstrings.
+Checks defun, defmacro, defgeneric, and defclass forms. Skips defmethod,
+which inherits its documentation from the generic function."))
+
+(defun form-type-string (expr)
+  "Return uppercase form type name for EXPR (e.g., \"DEFUN\", \"DEFCLASS\")."
+  (when (and (consp expr) (stringp (first expr)))
+    (string-upcase (utils:symbol-name-from-string (first expr)))))
+
+(defmethod base:check-form ((rule missing-docstring-rule) form file)
+  "Check FORM for missing docstring on a top-level definition."
+  (check-type form parser:form)
+  (check-type file pathname)
+  (let ((expr (parser:form-expr form)))
+    (when (and (checkable-definition-p expr)
+               (not (has-docstring-p expr))
+               (base:should-create-violation-p rule))
+      (let ((form-type (form-type-string expr))
+            (name (definition-name expr)))
+        (when (and form-type name)
+          (list (make-instance 'violation:violation
+                               :rule :missing-docstring
+                               :file file
+                               :line (parser:form-line form)
+                               :column (parser:form-column form)
+                               :severity (base:rule-severity rule)
+                               :message (format nil "~A ~A is missing a docstring"
+                                                form-type name)
+                               :fix nil)))))))

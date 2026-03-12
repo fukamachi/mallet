@@ -135,6 +135,7 @@
      (:file "test-framework-detection-test")
      (:file "error-with-string-only-test")
      (:file "docstring-utilities-test")
+     (:file "missing-docstring-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test")
      (:file "package-exports-test"))))
