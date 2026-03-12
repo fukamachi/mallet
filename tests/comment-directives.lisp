@@ -104,6 +104,26 @@
       (ok (eq :enable (second (second result))))
       (ok (equal '(:rule-b) (third (second result)))))))
 
+(deftest parse-comment-directives-trailing-same-line
+  (testing "Trailing comment on same line as code is matched"
+    (let ((result (suppression:parse-comment-directives
+                    "(let* ((x (foo))) ; mallet:suppress needless-let*")))
+      (ok (= 1 (length result)))
+      (let ((directive (first result)))
+        (ok (= 1 (first directive)))
+        (ok (eq :suppress (second directive)))
+        (ok (equal '(:needless-let*) (third directive)))
+        (ok (null (fourth directive))))))
+
+  (testing "Trailing comment with reason is matched"
+    (let ((result (suppression:parse-comment-directives
+                    "(foo x) ; mallet:suppress rule1 -- legacy")))
+      (ok (= 1 (length result)))
+      (let ((directive (first result)))
+        (ok (eq :suppress (second directive)))
+        (ok (equal '(:rule1) (third directive)))
+        (ok (string= "legacy" (fourth directive)))))))
+
 (deftest parse-comment-directives-rule-normalization
   (testing "Rule names are normalized to uppercase keywords"
     (let ((result (suppression:parse-comment-directives

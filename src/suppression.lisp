@@ -430,6 +430,7 @@
      ; mallet:suppress rule1 rule2 -- optional reason
      ;; mallet:disable rule1
      ;;; mallet:enable rule1
+     (form ...) ; mallet:suppress rule1   (trailing same-line comment)
 
    Returns a list of (line-number type rules reason) sorted by line-number, where:
    - line-number is 1-based
@@ -444,7 +445,7 @@
             do (incf line-number)
                (multiple-value-bind (matched groups)
                    (cl-ppcre:scan-to-strings
-                    "^\\s*;+\\s*mallet:(suppress|disable|enable)\\s*(.*)"
+                    ";+\\s*mallet:(suppress|disable|enable)\\s*(.*)"
                     line)
                  (when matched
                    (let* ((type-str (aref groups 0))

@@ -75,7 +75,43 @@
         (ok (null stale-violations)
             "No stale-suppression violations when rule not in config")))))
 
-;;; Test 2: Active suppression — comment suppresses real violation, no output
+;;; Test 2: Negative control — same form WITHOUT trailing comment DOES produce a violation
+
+(deftest comment-suppress-trailing-negative-control
+  (testing "needless-let* without trailing suppress comment produces a violation"
+    (let* ((file (violations-fixture "needless-let-star.lisp"))
+           (config (make-needless-let*-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((let*-violations (remove-if-not
+                               (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                               violations)))
+        (ok (>= (length let*-violations) 1)
+            "At least 1 needless-let* violation in unsuppressed file")))))
+
+;;; Test 3: Trailing same-line suppression — comment on the same line as the form
+
+(deftest comment-suppress-trailing-no-output
+  (testing "Trailing ; mallet:suppress on same line suppresses the form"
+    (let* ((file (no-violations-fixture "comment-suppress-trailing.lisp"))
+           (config (make-needless-let*-config))
+           (violations (engine:lint-file file :config config)))
+
+      (ok (null violations)
+          "No violations when needless-let* is suppressed by trailing same-line comment")))
+
+  (testing "Trailing suppress is not reported as stale"
+    (let* ((file (no-violations-fixture "comment-suppress-trailing.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violation when trailing suppress was used")))))
+
+;;; Test 3: Active suppression — comment suppresses real violation, no output
 
 (deftest comment-suppress-active-no-output
   (testing "; mallet:suppress :needless-let* suppresses the annotated form"
