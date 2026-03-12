@@ -61,7 +61,7 @@
        (:file "runtime-intern")
        (:file "runtime-unintern")
        (:file "ignore-errors-usage")
-       (:file "error-usage"))))
+       (:file "error-usage")))
      (:file "stale-suppression")))
    (:file "rules")
 
