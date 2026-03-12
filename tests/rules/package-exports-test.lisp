@@ -191,3 +191,77 @@
              (ok (null (pkg-exports:exported-symbol-p dir "pkg-b" "func-a"))))
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir)))))
+
+;;; Tests for test-package-p
+
+(deftest test-package-detection
+  (testing "package with (:use #:rove) is a test package"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (write-temp-file dir "tests.lisp"
+                              "(defpackage #:my-tests (:use #:cl #:rove))")
+             (pkg-exports:clear-package-export-cache)
+             (ok (pkg-exports:test-package-p dir "my-tests")))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir))))
+
+  (testing "package with (:import-from #:fiveam ...) is a test package"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (write-temp-file dir "tests.lisp"
+                              "(defpackage #:my-5am-tests (:import-from #:fiveam #:def-suite))")
+             (pkg-exports:clear-package-export-cache)
+             (ok (pkg-exports:test-package-p dir "my-5am-tests")))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir))))
+
+  (testing "package with (:use #:cl) only is not a test package"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (write-temp-file dir "src.lisp"
+                              "(defpackage #:my-lib (:use #:cl))")
+             (pkg-exports:clear-package-export-cache)
+             (ok (null (pkg-exports:test-package-p dir "my-lib"))))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir))))
+
+  (testing "unknown package name returns NIL"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (write-temp-file dir "src.lisp"
+                              "(defpackage #:known-pkg (:use #:rove))")
+             (pkg-exports:clear-package-export-cache)
+             (ok (null (pkg-exports:test-package-p dir "unknown-pkg"))))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir))))
+
+  (testing "lookup is case-insensitive"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (write-temp-file dir "tests.lisp"
+                              "(defpackage #:MY-TESTS (:use #:cl #:rove))")
+             (pkg-exports:clear-package-export-cache)
+             (ok (pkg-exports:test-package-p dir "my-tests"))
+             (ok (pkg-exports:test-package-p dir "MY-TESTS"))
+             (ok (pkg-exports:test-package-p dir "My-Tests")))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir)))))
+
+(deftest test-package-p-exported-symbol-p-still-works
+  (testing "exported-symbol-p is unaffected after refactor"
+    (let ((dir (make-temp-dir)))
+      (unwind-protect
+           (progn
+             (write-temp-file dir "pkg.lisp"
+                              "(defpackage #:my-pkg (:use #:rove) (:export #:my-fn))")
+             (pkg-exports:clear-package-export-cache)
+             (ok (pkg-exports:exported-symbol-p dir "my-pkg" "my-fn"))
+             (ok (null (pkg-exports:exported-symbol-p dir "my-pkg" "other-fn")))
+             (ok (pkg-exports:test-package-p dir "my-pkg")))
+        (pkg-exports:clear-package-export-cache)
+        (cleanup-temp-dir dir)))))

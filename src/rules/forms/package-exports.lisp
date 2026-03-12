@@ -2,9 +2,12 @@
   (:use #:cl)
   (:local-nicknames
    (#:utils #:mallet/utils)
-   (#:parser #:mallet/parser))
+   (#:parser #:mallet/parser)
+   (#:base #:mallet/rules/base))
   (:export #:exported-symbol-p
-           #:clear-package-export-cache))
+           #:clear-package-export-cache
+           #:test-package-p
+           #:find-project-root-for-file))
 (in-package #:mallet/rules/forms/package-exports)
 
 ;;; Package form detection
@@ -70,9 +73,11 @@ Collects all symbols from all :export clauses."
 ;;; Build the exports index for a project
 
 (defun build-exports-index (project-root)
-  "Scan all .lisp files under PROJECT-ROOT and return a hash-table:
-  package-name (UPPERCASE string) → hash-table of exported symbol names (UPPERCASE strings)."
+  "Scan all .lisp files under PROJECT-ROOT and return a cons
+  (exports-index . test-packages) where each is a hash-table keyed by
+  UPPERCASE package-name strings."
   (let ((index (make-hash-table :test 'equal))
+        (test-packages (make-hash-table :test 'equal))
         (files (collect-lisp-files project-root)))
     (dolist (file files)
       (let ((text (handler-case (uiop:read-file-string file)
@@ -91,26 +96,45 @@ Collects all symbols from all :export clauses."
                                            (setf (gethash pkg-name index)
                                                  (make-hash-table :test 'equal)))))
                           (dolist (sym symbols)
-                            (setf (gethash sym sym-set) t)))))))))))))
-    index))
+                            (setf (gethash sym sym-set) t)))
+                        (when (base:defpackage-uses-test-framework-p (cddr expr))
+                          (setf (gethash pkg-name test-packages) t))))))))))))
+    (cons index test-packages)))
 
 ;;; Cache
 
 (defvar *export-cache* (make-hash-table :test 'equal)
-  "Cache mapping project-root namestring to its export index hash-table.")
+  "Cache mapping project-root namestring to a cons (exports-index . test-packages).")
 
-(defun get-exports-index (project-root)
-  "Return the export index for PROJECT-ROOT, building and caching it if necessary."
+(defun get-project-data (project-root)
+  "Return the cached cons (exports-index . test-packages) for PROJECT-ROOT,
+building and caching it if necessary."
   (let ((key (namestring (uiop:ensure-directory-pathname project-root))))
     (or (gethash key *export-cache*)
         (setf (gethash key *export-cache*)
               (build-exports-index project-root)))))
+
+(defun get-exports-index (project-root)
+  "Return the export index hash-table for PROJECT-ROOT."
+  (car (get-project-data project-root)))
 
 (defun clear-package-export-cache ()
   "Clear the project export cache. Call this between test cases or after file changes."
   (clrhash *export-cache*))
 
 ;;; Public API
+
+(defun test-package-p (project-root package-name)
+  "Return T if PACKAGE-NAME is a test package in the project at PROJECT-ROOT.
+A package is considered a test package if its defpackage uses a known test framework.
+Comparison is case-insensitive. Results are cached per project-root."
+  (let* ((data (get-project-data project-root))
+         (test-packages (cdr data))
+         (pkg-key (string-upcase (utils:symbol-name-from-string
+                                   (if (stringp package-name)
+                                       package-name
+                                       (string package-name))))))
+    (and (gethash pkg-key test-packages) t)))
 
 (defun exported-symbol-p (project-root package-name symbol-name)
   "Return T if SYMBOL-NAME is exported from PACKAGE-NAME in the project at PROJECT-ROOT.
@@ -127,3 +151,25 @@ Results are cached per project-root; call CLEAR-PACKAGE-EXPORT-CACHE to invalida
                                        (string symbol-name)))))
          (sym-set (gethash pkg-key index)))
     (and sym-set (gethash sym-key sym-set) t)))
+
+;;; Project root detection
+
+(defun find-project-root-for-file (file)
+  "Walk up from FILE's directory to find the project root directory.
+Recognizes roots by presence of .git/, .hg/, .qlot/ directories or qlfile.
+Returns the project root pathname, or FILE's own directory if none found."
+  (let ((start-dir (uiop:pathname-directory-pathname file)))
+    (labels ((root-marker-p (dir)
+               (or (some (lambda (d)
+                           (uiop:directory-exists-p (merge-pathnames d dir)))
+                         '(".git/" ".hg/" ".qlot/"))
+                   (uiop:file-exists-p (merge-pathnames "qlfile" dir))))
+             (walk (dir)
+               (cond
+                 ((root-marker-p dir) dir)
+                 (t
+                  (let ((parent (uiop:pathname-parent-directory-pathname dir)))
+                    (if (or (null parent) (equal parent dir))
+                        start-dir
+                        (walk parent)))))))
+      (walk start-dir))))
