@@ -11,7 +11,7 @@
   (if (> x 0)
       (print "positive")))
 
-;;; bare-progn-in-if rule violations
+;;; bare-progn rule violations
 
 (defun handle-value (x)
   "Bad: bare progn in if should use cond."
@@ -19,6 +19,20 @@
       (progn
         (print "positive")
         (print x))
+      (progn
+        (print "not positive")
+        (print x))))
+
+(defun check-and (x)
+  "Bad: bare progn in and should use when."
+  (and (> x 0)
+       (progn
+         (print "positive")
+         (print x))))
+
+(defun check-or (x)
+  "Bad: bare progn in or should use unless."
+  (or (> x 0)
       (progn
         (print "not positive")
         (print x))))

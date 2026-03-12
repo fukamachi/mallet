@@ -29,7 +29,7 @@ Rules are organized by category. Each rule shows its severity and default preset
   - [`:unused-loop-variables`](#unused-loop-variables) - Loop variables that are never used
 - [Style](#style) — Idiomatic patterns and naming
   - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
-  - [`:bare-progn-in-if`](#bare-progn-in-if) - Use `cond` instead of `if` with bare `progn`
+  - [`:bare-progn`](#bare-progn) - Use `cond`/`when`/`unless` instead of `if`/`and`/`or` with bare `progn`
   - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
   - [`:interned-package-symbol`](#interned-package-symbol) - Use uninterned symbols in package definitions
   - [`:needless-let*`](#needless-let) - Use `let` when bindings are independent
@@ -364,12 +364,12 @@ Use `when` or `unless` instead of `if` without else.
 
 **Severity**: warning | **Default**: enabled
 
-### `:bare-progn-in-if`
+### `:bare-progn`
 
-Use `cond` instead of `if` with bare `progn`.
+Use `cond` instead of `if` with bare `progn`. Use `when` instead of `and` with bare `progn` as the last argument. Use `unless` instead of `or` with bare `progn` as the last argument.
 
 ```lisp
-;; Bad
+;; Bad: if with bare progn
 (if condition
     (progn
       (do-one)
@@ -380,6 +380,28 @@ Use `cond` instead of `if` with bare `progn`.
   (condition
    (do-one)
    (do-two)))
+
+;; Bad: and with bare progn as last argument
+(and condition
+     (progn
+       (do-one)
+       (do-two)))
+
+;; Good
+(when condition
+  (do-one)
+  (do-two))
+
+;; Bad: or with bare progn as last argument
+(or condition
+    (progn
+      (do-one)
+      (do-two)))
+
+;; Good
+(unless condition
+  (do-one)
+  (do-two))
 ```
 
 **Severity**: info | **Default**: disabled
