@@ -77,12 +77,18 @@ return :unknown-reader-macro after consuming the following form."
   (handler-case
       (call-next-method)
     (eclector.readtable:unknown-macro-sub-character (condition)
-      (let ((sub (slot-value condition
-                              (load-time-value
-                               (find-symbol "%SUB-CHAR" "ECLECTOR.READTABLE")))))
+      ;; Extract sub-char from eclector-internal slot.  This accesses
+      ;; an implementation detail (%SUB-CHAR) that may change across
+      ;; eclector versions.  If the slot lookup fails, fall back to
+      ;; consuming the next form and returning :unknown-reader-macro.
+      (let ((sub (handler-case
+                     (slot-value condition
+                                (load-time-value
+                                 (find-symbol "%SUB-CHAR" "ECLECTOR.READTABLE")))
+                   (error () nil))))
         (cond
           ;; cl-interpol #?"..." — extract interpolated references
-          ((char= sub #\?)
+          ((and sub (char= sub #\?))
            (let ((str (handler-case (cl:read input-stream)
                         (error () nil))))
              (if (stringp str)
@@ -91,7 +97,8 @@ return :unknown-reader-macro after consuming the following form."
                        (list* "PROGN" forms)
                        ':unknown-reader-macro))
                  ':unknown-reader-macro)))
-          ;; Other unknown dispatch macros — consume and return placeholder
+          ;; Other unknown dispatch macros (or failed sub-char extraction)
+          ;; — consume and return placeholder
           (t
            (handler-case (cl:read input-stream) (error () nil))
            ':unknown-reader-macro))))))
@@ -366,11 +373,14 @@ Returns a list of parsed expressions (just :expr parts), skipping errors."
 patterns and parse each into Lisp forms.
 
 Handles:
-- \\$ escape sequences (skip the $)
 - ${expr}: parse one form
 - @{func args...}: parse all forms
 - Nested braces inside interpolation blocks
 - Empty interpolation or parse errors: skip
+
+Note: cl:read has already consumed one level of backslash escaping before
+this function sees the string contents, so we do NOT apply any manual
+escape handling for \\$ or \\@ here.
 
 Returns a flat list of all parsed expressions."
   (let ((forms '())
@@ -379,12 +389,6 @@ Returns a flat list of all parsed expressions."
     (loop while (< i len)
           do (let ((ch (char string-body i)))
                (cond
-                 ;; Escaped dollar: skip both backslash and dollar
-                 ((and (char= ch #\\)
-                       (< (1+ i) len)
-                       (char= (char string-body (1+ i)) #\$))
-                  (incf i 2))
-
                  ;; ${...} expression interpolation
                  ((and (char= ch #\$)
                        (< (1+ i) len)

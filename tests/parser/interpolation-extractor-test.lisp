@@ -29,15 +29,19 @@
       (ok (null forms)))))
 
 (deftest extract-escaped-dollar
-  (testing "\\$ escape is skipped"
-    (let ((forms (parser:extract-interpolation-forms "\\${not-interpolated}")))
-      (ok (null forms))))
-
-  (testing "Escaped dollar followed by real interpolation"
-    (let ((forms (parser:extract-interpolation-forms "\\${skip} ${real}")))
+  (testing "Backslash before dollar does not suppress interpolation (cl:read already consumed one escape level)"
+    ;; In source: #?"\\${name}" → cl:read yields string "\${name}"
+    ;; The backslash is literal text here; ${name} is still interpolation.
+    (let ((forms (parser:extract-interpolation-forms "\\${name}")))
       (ok (= 1 (length forms)))
       (ok (stringp (first forms)))
-      (ok (search "REAL" (string-upcase (first forms)))))))
+      (ok (search "NAME" (string-upcase (first forms))))))
+
+  (testing "Backslash-dollar followed by real interpolation extracts both"
+    (let ((forms (parser:extract-interpolation-forms "\\${first} ${second}")))
+      (ok (= 2 (length forms)))
+      (ok (stringp (first forms)))
+      (ok (stringp (second forms))))))
 
 (deftest extract-empty-interpolation
   (testing "Empty ${} is skipped"
