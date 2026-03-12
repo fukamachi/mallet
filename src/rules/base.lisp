@@ -60,7 +60,7 @@
     :initarg :category
     :initform nil
     :reader rule-category
-    :type (or null (member :correctness :suspicious :cleanliness :style :format :metrics))
+    :type (or null (member :correctness :suspicious :cleanliness :style :practice :format :metrics))
     :documentation "Rule category for grouping and filtering")
    (type
     :initarg :type

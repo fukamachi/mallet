@@ -28,7 +28,7 @@
     ((1 3 5 7 8 10 12) 31)
     ((4 6 9 11) 30)
     (2 (if leap-year-p 29 28))
-    (otherwise (error "Invalid month"))))
+    (otherwise (error 'invalid-month-error))))
 
 ;;; Correct: ecase without otherwise (exhaustive)
 (defun classify-priority (priority)

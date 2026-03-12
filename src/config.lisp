@@ -171,8 +171,8 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                                        (unless (member severity '(:error :warning :info))
                                          (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
                                        (unless (member category '(:correctness :suspicious :cleanliness
-                                                                  :style :format :metrics))
-                                         (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :format :metrics), but got: ~S" category))
+                                                                  :style :practice :format :metrics))
+                                         (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :practice :format :metrics), but got: ~S" category))
                                        (cons category severity)))))
             (nreverse raw))))
 
@@ -379,6 +379,7 @@ Style preferences are disabled to keep output clean."
             :trailing-whitespace
             :no-tabs
             :final-newline
+            :closing-paren-on-own-line
             :wrong-otherwise
             :unused-variables
             :unused-local-functions
@@ -388,8 +389,10 @@ Style preferences are disabled to keep output clean."
             :mixed-optional-and-key
             :if-without-else
             :eval-usage
+            :ignore-errors-usage
             :no-package-use
             :needless-let*
+            :double-colon-access
             :stale-suppression))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
@@ -413,9 +416,13 @@ Useful for exploration and discovering what rules exist."
           '(;; Correctness
             :wrong-otherwise
             :mixed-optional-and-key
+            ;; Practice
+            :allow-other-keys
             ;; Suspicious
             :eval-usage
             :runtime-intern
+            :runtime-unintern
+            :ignore-errors-usage
             ;; Cleanliness
             :unused-variables
             :unused-local-functions
@@ -433,11 +440,14 @@ Useful for exploration and discovering what rules exist."
             :needless-let*
             :no-package-use
             :bare-float-literal
+            :double-colon-access
+            :error-with-string-only
             :stale-suppression
             ;; Format
             :no-tabs
             :trailing-whitespace
             :final-newline
+            :closing-paren-on-own-line
             :line-length
             :consecutive-blank-lines
             ;; Metrics

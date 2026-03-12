@@ -632,7 +632,7 @@ Preserves comments, formatting, and structural close parens."
    :name :no-package-use
    :description "Using :use in defpackage imports all exported symbols, making it hard to tell which symbols are actually used and risking symbol conflicts when the used package exports new symbols."
    :severity :warning
-   :category :style
+   :category :practice
    :type :form))
 
 (defparameter *exempt-packages*

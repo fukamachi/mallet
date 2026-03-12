@@ -3,6 +3,7 @@
   (:use-reexport #:mallet/rules/base
                  #:mallet/rules/text
                  #:mallet/rules/tokens/bare-float-literal
+                 #:mallet/rules/tokens/double-colon-access
                  #:mallet/rules/forms/control-flow
                  #:mallet/rules/forms/variables
                  #:mallet/rules/forms/local-functions
@@ -13,6 +14,9 @@
                  #:mallet/rules/forms/metrics
                  #:mallet/rules/forms/eval-usage
                  #:mallet/rules/forms/runtime-intern
+                 #:mallet/rules/forms/runtime-unintern
+                 #:mallet/rules/forms/ignore-errors-usage
+                 #:mallet/rules/forms/error-usage
                  #:mallet/rules/stale-suppression)
   (:export #:make-rule))
 (in-package #:mallet/rules)
@@ -34,10 +38,14 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'final-newline-rule options))
     (:consecutive-blank-lines
      (apply #'make-instance 'consecutive-blank-lines-rule options))
+    (:closing-paren-on-own-line
+     (apply #'make-instance 'closing-paren-on-own-line-rule options))
 
     ;; Token rules
     (:bare-float-literal
      (apply #'make-instance 'bare-float-literal-rule options))
+    (:double-colon-access
+     (apply #'make-instance 'double-colon-access-rule options))
 
     ;; Form rules
     (:if-without-else
@@ -70,6 +78,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'constant-naming-rule options))
     (:mixed-optional-and-key
      (apply #'make-instance 'mixed-optional-and-key-rule options))
+    (:allow-other-keys
+     (apply #'make-instance 'allow-other-keys-rule options))
     (:asdf-component-strings
      (apply #'make-instance 'asdf-component-strings-rule options))
 
@@ -78,6 +88,12 @@ Severity and category defaults are defined in each rule class's :default-initarg
      (apply #'make-instance 'eval-usage-rule options))
     (:runtime-intern
      (apply #'make-instance 'runtime-intern-rule options))
+    (:runtime-unintern
+     (apply #'make-instance 'runtime-unintern-rule options))
+    (:ignore-errors-usage
+     (apply #'make-instance 'ignore-errors-usage-rule options))
+    (:error-with-string-only
+     (apply #'make-instance 'error-with-string-only-rule options))
 
     ;; Suppression rules
     (:stale-suppression

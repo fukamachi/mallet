@@ -1,0 +1,9 @@
+# Expected violations for runtime-unintern.lisp
+# Format: line:column rule-name severity
+# Note: cl:unintern is also detected by runtime-intern rule (which covers all intern-family functions)
+
+5:2 runtime-intern warning
+5:2 runtime-unintern warning
+9:2 runtime-intern warning
+9:2 runtime-unintern warning
+13:2 runtime-unintern warning

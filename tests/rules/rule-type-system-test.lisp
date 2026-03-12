@@ -67,6 +67,14 @@
                                :category :style)))
       (ok (eq :style (base:rule-category rule)))))
 
+  (testing "Rule accepts :practice category"
+    (let ((rule (make-instance 'base:rule
+                               :name :test-rule
+                               :description "test"
+                               :severity :warning
+                               :category :practice)))
+      (ok (eq :practice (base:rule-category rule)))))
+
   (testing "Rule accepts :format category"
     (let ((rule (make-instance 'base:rule
                                :name :test-rule
@@ -187,6 +195,22 @@
     (let ((rule (rules:make-rule :if-without-else)))
       (ok (eq :style (base:rule-category rule)))))
 
+  (testing ":no-package-use rule has :practice category"
+    (let ((rule (rules:make-rule :no-package-use)))
+      (ok (eq :practice (base:rule-category rule)))))
+
+  (testing ":allow-other-keys rule has :practice category"
+    (let ((rule (rules:make-rule :allow-other-keys)))
+      (ok (eq :practice (base:rule-category rule)))))
+
   (testing ":cyclomatic-complexity rule has :metrics category"
     (let ((rule (rules:make-rule :cyclomatic-complexity)))
-      (ok (eq :metrics (base:rule-category rule))))))
+      (ok (eq :metrics (base:rule-category rule)))))
+
+  (testing ":double-colon-access rule has :practice category"
+    (let ((rule (rules:make-rule :double-colon-access)))
+      (ok (eq :practice (base:rule-category rule)))))
+
+  (testing ":error-with-string-only rule has :practice category"
+    (let ((rule (rules:make-rule :error-with-string-only)))
+      (ok (eq :practice (base:rule-category rule))))))

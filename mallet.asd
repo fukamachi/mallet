@@ -44,7 +44,8 @@
      (:module "tokens"
       :pathname "tokens"
       :components
-      ((:file "bare-float-literal")))
+      ((:file "bare-float-literal")
+       (:file "double-colon-access")))
      (:module "forms"
       :pathname "forms"
       :components
@@ -57,7 +58,10 @@
        (:file "asdf")
        (:file "metrics")
        (:file "eval-usage")
-       (:file "runtime-intern")))
+       (:file "runtime-intern")
+       (:file "runtime-unintern")
+       (:file "ignore-errors-usage")
+       (:file "error-usage")))
      (:file "stale-suppression")))
    (:file "rules")
 
@@ -112,6 +116,7 @@
      (:file "interned-package-symbol-test")
      (:file "unused-imported-symbols-test")
      (:file "text-formatting-test")
+     (:file "closing-paren-on-own-line-test")
      (:file "naming")
      (:file "lambda-list")
      (:file "asdf")
@@ -121,7 +126,11 @@
      (:file "bare-float-literal-test")
      (:file "eval-usage-test")
      (:file "runtime-intern-test")
+     (:file "runtime-unintern-test")
+     (:file "ignore-errors-usage-test")
      (:file "no-package-use-test")
+     (:file "double-colon-access-test")
+     (:file "error-with-string-only-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test"))))
 
