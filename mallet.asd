@@ -61,7 +61,8 @@
        (:file "runtime-intern")
        (:file "runtime-unintern")
        (:file "ignore-errors-usage")
-       (:file "error-usage")))
+       (:file "error-usage")
+       (:file "docstring")))
      (:file "stale-suppression")))
    (:file "rules")
 
@@ -132,6 +133,7 @@
      (:file "double-colon-access-test")
      (:file "test-framework-detection-test")
      (:file "error-with-string-only-test")
+     (:file "docstring-utilities-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test"))))
 
