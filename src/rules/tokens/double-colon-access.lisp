@@ -54,7 +54,11 @@ Examples:
 
 (defun extract-in-package-name (tokens)
   "Scan TOKENS for the first IN-PACKAGE form and return the normalized
-uppercase package name, or NIL if none found."
+uppercase package name, or NIL if none found.
+
+Note: only the FIRST in-package form is used. Files with multiple
+in-package forms (switching between test and non-test packages) will
+be classified entirely by the first declaration."
   (let ((toks (coerce tokens 'vector))
         (n (length tokens)))
     (block scan
