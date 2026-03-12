@@ -579,37 +579,53 @@ EXTRA-FRAMEWORKS is an optional list of additional framework names (strings, cas
                 (return-from defpackage-uses-test-framework-p t))))))))
   nil)
 
+(defun defpackage-token-p (tok)
+  "Return T if TOK is a DEFPACKAGE or DEFINE-PACKAGE symbol token."
+  (and (eq (parser:token-type tok) :symbol)
+       (let ((name (symbol-name-from-string (parser:token-raw tok))))
+         (or (string-equal name "DEFPACKAGE")
+             (string-equal name "DEFINE-PACKAGE")))))
+
 (defun tokens-use-test-framework-p (tokens)
-  "Return T if TOKENS contain a DEFPACKAGE form that :USE or :IMPORT-FROM a known test framework.
-Scans token stream looking for DEFPACKAGE, then inspects up to 200 following tokens for
-:USE or :IMPORT-FROM keywords followed by framework package names."
+  "Return T if TOKENS contain a DEFPACKAGE or DEFINE-PACKAGE form that :USE or :IMPORT-FROM
+a known test framework. Scans until the form's closing paren (tracked via paren depth)."
   (let ((toks (coerce tokens 'vector))
         (n (length tokens)))
-    ;; Find DEFPACKAGE token
+    ;; Find DEFPACKAGE / DEFINE-PACKAGE token
     (loop for i from 0 below n
           for tok = (aref toks i)
-          when (and (eq (parser:token-type tok) :symbol)
-                    (string-equal (symbol-name-from-string (parser:token-raw tok))
-                                  "DEFPACKAGE"))
-            do (let ((end (min n (+ i 201)))
-                     (in-use-or-import nil))
-                 (loop for j from (1+ i) below end
+          when (defpackage-token-p tok)
+            do (let ((in-use-or-import nil)
+                     (depth 0)
+                     (started nil))
+                 (loop for j from (1+ i) below n
                        for t2 = (aref toks j)
+                       for ttype = (parser:token-type t2)
                        do (cond
+                            ;; Track paren depth to know when defpackage form ends
+                            ((eq ttype :open-paren)
+                             (incf depth)
+                             (setf started t))
+                            ((eq ttype :close-paren)
+                             (decf depth)
+                             ;; If we were inside the form and depth drops below 0,
+                             ;; the defpackage form has ended.
+                             (when (and started (minusp depth))
+                               (return)))
                             ;; :use or :import-from keyword starts a relevant clause
-                            ((and (eq (parser:token-type t2) :symbol)
+                            ((and (eq ttype :symbol)
                                   (or (string-equal (parser:token-raw t2) ":use")
                                       (string-equal (parser:token-raw t2) ":import-from")))
                              (setf in-use-or-import t))
                             ;; Another keyword (like :export, :local-nicknames) resets
-                            ((and (eq (parser:token-type t2) :symbol)
+                            ((and (eq ttype :symbol)
                                   (utils:keyword-string-p (parser:token-raw t2))
                                   (not (string-equal (parser:token-raw t2) ":use"))
                                   (not (string-equal (parser:token-raw t2) ":import-from")))
                              (setf in-use-or-import nil))
                             ;; Check package name tokens when inside :use or :import-from
                             ((and in-use-or-import
-                                  (eq (parser:token-type t2) :symbol)
+                                  (eq ttype :symbol)
                                   (not (utils:keyword-string-p (parser:token-raw t2))))
                              (let ((name (normalize-framework-name (parser:token-raw t2))))
                                (when (framework-name-p name *known-test-frameworks* nil)

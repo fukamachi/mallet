@@ -141,3 +141,42 @@
         #:rove)
   (:export #:run-tests))")))
       (ok (base:tokens-use-test-framework-p tokens)))))
+
+;;; U-1: define-package support
+
+(deftest tokens-use-test-framework-p-define-package
+  (testing "DEFINE-PACKAGE with :USE :ROVE is detected"
+    (let ((tokens (tokenize-code
+                   "(uiop:define-package #:my-tests (:use #:cl #:rove))")))
+      (ok (base:tokens-use-test-framework-p tokens))))
+
+  (testing "DEFINE-PACKAGE with :IMPORT-FROM #:FIVEAM is detected"
+    (let ((tokens (tokenize-code
+                   "(uiop:define-package #:my-tests (:import-from #:fiveam #:is))")))
+      (ok (base:tokens-use-test-framework-p tokens))))
+
+  (testing "DEFINE-PACKAGE without test framework is not detected"
+    (let ((tokens (tokenize-code
+                   "(uiop:define-package #:my-pkg (:use #:cl))")))
+      (ok (null (base:tokens-use-test-framework-p tokens))))))
+
+;;; U-2: large export lists (no 200-token limit)
+
+(deftest tokens-use-test-framework-p-large-export
+  (testing "Detection works when :use appears after 200+ export symbols"
+    (let* ((exports (format nil "~{#:sym~A~^ ~}"
+                            (loop for i from 1 to 250 collect i)))
+           (code (format nil "(defpackage #:big-pkg~%  (:export ~A)~%  (:use #:cl #:rove))"
+                         exports))
+           (tokens (tokenize-code code)))
+      (ok (base:tokens-use-test-framework-p tokens)
+          "Should detect framework even after 250 exported symbols")))
+
+  (testing "Non-framework defpackage with large export list is not detected"
+    (let* ((exports (format nil "~{#:sym~A~^ ~}"
+                            (loop for i from 1 to 250 collect i)))
+           (code (format nil "(defpackage #:big-pkg~%  (:export ~A)~%  (:use #:cl))"
+                         exports))
+           (tokens (tokenize-code code)))
+      (ok (null (base:tokens-use-test-framework-p tokens))
+          "Should not detect framework in non-test package"))))

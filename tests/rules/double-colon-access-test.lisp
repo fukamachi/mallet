@@ -173,12 +173,43 @@
       (ok (= 1 (length violations))
           "Export clause with framework name should not suppress violations"))))
 
-;;; :skip-test-files nil option
+;;; define-package test file skipping
 
-(deftest skip-test-files-nil
-  (testing "With :skip-test-files nil, test files are still checked"
+(deftest test-file-skipping-define-package
+  (testing "File with uiop:define-package using rove is skipped"
+    (let* ((test-code "(uiop:define-package #:my-tests
+  (:use #:cl #:rove))
+(in-package #:my-tests)
+(deftest foo
+  (ok (null pkg::internal)))")
+           (violations (check-double-colon test-code)))
+      (ok (null violations)
+          "Test file using define-package with rove should have no violations")))
+
+  (testing "File with define-package using fiveam is skipped"
+    (let* ((test-code "(uiop:define-package #:my-tests
+  (:import-from #:fiveam #:is))
+(in-package #:my-tests)
+(defun foo () pkg::internal)")
+           (violations (check-double-colon test-code)))
+      (ok (null violations)
+          "Test file using define-package with fiveam should have no violations")))
+
+  (testing "define-package without test framework is not skipped"
+    (let* ((code "(uiop:define-package #:my-pkg
+  (:use #:cl))
+(in-package #:my-pkg)
+(defun foo () pkg::internal)")
+           (violations (check-double-colon code)))
+      (ok (= 1 (length violations))
+          "Non-test define-package file should report violations"))))
+
+;;; :include-tests option
+
+(deftest include-tests
+  (testing "With :include-tests t, test files are still checked"
     (let* ((rule (make-instance 'rules:double-colon-access-rule
-                                :skip-test-files nil))
+                                :include-tests t))
            (test-code "(defpackage #:test-pkg (:use #:cl #:rove))
 (in-package #:test-pkg)
 (deftest foo
@@ -186,4 +217,4 @@
            (tokens (parser:tokenize test-code #p"test.lisp"))
            (violations (rules:check-tokens rule tokens #p"test.lisp")))
       (ok (= 1 (length violations))
-          "Violations should be reported when skip-test-files is nil"))))
+          "Violations should be reported when include-tests is t"))))
