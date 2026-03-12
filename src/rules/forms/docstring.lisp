@@ -181,26 +181,6 @@ which inherits its documentation from the generic function."))
        (stringp (first expr))
        (base:symbol-matches-p (first expr) "IN-PACKAGE")))
 
-(defun find-project-root-for-file (file)
-  "Walk up from FILE's directory to find the project root directory.
-Recognizes roots by presence of .git/, .hg/, .qlot/ directories or qlfile.
-Returns the project root pathname, or FILE's own directory if none found."
-  (let ((start-dir (uiop:pathname-directory-pathname file)))
-    (labels ((root-marker-p (dir)
-               (or (some (lambda (d)
-                           (uiop:directory-exists-p (merge-pathnames d dir)))
-                         '(".git/" ".hg/" ".qlot/"))
-                   (uiop:file-exists-p (merge-pathnames "qlfile" dir))))
-             (walk (dir)
-               (cond
-                 ((root-marker-p dir) dir)
-                 (t
-                  (let ((parent (uiop:pathname-parent-directory-pathname dir)))
-                    (if (or (null parent) (equal parent dir))
-                        start-dir
-                        (walk parent)))))))
-      (walk start-dir))))
-
 (defun export-lookup-name (name)
   "Return the symbol name to use for export lookup from a definition name.
 For setf names like \"(setf foo)\", returns \"foo\".
@@ -247,7 +227,7 @@ Tracks the current package via in-package forms during traversal."))
   (unless (equal file (rule-current-file rule))
     (setf (rule-current-file rule) file
           (rule-current-package rule) nil
-          (rule-cached-project-root rule) (find-project-root-for-file file)))
+          (rule-cached-project-root rule) (pkg-exports:find-project-root-for-file file)))
 
   (let ((expr (parser:form-expr form)))
     (cond

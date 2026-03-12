@@ -6,7 +6,8 @@
    (#:base #:mallet/rules/base))
   (:export #:exported-symbol-p
            #:clear-package-export-cache
-           #:test-package-p))
+           #:test-package-p
+           #:find-project-root-for-file))
 (in-package #:mallet/rules/forms/package-exports)
 
 ;;; Package form detection
@@ -150,3 +151,25 @@ Results are cached per project-root; call CLEAR-PACKAGE-EXPORT-CACHE to invalida
                                        (string symbol-name)))))
          (sym-set (gethash pkg-key index)))
     (and sym-set (gethash sym-key sym-set) t)))
+
+;;; Project root detection
+
+(defun find-project-root-for-file (file)
+  "Walk up from FILE's directory to find the project root directory.
+Recognizes roots by presence of .git/, .hg/, .qlot/ directories or qlfile.
+Returns the project root pathname, or FILE's own directory if none found."
+  (let ((start-dir (uiop:pathname-directory-pathname file)))
+    (labels ((root-marker-p (dir)
+               (or (some (lambda (d)
+                           (uiop:directory-exists-p (merge-pathnames d dir)))
+                         '(".git/" ".hg/" ".qlot/"))
+                   (uiop:file-exists-p (merge-pathnames "qlfile" dir))))
+             (walk (dir)
+               (cond
+                 ((root-marker-p dir) dir)
+                 (t
+                  (let ((parent (uiop:pathname-parent-directory-pathname dir)))
+                    (if (or (null parent) (equal parent dir))
+                        start-dir
+                        (walk parent)))))))
+      (walk start-dir))))
