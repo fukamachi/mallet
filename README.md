@@ -204,6 +204,40 @@ Use `#+mallet` with `declaim` or `declare` to suppress specific rules. The `#+ma
 (defun generated-code () ...)
 ```
 
+### Inline Comment Directives
+
+Mallet also supports lightweight inline comment directives as an alternative to `#+mallet` forms.
+
+**Suppress the next form** (trailing same-line or standalone comment):
+```lisp
+(let* ((x (foo))) ; mallet:suppress needless-let*
+
+; mallet:suppress if-without-else
+(if condition (do-something))
+```
+
+**Suppress with a reason** (using `--`):
+```lisp
+(let* ((x (foo))) ; mallet:suppress needless-let* -- legacy API shape
+```
+
+**Suppress a region** (disable/enable pair):
+```lisp
+; mallet:disable line-length
+(defun foo () (very-long-expression-that-cannot-be-shortened-for-technical-reasons))
+(defun bar () (another-long-expression))
+; mallet:enable line-length
+```
+
+**Multiple rules in one directive**:
+```lisp
+; mallet:suppress needless-let* unused-variables
+```
+
+Rule names are case-insensitive. A `; mallet:suppress` on its own line suppresses violations on the immediately following form. When placed as a trailing comment on a line of code, it suppresses violations on that same line/form.
+
+> **Note:** Stale suppressions (directives that don't match any actual violation) are flagged by the optional `:stale-suppression` rule. See [RULES.md](RULES.md) for details.
+
 ## Rules
 
 See [RULES.md](RULES.md) for the complete list.

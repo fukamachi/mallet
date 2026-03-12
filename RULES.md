@@ -38,6 +38,8 @@ Rules are organized by severity level. See README.md for severity meanings.
   - [`:function-length`](#function-length) - Function exceeds maximum line count
   - [`:cyclomatic-complexity`](#cyclomatic-complexity) - Function has high cyclomatic complexity
   - [`:comment-ratio`](#comment-ratio) - Function has too many comments relative to code
+- [CLEANLINESS](#cleanliness)
+  - [`:stale-suppression`](#stale-suppression) - Suppression directive has no effect
 
 ## ERROR
 
@@ -619,3 +621,33 @@ Notes:
 - Nested `flet`/`labels` functions are counted separately
 
 **Default**: disabled
+
+## CLEANLINESS
+
+Rules that detect housekeeping issues in suppression directives. These are opt-in and pair with the inline comment suppression feature.
+
+### `:stale-suppression`
+
+A suppression directive (inline comment or `#+mallet` form) has no effect because no matching violation was found at the suppressed location.
+
+This rule fires when:
+- A `; mallet:suppress rule-name` comment is present but the named rule produces no violation on that form.
+- A `; mallet:disable` / `; mallet:enable` region contains no violations for the listed rules.
+
+Enable this rule to catch outdated suppression comments left behind after code changes.
+
+```lisp
+;; Bad: no violation here, suppression is stale
+(let ((x (foo))     ; mallet:suppress needless-let*
+      (y (bar)))
+  (list x y))
+
+;; Good: violation exists, suppression is meaningful
+(let* ((x (foo))    ; mallet:suppress needless-let*
+       (y (bar)))
+  (list x y))
+```
+
+**Category**: `:cleanliness`
+**Severity**: `:warning`
+**Default**: disabled (must be explicitly enabled; not included in `:default` or `:all` presets)
