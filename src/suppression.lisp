@@ -489,7 +489,7 @@
                 (cond
                   ;; #\x character literal: skip '#', '\', and the next char
                   ((and (char= (char line i) #\#)
-                        (< (1+ i) semi-pos)
+                        (< (+ i 2) semi-pos)
                         (char= (char line (1+ i)) #\\))
                    (incf i 3))        ; skip #, \, and the character itself
                   ((char= (char line i) #\")
@@ -543,7 +543,10 @@
                    (incf block-comment-depth openers)
                    (setf block-comment-depth (max 0 (- block-comment-depth closers))))
                  ;; Update cross-line string state for next line
-                 (setf in-string-p (%string-state-after-line line in-string-at-start))
+                 ;; Only track string state outside block comments; quotes inside
+                 ;; block comments must not toggle in-string-p.
+                 (when (zerop depth-at-start)
+                   (setf in-string-p (%string-state-after-line line in-string-at-start)))
                  ;; Skip lines inside a block comment
                  (when (zerop depth-at-start)
                    (let ((semi-pos (cl-ppcre:scan
