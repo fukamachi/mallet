@@ -206,7 +206,7 @@ Signals specific error conditions for invalid input."
         (debug nil)
         (no-color nil)
         (fix-mode nil)
-        (fail-on :error)
+        (fail-on :warning)
         (enable-rules '())
         (disable-rules '())
         (files '()))
@@ -283,7 +283,7 @@ Options:
   --enable <rule:opts> Enable rule with options (e.g., --enable line-length:max=120)
   --disable <rule>    Disable specific rule (e.g., --disable trailing-whitespace)
 
-  --fail-on <level>   Exit 1 if any violation meets or exceeds level (error, warning, info; default: error)
+  --fail-on <level>   Exit 1 if any violation meets or exceeds level (error, warning, info; default: warning)
   --strict            Alias for --fail-on info (exit 1 for any violation)
 
   --fix               Auto-fix violations and write files
@@ -304,8 +304,8 @@ Presets:
   none                No rules enabled (explicitly enable specific rules)
 
 Severity Levels (for --fail-on):
-  error               Objectively wrong code (exit 1 by default)
-  warning             Likely bugs or dangerous patterns
+  error               Objectively wrong code
+  warning             Likely bugs or dangerous patterns (exit 1 by default)
   info                Style preferences, metrics, and formatting suggestions
 
 Examples:
@@ -318,7 +318,7 @@ Examples:
   mallet --fix src/                   # Auto-fix violations
   mallet --fix-dry-run src/           # Preview fixes without changing files
 
-  # Fail on warnings and above (CI-friendly)
+  # Fail on warnings and above (the default)
   mallet --fail-on warning src/
 
   # Fail on any violation (equivalent to --strict)

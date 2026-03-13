@@ -1,6 +1,6 @@
 # Expected violations for closing-paren-on-own-line.lisp
 # Format: line:column rule-name severity
 
-7:4 closing-paren-on-own-line warning
-8:2 closing-paren-on-own-line warning
-13:8 closing-paren-on-own-line warning
+7:4 closing-paren-on-own-line info
+8:2 closing-paren-on-own-line info
+13:8 closing-paren-on-own-line info
