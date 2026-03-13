@@ -203,9 +203,6 @@
 
 (deftest parse-comment-directives-block-comment-with-quote
   (testing "Multi-line block comment with quote does not corrupt string state"
-    ;; The quote on line 2 is inside the block comment; without the fix,
-    ;; %string-state-after-line would toggle in-string-p and lines after |#
-    ;; would be incorrectly treated as inside a string.
     (let ((result (suppression:parse-comment-directives
                     (format nil "#| start~%has \" quote~%|#~%; mallet:suppress rule1~%"))))
       (ok (= 1 (length result)) "directive after multi-line block comment with quote is matched")
@@ -213,20 +210,36 @@
       (ok (eq :suppress (second (first result))))))
 
   (testing "Multiple lines inside block comment with quotes do not affect string state"
-    ;; Two quotes on separate lines inside a block comment — neither should
-    ;; affect the string state used after the comment closes.
     (let ((result (suppression:parse-comment-directives
                     (format nil "#|~%\"first quote~%\"second quote~%|#~%; mallet:suppress rule1~%"))))
       (ok (= 1 (length result)) "directive after block comment with multiple quotes is matched")
-      (ok (= 5 (first (first result))) "directive is on line 5"))))
+      (ok (= 5 (first (first result))) "directive is on line 5")))
+
+  (testing "Same-line block comment with quote does not corrupt string state"
+    ;; #| " |# on a single line where depth-at-start is 0 — the quote inside
+    ;; should not toggle in-string-p.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#| \" |#~%; mallet:suppress rule1~%"))))
+      (ok (= 1 (length result)) "directive after same-line block comment with quote is matched")
+      (ok (= 2 (first (first result))) "directive is on line 2")))
+
+  (testing "Block comment closing on line that opens a string tracks string state"
+    ;; |# closes the block comment, then " opens a string. The directive-like
+    ;; text on line 3 is inside that string and must NOT be matched.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#| comment~%|# (foo \"text~%; mallet:suppress rule1~%end\")~%"))))
+      (ok (null result) "directive inside string opened after |# is not matched"))))
 
 (deftest parse-comment-directives-char-literal-at-end
   (testing "Incomplete #\\ at end of line does not crash or mismatch"
-    ;; If a line ends with #\\ and there is no following character,
-    ;; the bounds check should prevent over-reading.
     (let ((result (suppression:parse-comment-directives
                     (format nil "(foo #\\~%; mallet:suppress rule1~%"))))
-      ;; The #\ at end-of-line is unusual but should not crash.
-      ;; The directive on line 2 should still be matched.
       (ok (= 1 (length result)) "directive after line ending with #\\\\ is matched")
-      (ok (= 2 (first (first result))) "directive is on line 2"))))
+      (ok (= 2 (first (first result))) "directive is on line 2")))
+
+  (testing "#\\; character literal does not expose semicolon as a comment"
+    ;; The semicolon in #\; is a character literal, not a comment starter.
+    ;; A directive-like pattern after #\; on the same line must not be matched.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(foo #\\; mallet:suppress rule1)~%"))))
+      (ok (null result) "#\\; semicolon is not treated as a comment"))))
