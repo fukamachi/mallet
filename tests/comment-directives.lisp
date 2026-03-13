@@ -230,6 +230,22 @@
                     (format nil "#| comment~%|# (foo \"text~%; mallet:suppress rule1~%end\")~%"))))
       (ok (null result) "directive inside string opened after |# is not matched"))))
 
+(deftest parse-comment-directives-line-comment-with-quote
+  (testing "Quote inside a line comment does not corrupt string state"
+    ;; A comment like ; Don't use "eval" has quotes that are NOT string openers.
+    ;; Without line-comment awareness, %string-state-after-line would toggle
+    ;; in-string-p and miss the directive on the next line.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "; Don't use \"eval\"~%; mallet:suppress rule1~%"))))
+      (ok (= 1 (length result)) "directive after comment with quotes is matched")
+      (ok (= 2 (first (first result))) "directive is on line 2")))
+
+  (testing "Odd number of quotes in line comment does not corrupt string state"
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "; contains \" one quote~%; mallet:suppress rule1~%"))))
+      (ok (= 1 (length result)) "directive after comment with odd quotes is matched")
+      (ok (= 2 (first (first result))) "directive is on line 2"))))
+
 (deftest parse-comment-directives-char-literal-at-end
   (testing "Incomplete #\\ at end of line does not crash or mismatch"
     (let ((result (suppression:parse-comment-directives
