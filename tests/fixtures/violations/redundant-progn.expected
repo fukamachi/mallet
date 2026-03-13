@@ -1,0 +1,9 @@
+# Expected violations for redundant-progn.lisp
+# Rule detects PROGN forms with exactly one body form
+
+4:0 redundant-progn info
+6:0 redundant-progn info
+8:0 redundant-progn info
+11:2 redundant-progn info
+14:2 redundant-progn info
+17:2 redundant-progn info
