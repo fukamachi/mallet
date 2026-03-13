@@ -538,10 +538,13 @@
                    (setf in-string nil)
                    (incf i))
                   (t (incf i))))
-               ;; Outside both: handle block comment openers, char literals,
-               ;; string openers
+               ;; Outside both: handle line comments, block comment openers,
+               ;; char literals, string openers
                (t
                 (cond
+                  ;; Line comment: rest of line is comment, stop scanning
+                  ((char= (char line i) #\;)
+                   (return))
                   ((and (< (1+ i) len)
                         (char= (char line i) #\#)
                         (char= (char line (1+ i)) #\|))
