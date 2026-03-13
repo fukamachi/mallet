@@ -1716,7 +1716,6 @@ Each clause has the structure: (restart-name lambda-list &body body)"
       (let ((spec (first rest-args))
             (body (rest rest-args)))
         (when (utils:proper-list-of-min-length-p spec 1)
-          ; mallet:suppress needless-let*
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope
@@ -1758,7 +1757,6 @@ Each clause has the structure: (restart-name lambda-list &body body)"
       (let ((spec (first rest-args))
             (body (rest rest-args)))
         (when (utils:proper-list-of-min-length-p spec 2)
-          ; mallet:suppress needless-let*
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope
@@ -1771,7 +1769,6 @@ Each clause has the structure: (restart-name lambda-list &body body)"
       (let ((spec (first rest-args))
             (body (rest rest-args)))
         (when (a:proper-list-p spec)
-          ; mallet:suppress needless-let*
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope
@@ -1784,7 +1781,6 @@ Each clause has the structure: (restart-name lambda-list &body body)"
       (let ((spec (first rest-args))
             (body (rest rest-args)))
         (when (utils:proper-list-of-min-length-p spec 2)
-          ; mallet:suppress needless-let*
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope

@@ -563,11 +563,11 @@
 (defun parse-comment-directives (source-text)
   "Parse mallet comment directives from SOURCE-TEXT.
 
-   Scans each line for directive patterns preceded by one or more semicolons:
-     <;> mallet:suppress rule1 rule2 -- optional reason
-     <;;> mallet:disable rule1
-     <;;;> mallet:enable rule1
-     (form ...) <;> mallet:suppress rule1   (trailing same-line comment)
+   Scans each line for patterns like:
+     ; mallet:suppress rule1 rule2 -- optional reason
+     ;; mallet:disable rule1
+     ;;; mallet:enable rule1
+     (form ...) ; mallet:suppress rule1   (trailing same-line comment)
 
    Returns a list of (line-number type rules reason) sorted by line-number, where:
    - line-number is 1-based
