@@ -192,6 +192,31 @@
         (ok (= 1 (length stale-violations))
             "Exactly 1 stale-suppression violation for unused :line-length disable region")))))
 
+;;; Test: U-2a — Directive-like text in a multi-line docstring is not a real directive
+
+(deftest docstring-multiline-directive-text-not-stale
+  (testing "Directive-like text on a continuation line of a docstring is not registered"
+    ;; The docstring contains '; mallet:suppress needless-let*' on a new line
+    ;; where no quote precedes the semicolon on that line.
+    ;; Before the fix this was incorrectly parsed as a real directive and then
+    ;; reported as stale-suppression because the directive never matched a violation.
+    (let* ((file (no-violations-fixture "docstring-with-directive-text.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      ;; No needless-let* violations (no let* in these functions)
+      (let ((let*-violations (remove-if-not
+                               (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                               violations)))
+        (ok (null let*-violations) "No needless-let* violations in clean fixture"))
+
+      ;; No stale-suppression violations (directive-like text is not a real directive)
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violations: docstring text is not a directive")))))
+
 ;;; Test: U-2 — Suppress comment after the last top-level form
 
 (deftest suppress-after-last-form

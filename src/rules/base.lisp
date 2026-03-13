@@ -20,6 +20,7 @@
            #:disable-rule
            #:symbol-name-from-string
            #:symbol-matches-p
+           #:keyword-symbol-string-p
            #:coalton-form-p
            #:check-text
            #:check-tokens
@@ -108,6 +109,13 @@ the full symbol string (e.g., \"CURRENT:IF\") not the extracted name."
   (and (stringp str)
        (find #\: str)  ; Require colon to distinguish symbols from string literals
        (string-equal (symbol-name-from-string str) name)))
+
+(defun keyword-symbol-string-p (str)
+  "Return T if STR represents a keyword symbol (starts with colon, e.g. \":let*\").
+Keyword symbols are self-evaluating data values, not operators or form heads."
+  (and (stringp str)
+       (> (length str) 0)
+       (char= (char str 0) #\:)))
 
 (defun coalton-form-p (form)
   "Check if FORM is a Coalton toplevel form.
