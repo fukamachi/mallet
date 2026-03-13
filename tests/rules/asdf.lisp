@@ -115,3 +115,34 @@
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1))
           (ok (search "my-lib" (violation:violation-message (first violations)))))))))
+
+(deftest asdf-component-strings-version-dep-spec
+  (testing "Bare version dep-spec operator is recognized, not treated as string dep"
+    (let ((rule (make-instance 'rules:asdf-component-strings-rule))
+          (file (uiop:parse-native-namestring "test.asd")))
+
+      (testing "(version 'dep ver) -- bare version op with quoted system name -- 0 violations"
+        (let* ((text "(defsystem \"my-system\" :depends-on ((version 'alexandria \"1.0\")))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations))))
+
+      (testing "(version \"dep\" ver) -- bare version op with string system name -- 0 violations"
+        (let* ((text "(defsystem \"my-system\" :depends-on ((version \"cl-ppcre\" \"1.0\")))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations))))
+
+      (testing "(:feature :sbcl (version 'dep ver)) -- version op nested in :feature -- 0 violations"
+        (let* ((text "(defsystem \"my-system\" :depends-on ((:feature :sbcl (version 'trivia \"1.0\"))))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (null violations))))
+
+      (testing "(version bare-sym ver) -- unquoted bare symbol system name -- 1 violation"
+        (let* ((text "(defsystem \"my-system\" :depends-on ((version my-dep \"1.0\")))")
+               (forms (parser:parse-forms text file))
+               (violations (rules:check-form rule (first forms) file)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations)) :asdf-component-strings))
+          (ok (search "my-dep" (violation:violation-message (first violations)))))))))
