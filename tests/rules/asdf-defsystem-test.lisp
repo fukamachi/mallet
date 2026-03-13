@@ -270,3 +270,41 @@
   ((:module \"mod\"
     :components ((:file \"main\" :if-feature sbcl)))))")))
       (ok (= (length violations) 1)))))
+
+;;; asdf-component-strings — version dep-spec operator tests
+
+(deftest asdf-component-strings-version-dep-spec-valid
+  (testing "(:version ...) keyword form — no violation for operator, string system — 0 violations"
+    (ok (null (check-form-rule 'rules:asdf-component-strings-rule
+                               "(defsystem \"foo\" :depends-on ((:version \"system\" \"1.0\")))"))))
+
+  (testing "(version ...) bare-symbol form, string system name — 0 violations"
+    (ok (null (check-form-rule 'rules:asdf-component-strings-rule
+                               "(defsystem \"foo\" :depends-on ((version \"system\" \"1.0\")))"))))
+
+  (testing "(version ...) bare-symbol form, quoted system name — 0 violations"
+    (ok (null (check-form-rule 'rules:asdf-component-strings-rule
+                               "(defsystem \"foo\" :depends-on ((version 'system \"1.0\")))"))))
+
+  (testing "(:feature :sbcl (version ...)) — version inside feature, string name — 0 violations"
+    (ok (null (check-form-rule 'rules:asdf-component-strings-rule
+                               "(defsystem \"foo\" :depends-on ((:feature :sbcl (version \"dep\" \"1.0\"))))"))))
+
+  (testing "Non-.asd file is ignored"
+    (ok (null (check-form-rule 'rules:asdf-component-strings-rule
+                               "(defsystem \"foo\" :depends-on ((version #:dep \"1.0\")))"
+                               "test.lisp")))))
+
+(deftest asdf-component-strings-version-dep-spec-invalid
+  (testing "(version bare-sym ver) — unquoted bare symbol system name — 1 violation"
+    (let ((violations (check-form-rule 'rules:asdf-component-strings-rule
+                                       "(defsystem \"foo\" :depends-on ((version my-dep \"1.0\")))")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :asdf-component-strings))
+      (ok (search "my-dep" (violation:violation-message (first violations))))))
+
+  (testing "(version #:sym ver) — uninterned symbol system name — 1 violation"
+    (let ((violations (check-form-rule 'rules:asdf-component-strings-rule
+                                       "(defsystem \"foo\" :depends-on ((version #:dep \"1.0\")))")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :asdf-component-strings)))))

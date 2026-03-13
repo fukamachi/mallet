@@ -10,11 +10,11 @@
                 :components ((:file "core")
                              (:file "helpers")))))
 
-;; Version dep-spec forms (bare version operator, not :version keyword) are valid
+;; Version dep-spec forms: both :version keyword and bare version operator are valid
 (defsystem "asdf-component-strings/with-version-deps"
-  :depends-on ((version 'alexandria "1.0")
+  :depends-on ((:version "alexandria" "1.0")
                (version "cl-ppcre" "2.0")
-               (:feature :sbcl (version 'trivial-features "0.9")))
+               (:feature :sbcl (version "trivial-features" "0.9")))
   :components ((:file "impl")))
 
 (defsystem "asdf-component-strings/tests"
