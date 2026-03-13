@@ -1,0 +1,5 @@
+# Expected violations for asdf-secondary-system-name.asd
+# Format: line:column rule-name severity
+
+8:11 asdf-secondary-system-name warning
+12:11 asdf-secondary-system-name warning

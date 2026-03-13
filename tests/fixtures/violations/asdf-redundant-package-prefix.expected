@@ -1,0 +1,6 @@
+# Expected violations for asdf-redundant-package-prefix.asd
+# Format: line:column rule-name severity
+
+5:1 asdf-redundant-package-prefix info
+11:16 asdf-redundant-package-prefix info
+16:16 asdf-redundant-package-prefix info

@@ -1,0 +1,7 @@
+# Expected violations for asdf-if-feature-keyword.asd
+# Format: line:column rule-name severity
+
+6:25 asdf-if-feature-keyword warning
+8:28 asdf-if-feature-keyword warning
+10:34 asdf-if-feature-keyword warning
+10:39 asdf-if-feature-keyword warning

@@ -52,7 +52,7 @@ test_fail() {
 echo "Testing clean files (should pass)..."
 echo ""
 
-for file in "$CLEAN_DIR"/*.lisp; do
+for file in "$CLEAN_DIR"/*.lisp "$CLEAN_DIR"/*.asd; do
     if [ -f "$file" ]; then
         filename=$(basename "$file")
 
@@ -80,11 +80,12 @@ echo ""
 echo "Testing violation files (should detect violations)..."
 echo ""
 
-# Test violation files
-for file in "$VIOLATIONS_DIR"/*.lisp; do
+# Test violation files (.lisp and .asd)
+for file in "$VIOLATIONS_DIR"/*.lisp "$VIOLATIONS_DIR"/*.asd; do
     if [ -f "$file" ]; then
         filename=$(basename "$file")
-        expected_file="${file%.lisp}.expected"
+        base="${file%.*}"
+        expected_file="${base}.expected"
 
         # Check if this file has expected violations
         EXPECTED_COUNT=0
@@ -133,12 +134,36 @@ for file in "$VIOLATIONS_DIR"/*.lisp; do
             EXPECTED_COUNT=$(grep -v '^#' "$expected_file" | grep -v '^$' | wc -l | tr -d ' ')
 
             # Count actual violations (format: "  line:col  severity  message  rule")
-            ACTUAL_COUNT=$("$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 | grep -E '^\s+[0-9]+:[0-9]+' | wc -l | tr -d ' ')
+            ACTUAL_OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$file" 2>&1 || true)
+            ACTUAL_COUNT=$(echo "$ACTUAL_OUTPUT" | grep -E '^\s+[0-9]+:[0-9]+' | wc -l | tr -d ' ')
 
-            if [ "$ACTUAL_COUNT" -eq "$EXPECTED_COUNT" ]; then
-                test_pass
-            else
+            if [ "$ACTUAL_COUNT" -ne "$EXPECTED_COUNT" ]; then
                 test_fail "Expected $EXPECTED_COUNT violations, found $ACTUAL_COUNT"
+            else
+                # Verify each expected violation line:col, rule-name, severity
+                MATCH_FAIL=""
+                while IFS= read -r expected_line; do
+                    # Skip comments and empty lines
+                    case "$expected_line" in
+                        '#'*|'') continue ;;
+                    esac
+                    # Parse expected: "line:col rule-name severity"
+                    exp_loc=$(echo "$expected_line" | awk '{print $1}')
+                    exp_rule=$(echo "$expected_line" | awk '{print $2}')
+                    exp_sev=$(echo "$expected_line" | awk '{print $3}')
+                    # Check actual output contains a line with matching loc, rule, severity
+                    # CLI format: "  line:col     severity     message  rule-name"
+                    if ! echo "$ACTUAL_OUTPUT" | grep -E '^\s+'"$exp_loc"'\s' | grep -q "$exp_rule"; then
+                        MATCH_FAIL="$MATCH_FAIL\n    Missing: $exp_loc $exp_rule $exp_sev"
+                    elif ! echo "$ACTUAL_OUTPUT" | grep -E '^\s+'"$exp_loc"'\s' | grep "$exp_rule" | grep -q "$exp_sev"; then
+                        MATCH_FAIL="$MATCH_FAIL\n    Wrong severity at $exp_loc $exp_rule: expected $exp_sev"
+                    fi
+                done < "$expected_file"
+                if [ -z "$MATCH_FAIL" ]; then
+                    test_pass
+                else
+                    test_fail "Violations do not match expected:$MATCH_FAIL"
+                fi
             fi
         fi
     fi

@@ -1,0 +1,7 @@
+# Expected violations for asdf-operate-in-perform.asd
+# Format: line:column rule-name severity
+
+8:5 asdf-operate-in-perform warning
+9:5 asdf-operate-in-perform warning
+8:5 asdf-redundant-package-prefix info
+9:5 asdf-redundant-package-prefix info

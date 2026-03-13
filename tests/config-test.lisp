@@ -86,7 +86,14 @@
         ;; missing-exported-docstring is in the default preset
         (ok (member :missing-exported-docstring rule-names))
         ;; missing-docstring is opt-in only; must not be in default
-        (ok (not (member :missing-docstring rule-names))))
+        (ok (not (member :missing-docstring rule-names)))
+        ;; ASDF best-practices rules in the default preset
+        (ok (member :asdf-redundant-package-prefix rule-names))
+        (ok (member :asdf-operate-in-perform rule-names))
+        (ok (member :asdf-secondary-system-name rule-names))
+        (ok (member :asdf-if-feature-keyword rule-names))
+        ;; asdf-reader-conditional is disabled in default
+        (ok (not (member :asdf-reader-conditional rule-names))))
       ;; Check that some rules are disabled
       (let ((disabled (config:config-disabled-rules cfg)))
         (ok (member :line-length disabled))
@@ -105,7 +112,13 @@
         (ok (member :if-without-else rule-names))
         ;; Both docstring rules are in the all preset
         (ok (member :missing-exported-docstring rule-names))
-        (ok (member :missing-docstring rule-names)))))
+        (ok (member :missing-docstring rule-names))
+        ;; All 5 ASDF best-practices rules are in the all preset
+        (ok (member :asdf-redundant-package-prefix rule-names))
+        (ok (member :asdf-operate-in-perform rule-names))
+        (ok (member :asdf-secondary-system-name rule-names))
+        (ok (member :asdf-if-feature-keyword rule-names))
+        (ok (member :asdf-reader-conditional rule-names)))))
 
   (testing "Load none config"
     (let ((cfg (config:get-built-in-config :none)))

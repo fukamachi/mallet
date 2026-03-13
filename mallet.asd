@@ -58,6 +58,7 @@
        (:file "naming")
        (:file "lambda-list")
        (:file "asdf")
+       (:file "asdf-defsystem")
        (:file "metrics")
        (:file "eval-usage")
        (:file "runtime-intern")
@@ -65,7 +66,8 @@
        (:file "ignore-errors-usage")
        (:file "error-usage")
        (:file "docstring")))
-     (:file "stale-suppression")))
+     (:file "stale-suppression")
+     (:file "asdf-reader-conditional")))
    (:file "rules")
 
    ;; Configuration
@@ -125,6 +127,8 @@
      (:file "naming")
      (:file "lambda-list")
      (:file "asdf")
+     (:file "asdf-defsystem-test")
+     (:file "asdf-reader-conditional-test")
      (:file "special-forms-test")
      (:file "with-macros-test")
      (:file "metrics-test")
