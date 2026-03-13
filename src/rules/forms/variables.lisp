@@ -781,7 +781,6 @@ Returns a list of default forms that can reference earlier parameters."
              (incf i))
     (nreverse defaults)))
 
-; mallet:suppress needless-let* -- false positive: :let* ecase keyword is not a let* form
 (defun calculate-scope (form-type remaining-bindings body aux-context &optional optional-key-defaults)
   "Calculate the scope where a variable binding is available.
 Returns a list of forms where the variable should be checked for usage.
