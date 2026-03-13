@@ -164,3 +164,39 @@
                     "(foo \"bar\") ; mallet:suppress rule1")))
       (ok (= 1 (length result)) "directive after closed string is matched")
       (ok (eq :suppress (second (first result)))))))
+
+(deftest parse-comment-directives-multiline-string
+  (testing "Directive-like text on a continuation line starting with no quote is not matched"
+    ;; The string opens on line 1. Line 2 has NO quote before the semicolon,
+    ;; so %semicolon-in-string-p would return NIL without cross-line tracking.
+    ;; This is the real bug: line 2 looks like a real directive.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(defun foo ()~%  \"This is a docstring~%; mallet:suppress rule1~%  end of docstring\")~%"))))
+      (ok (null result) "directive on continuation line (no quote before semi) is not matched")))
+
+  (testing "Directive-like text mid-string where opening quote is on previous line is not matched"
+    ;; The string opens with a quote on line 2 and the directive-like line (line 3)
+    ;; starts with no quotes — only cross-line string tracking detects this.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(defun foo (x)~%  \"docstring text~%; mallet:suppress needless-let*~%  more text\")~%"))))
+      (ok (null result) "no directive matched when semicolon line has no preceding quote")))
+
+  (testing "Real directive after the multi-line string is matched"
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(defun foo ()~%  \"docstring with~%  some text\")~%; mallet:suppress rule1~%"))))
+      (ok (= 1 (length result)) "real directive after string is matched")
+      (ok (= 4 (first (first result))) "directive is on line 4")))
+
+  (testing "Directive-like text on same line as opening quote is still protected by single-line check"
+    ;; This already worked before: the quote is on the same line as the semicolon.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(defun foo ()~%  \"docstring with ; mallet:suppress rule1~%  and more text\")~%"))))
+      (ok (null result) "directive inside single-line string open is not matched")))
+
+  (testing "Character literal #\\\" does not confuse string tracking outside a string"
+    ;; Code like (char= x #\") contains a #\" which is NOT a string opener.
+    ;; The line after it should not be considered inside a string.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(cond ((char= x #\\\")~%; mallet:suppress rule1~%  (do-something)))~%"))))
+      (ok (= 1 (length result)) "directive after #\\\" character literal is matched")
+      (ok (= 2 (first (first result))) "directive is on line 2"))))
