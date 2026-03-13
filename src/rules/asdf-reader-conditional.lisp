@@ -23,8 +23,9 @@ Reader conditionals are processed at read time and cannot be controlled by ASDF,
 less portable than ASDF's built-in :if-feature (component option) and :feature (dependency
 modifier).  Use these ASDF mechanisms instead.
 
-Exclusions: reader conditionals inside :perform bodies are legitimate runtime CL code and are
-not flagged.  Reader conditionals outside any defsystem form are also ignored.
+Exclusions: reader conditionals inside :perform and :around-compile bodies are legitimate
+runtime CL code and are not flagged.  Reader conditionals outside any defsystem form are
+also ignored.
 Comments, string literals, and character literals are not scanned."))
 
 ;;; Text scanner state
@@ -44,11 +45,12 @@ Comments, string literals, and character literals are not scanned."))
   ;; we have exited the defsystem.
   (in-defsystem nil :type boolean)
   (defsystem-start-depth 0 :type integer)
-  ;; :perform body tracking
+  ;; :perform/:around-compile body tracking
   ;; We use a list of depths.  Each entry is the paren-depth at the moment we saw the
-  ;; opening `(` of the :perform argument list.  While perform-depths is non-nil, we are
-  ;; inside at least one :perform body.
-  ;; perform-pending: T means we just saw `:perform` and are waiting for its `(`
+  ;; opening `(` of the :perform/:around-compile argument list.  While perform-depths
+  ;; is non-nil, we are inside at least one such body.
+  ;; perform-pending: T means we just saw `:perform` or `:around-compile` and are
+  ;; waiting for its `(`
   (perform-pending nil :type boolean)
   (perform-depths nil :type list)
   ;; Token accumulation buffer (reused across characters)
@@ -56,11 +58,11 @@ Comments, string literals, and character literals are not scanned."))
               :type (vector character)))
 
 (defun in-perform-p (state)
-  "Return T if we are currently inside a :perform body."
+  "Return T if we are currently inside a :perform or :around-compile body."
   (scan-state-perform-depths state))
 
 (defun maybe-pop-performs (state)
-  "Remove any :perform depth entries for bodies we have exited."
+  "Remove any :perform/:around-compile depth entries for bodies we have exited."
   (loop while (and (scan-state-perform-depths state)
                    (<= (scan-state-paren-depth state)
                        (first (scan-state-perform-depths state))))
@@ -93,9 +95,10 @@ Comments, string literals, and character literals are not scanned."))
            (name (if colon-pos (subseq tok (1+ colon-pos)) tok)))
       (name-matches-defsystem-p name))))
 
-(defun token-perform-keyword-p (tok)
-  "Return T if TOK is the `:perform` keyword."
-  (string-equal tok ":perform"))
+(defun token-runtime-body-keyword-p (tok)
+  "Return T if TOK is a keyword that introduces a runtime CL body (:perform or :around-compile)."
+  (or (string-equal tok ":perform")
+      (string-equal tok ":around-compile")))
 
 (defun process-token (state tok)
   "Handle a completed token TOK, updating STATE accordingly."
@@ -111,10 +114,11 @@ Comments, string literals, and character literals are not scanned."))
        (setf (scan-state-defsystem-start-depth state)
              (1- (scan-state-paren-depth state))))
 
-      ;; `:perform` inside a defsystem: mark that the next `(` opens the perform body
+      ;; `:perform` or `:around-compile` inside a defsystem: mark that the next `(`
+      ;; opens a runtime body that should be excluded from scanning
       ((and (scan-state-in-defsystem state)
             (not (scan-state-perform-pending state))
-            (token-perform-keyword-p tok))
+            (token-runtime-body-keyword-p tok))
        (setf (scan-state-perform-pending state) t))
 
       (t nil))))
@@ -221,7 +225,8 @@ Returns updated violations list."
 
 (defmethod base:check-text ((rule asdf-reader-conditional-rule) text file)
   "Scan TEXT for #+/#- reader conditionals inside defsystem bodies.
-Only processes .asd files; skips comments, strings, character literals, and :perform bodies."
+Only processes .asd files; skips comments, strings, character literals,
+and :perform/:around-compile bodies."
   (check-type text string)
   (check-type file pathname)
 

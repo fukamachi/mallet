@@ -68,6 +68,29 @@
   ((:module \"tests\"
     :perform (test-op (o c)
                #+sbcl (load \"x\")))))")))
+      (ok (null violations))))
+
+  (testing "#+sbcl inside :around-compile body is excluded"
+    (let ((violations (check "(defsystem \"foo\"
+  :around-compile (lambda (next)
+                    #+sbcl (sbcl-setup)
+                    (funcall next)))")))
+      (ok (null violations))))
+
+  (testing "#-ccl inside :around-compile body is excluded"
+    (let ((violations (check "(defsystem \"foo\"
+  :around-compile (lambda (next)
+                    #-ccl (non-ccl-setup)
+                    (funcall next)))")))
+      (ok (null violations))))
+
+  (testing "#+sbcl in :around-compile in nested :components is excluded"
+    (let ((violations (check "(defsystem \"foo\"
+  :components
+  ((:module \"src\"
+    :around-compile (lambda (next)
+                      #+sbcl (do-thing)
+                      (funcall next)))))")))
       (ok (null violations)))))
 
 ;;; Invalid cases — violations expected
@@ -125,4 +148,11 @@
 (defsystem \"bar\"
   :depends-on (#+sbcl \"x\"))")))
       (ok (= 1 (length violations)))
-      (ok (= 3 (violation:violation-line (first violations)))))))
+      (ok (= 3 (violation:violation-line (first violations))))))
+
+  (testing "#+sbcl before :around-compile and #-ccl inside: only the first is flagged"
+    (let ((violations (check "(defsystem \"foo\"
+  :depends-on (#+sbcl \"x\")
+  :around-compile (lambda (next) #-ccl (foo) (funcall next)))")))
+      (ok (= 1 (length violations)))
+      (ok (= 2 (violation:violation-line (first violations)))))))
