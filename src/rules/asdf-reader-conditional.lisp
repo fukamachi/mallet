@@ -37,7 +37,10 @@ Comments, string literals, and character literals are not scanned."))
   ;; String/comment/char literal tracking
   (in-string nil :type boolean)
   (escape-next nil :type boolean)
-  (in-char nil :type boolean)   ; T after #\ — next char is the char value
+  (in-char nil :type boolean)   ; T after #\ — consuming character name
+  ;; Block comment tracking (#| ... |# nesting)
+  (block-comment-depth 0 :type integer)
+  (prev-char-bar nil :type boolean)  ; T when previous char was `|` (for detecting |#)
   ;; Paren depth (global)
   (paren-depth 0 :type integer)
   ;; defsystem tracking
@@ -144,13 +147,35 @@ Returns updated violations list."
     (loop while (< i len) do
       (let ((ch (char line i)))
         (cond
+          ;; --- inside block comment (#| ... |#) ---
+          ((plusp (scan-state-block-comment-depth state))
+           (cond
+             ;; Check for nested #|
+             ((and (char= ch #\#)
+                   (< (1+ i) len)
+                   (char= (char line (1+ i)) #\|))
+              (incf (scan-state-block-comment-depth state))
+              (setf (scan-state-prev-char-bar state) nil)
+              (incf i))  ; skip past |
+             ;; Check for closing |#
+             ((and (scan-state-prev-char-bar state)
+                   (char= ch #\#))
+              (decf (scan-state-block-comment-depth state))
+              (setf (scan-state-prev-char-bar state) nil))
+             ;; Track | for |# detection
+             (t
+              (setf (scan-state-prev-char-bar state) (char= ch #\|)))))
+
           ;; --- escape sequence ---
           ((scan-state-escape-next state)
            (setf (scan-state-escape-next state) nil))
 
-          ;; --- character literal value (after #\) ---
+          ;; --- character literal name (after #\) ---
           ((scan-state-in-char state)
-           (setf (scan-state-in-char state) nil))
+           (unless (alphanumericp ch)
+             ;; Non-alphanumeric ends the character name; re-process this char
+             (setf (scan-state-in-char state) nil)
+             (decf i)))  ; will be re-incremented at end of loop
 
           ;; --- inside string ---
           ((scan-state-in-string state)
@@ -175,10 +200,16 @@ Returns updated violations list."
            (process-token state (flush-token-buf state))
            (let ((next (when (< (1+ i) len) (char line (1+ i)))))
              (cond
-               ;; #\ — character literal; skip the next char
+               ;; #| — block comment start
+               ((and next (char= next #\|))
+                (incf (scan-state-block-comment-depth state))
+                (setf (scan-state-prev-char-bar state) nil)
+                (incf i))   ; advance past `|`
+
+               ;; #\ — character literal; consume the full character name
                ((and next (char= next #\\))
                 (setf (scan-state-in-char state) t)
-                (incf i))   ; advance past `\`; in-char will skip the next char
+                (incf i))   ; advance past `\`; in-char will consume alphanumeric chars
 
                ;; #+ or #- — reader conditional
                ((and next (or (char= next #\+) (char= next #\-)))

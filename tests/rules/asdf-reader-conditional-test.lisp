@@ -93,6 +93,50 @@
                       (funcall next)))))")))
       (ok (null violations))))
 
+  (testing "#+sbcl inside a block comment is excluded"
+    (let ((violations (check "(defsystem \"foo\"
+  :components (#| #+sbcl this is commented out |#
+               (:file \"main\")))")))
+      (ok (null violations))))
+
+  (testing "#+sbcl inside nested block comments is excluded"
+    (let ((violations (check "(defsystem \"foo\"
+  :components (#| outer #| #+sbcl inner |# still comment |#
+               (:file \"main\")))")))
+      (ok (null violations))))
+
+  (testing "Block comment with unbalanced parens does not corrupt paren tracking"
+    (let ((violations (check "(defsystem \"foo\"
+  :components (#| ((( |#
+               (:file \"main\")))")))
+      (ok (null violations))))
+
+  (testing "#+sbcl after block comment ends is still flagged"
+    (let ((violations (check "(defsystem \"foo\"
+  :components (#| comment |# #+sbcl (:file \"sbcl-impl\")))")))
+      (ok (= 1 (length violations)))))
+
+  (testing "#\\Newline character literal does not corrupt state"
+    (let ((violations (check "(defsystem \"foo\"
+  :components ((:file \"main\"))
+  :perform (test-op (o c)
+             (write-char #\\Newline)))")))
+      (ok (null violations))))
+
+  (testing "#\\Space character literal does not corrupt state"
+    (let ((violations (check "(defsystem \"foo\"
+  :components ((:file \"main\"))
+  :perform (test-op (o c)
+             (write-char #\\Space)))")))
+      (ok (null violations))))
+
+  (testing "#\\Tab followed by #+sbcl in :depends-on is flagged"
+    (let ((violations (check "(defsystem \"foo\"
+  :perform (test-op (o c)
+             (write-char #\\Tab))
+  :depends-on (#+sbcl \"x\"))")))
+      (ok (= 1 (length violations)))))
+
   (testing "#+asdf3 guarding a defsystem option keyword is excluded"
     (let ((violations (check "(defsystem \"foo\"
   :description \"bar\"
