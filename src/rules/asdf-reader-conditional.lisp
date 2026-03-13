@@ -24,8 +24,10 @@ less portable than ASDF's built-in :if-feature (component option) and :feature (
 modifier).  Use these ASDF mechanisms instead.
 
 Exclusions: reader conditionals inside :perform and :around-compile bodies are legitimate
-runtime CL code and are not flagged.  Reader conditionals outside any defsystem form are
-also ignored.
+runtime CL code and are not flagged.  Reader conditionals at the top-level option-plist depth
+of a defsystem form (e.g., #+asdf3 :mailto #+asdf3 \"email\") guard keyword-value pairs for
+which there is no ASDF-native alternative; these are also not flagged.  Reader conditionals
+outside any defsystem form are ignored.
 Comments, string literals, and character literals are not scanned."))
 
 ;;; Text scanner state
@@ -60,6 +62,17 @@ Comments, string literals, and character literals are not scanned."))
 (defun in-perform-p (state)
   "Return T if we are currently inside a :perform or :around-compile body."
   (scan-state-perform-depths state))
+
+(defun at-defsystem-option-plist-p (state)
+  "Return T if we are at the top-level option-plist depth of a defsystem form.
+
+At this depth, reader conditionals guard keyword-value pairs such as:
+  #+asdf3 :mailto #+asdf3 \"dev@example.com\"
+There is no ASDF-native alternative for these option-pair guards, so they must
+not be flagged.  Deeper depths (inside subforms like :depends-on or :components)
+still have ASDF alternatives and should be flagged."
+  (= (scan-state-paren-depth state)
+     (1+ (scan-state-defsystem-start-depth state))))
 
 (defun maybe-pop-performs (state)
   "Remove any :perform/:around-compile depth entries for bodies we have exited."
@@ -170,7 +183,8 @@ Returns updated violations list."
                ;; #+ or #- — reader conditional
                ((and next (or (char= next #\+) (char= next #\-)))
                 (when (and (scan-state-in-defsystem state)
-                           (not (in-perform-p state)))
+                           (not (in-perform-p state))
+                           (not (at-defsystem-option-plist-p state)))
                   (push (make-instance 'violation:violation
                                        :rule :asdf-reader-conditional
                                        :file file

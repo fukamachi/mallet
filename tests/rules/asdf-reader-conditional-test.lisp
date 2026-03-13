@@ -91,7 +91,34 @@
     :around-compile (lambda (next)
                       #+sbcl (do-thing)
                       (funcall next)))))")))
-      (ok (null violations)))))
+      (ok (null violations))))
+
+  (testing "#+asdf3 guarding a defsystem option keyword is excluded"
+    (let ((violations (check "(defsystem \"foo\"
+  :description \"bar\"
+  #+asdf3 :mailto
+  #+asdf3 \"dev@example.com\"
+  :components ((:file \"main\")))")))
+      (ok (null violations))))
+
+  (testing "#-asdf3 guarding a defsystem option value is excluded"
+    (let ((violations (check "(defsystem \"foo\"
+  #-asdf3 :defsystem-depends-on
+  #-asdf3 (\"my-defsystem-extension\")
+  :components ((:file \"main\")))")))
+      (ok (null violations))))
+
+  (testing "#+sbcl option-pair excluded but #+sbcl in :depends-on sublist still flagged"
+    (let ((violations (check "(defsystem \"foo\"
+  #+sbcl :entry-point
+  #+sbcl \"foo:main\"
+  :depends-on (#+sbcl \"sbcl-dep\")
+  :components ((:file \"main\")))")))
+      ;; #+sbcl at option-plist level (2 occurrences) are excluded
+      ;; #+sbcl inside :depends-on (...) is flagged
+      (ok (= 1 (length violations)))
+      (ok (eq :asdf-reader-conditional
+              (violation:violation-rule (first violations)))))))
 
 ;;; Invalid cases — violations expected
 
