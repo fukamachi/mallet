@@ -288,8 +288,8 @@ Returns the line content as a string, or NIL if line doesn't exist."
 (defmethod base:make-fix ((rule consecutive-blank-lines-rule) text file violation)
   "Generate fix for excessive blank lines - delete the excess lines."
   (declare (ignore file))
-  (let* ((start-line (violation:violation-line violation))
-         (max-consecutive (consecutive-blank-lines-rule-max rule)))
+  (let ((start-line (violation:violation-line violation))
+        (max-consecutive (consecutive-blank-lines-rule-max rule)))
     ;; Count consecutive blank lines starting from start-line
     (with-input-from-string (stream text)
       ;; Skip to start-line

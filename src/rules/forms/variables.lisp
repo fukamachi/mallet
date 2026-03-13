@@ -203,6 +203,7 @@ For strings, extracts just the symbol name (strips package prefix if present)."
   "Check if PARAM is a parameter (string or symbol, not a list)."
   (or (stringp param) (symbolp param)))
 
+; mallet:suppress comment-ratio
 (defun infer-binding-info (lambda-list)
   "Infer binding information from lambda list structure.
 Returns (values binding-position extraction-type) or (values nil nil) if no bindings.
@@ -360,6 +361,7 @@ Handles nested structures:
               (return (list pos '&rest '&body))))
         finally (return nil)))
 
+; mallet:suppress comment-ratio
 (defun register-macros-from-lambda-lists (macro-specs)
   "Batch register multiple macros from lambda list specifications.
 Each spec is (name lambda-list &key options...).
@@ -514,6 +516,7 @@ Examples:
 
 ;;; Binding extraction
 
+; mallet:suppress comment-ratio
 (defun extract-from-pattern (pattern)
   "Recursively extract all variable names from a destructuring pattern."
   (cond
@@ -535,6 +538,7 @@ Examples:
     ;; Anything else (NIL, numbers, keywords, etc.)
     (t nil)))
 
+; mallet:suppress comment-ratio
 (defun extract-bindings (binding-form &optional (context :binding))
   "Extract variable names from binding form (supports simple and nested destructuring).
 CONTEXT determines interpretation of ambiguous 2-element lists:
@@ -1338,6 +1342,7 @@ IN-FUNCTION-POSITION is true if we're looking at the first element of a form (fu
       ;; Search all forms in body using OR-based search
       (some #'search-expr body))))
 
+; mallet:suppress comment-ratio
 (defun find-references (var-name body)
   "Find if VAR-NAME is referenced in BODY, respecting variable shadowing.
 Uses two-phase architecture: Phase 1 finds all shadows, Phase 2 searches for references."
@@ -1493,8 +1498,8 @@ Pushes violations to *violations* special variable."
     (when (and (a:proper-list-p rest-args)
                (>= (length rest-args) 3)
                (listp (second rest-args)))
-      (let* ((lambda-list (second rest-args))
-             (body (cddr rest-args)))
+      (let ((lambda-list (second rest-args))
+            (body (cddr rest-args)))
         (multiple-value-bind (non-aux-part aux-params)
             (parse-lambda-list-for-aux lambda-list)
           ;; Extract default forms from &optional and &key parameters
@@ -1514,8 +1519,8 @@ Pushes violations to *violations* special variable."
     (when (and (a:proper-list-p rest-args)
                (>= (length rest-args) 2)
                (listp (first rest-args)))
-      (let* ((lambda-list (first rest-args))
-             (body (rest rest-args)))
+      (let ((lambda-list (first rest-args))
+            (body (rest rest-args)))
         (multiple-value-bind (non-aux-part aux-params)
             (parse-lambda-list-for-aux lambda-list)
           ;; Extract default forms from &optional and &key parameters
@@ -1642,8 +1647,8 @@ Special case: :no-error clause also has lambda-list with potential bindings."
       (dolist (clause (rest rest-args))
         (when (and (a:proper-list-p clause)
                    (utils:proper-list-of-min-length-p clause 2))
-          (let* ((lambda-list (second clause))
-                 (body (cddr clause)))
+          (let ((lambda-list (second clause))
+                (body (cddr clause)))
             ;; Lambda-list should be a list of parameters
             (when (a:proper-list-p lambda-list)
               (let ((bindings (mapcar #'list lambda-list)))
@@ -1659,8 +1664,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
       (dolist (clause (rest rest-args))
         (when (and (a:proper-list-p clause)
                    (utils:proper-list-of-min-length-p clause 2))
-          (let* ((lambda-list (second clause))
-                 (body (cddr clause)))
+          (let ((lambda-list (second clause))
+                (body (cddr clause)))
             ;; Lambda-list should be a list of parameters
             (when (a:proper-list-p lambda-list)
               (let ((bindings (mapcar #'list lambda-list)))
@@ -1695,9 +1700,10 @@ Each clause has the structure: (restart-name lambda-list &body body)"
   "Check DOLIST for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 2)
-      (let* ((spec (first rest-args))
-             (body (rest rest-args)))
+      (let ((spec (first rest-args))
+            (body (rest rest-args)))
         (when (utils:proper-list-of-min-length-p spec 2)
+          ; mallet:suppress needless-let*
           (let* ((var (first spec))
                  (bindings (list (list var))))
             (scope:with-new-scope
@@ -1707,8 +1713,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
   "Check DO-SYMBOLS/DO-EXTERNAL-SYMBOLS/DO-ALL-SYMBOLS for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 2)
-      (let* ((spec (first rest-args))
-             (body (rest rest-args)))
+      (let ((spec (first rest-args))
+            (body (rest rest-args)))
         (when (utils:proper-list-of-min-length-p spec 1)
           (let* ((var (first spec))
                  (bindings (list (list var))))
@@ -1719,8 +1725,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
   "Check WITH-SLOTS for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 3)
-      (let* ((slot-specs (first rest-args))
-             (body (cddr rest-args)))
+      (let ((slot-specs (first rest-args))
+            (body (cddr rest-args)))
         (when (a:proper-list-p slot-specs)
           (let ((bindings (mapcar (lambda (spec)
                                     (list (if (consp spec)
@@ -1734,8 +1740,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
   "Check WITH-ACCESSORS for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 3)
-      (let* ((accessor-specs (first rest-args))
-             (body (cddr rest-args)))
+      (let ((accessor-specs (first rest-args))
+            (body (cddr rest-args)))
         (when (a:proper-list-p accessor-specs)
           (let ((bindings (mapcar (lambda (spec)
                                     (when (and (consp spec) (>= (length spec) 2))
@@ -1748,8 +1754,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
   "Check WITH-INPUT-FROM-STRING for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 2)
-      (let* ((spec (first rest-args))
-             (body (rest rest-args)))
+      (let ((spec (first rest-args))
+            (body (rest rest-args)))
         (when (utils:proper-list-of-min-length-p spec 2)
           (let* ((var (first spec))
                  (bindings (list (list var))))
@@ -1760,8 +1766,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
   "Check WITH-OUTPUT-TO-STRING for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 1)
-      (let* ((spec (first rest-args))
-             (body (rest rest-args)))
+      (let ((spec (first rest-args))
+            (body (rest rest-args)))
         (when (a:proper-list-p spec)
           (let* ((var (first spec))
                  (bindings (list (list var))))
@@ -1772,8 +1778,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
   "Check WITH-OPEN-FILE for unused variable bindings."
   (let ((rest-args (rest expr)))
     (when (utils:proper-list-of-min-length-p rest-args 2)
-      (let* ((spec (first rest-args))
-             (body (rest rest-args)))
+      (let ((spec (first rest-args))
+            (body (rest rest-args)))
         (when (utils:proper-list-of-min-length-p spec 2)
           (let* ((var (first spec))
                  (bindings (list (list var))))
@@ -1786,8 +1792,8 @@ Each clause has the structure: (restart-name lambda-list &body body)"
     (when (and (a:proper-list-p rest-args)
                (>= (length rest-args) 3)
                (listp (second rest-args)))
-      (let* ((lambda-list (second rest-args))
-             (body (cddr rest-args)))
+      (let ((lambda-list (second rest-args))
+            (body (cddr rest-args)))
         (multiple-value-bind (non-aux-part aux-params)
             (parse-lambda-list-for-aux lambda-list)
           ;; Extract default forms from &optional and &key parameters
@@ -1893,6 +1899,7 @@ Returns T if a binding form was checked, NIL otherwise."
       (dolist (arg rest-args)
         (check-quasi arg)))))
 
+; mallet:suppress comment-ratio
 (defun check-expr (expr line column position-map rule)
   "Recursively check expression for unused variables."
   (when (consp expr)

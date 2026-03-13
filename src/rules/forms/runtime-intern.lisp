@@ -139,8 +139,8 @@ Resolution order:
     (return-from resolve-runtime-intern nil))
   (unless context
     (return-from resolve-runtime-intern nil))
-  (let* ((name    (string-upcase (utils:symbol-name-from-string symbol-string)))
-         (prefix  (extract-package-from-symbol-string symbol-string)))
+  (let ((name    (string-upcase (utils:symbol-name-from-string symbol-string)))
+        (prefix  (extract-package-from-symbol-string symbol-string)))
     (if prefix
         ;; Has a package prefix
         (let* ((prefix-upper (string-upcase prefix))

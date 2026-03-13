@@ -431,6 +431,7 @@ Becomes:
 
 ;;; Generic traversal with cycle detection
 
+; mallet:suppress comment-ratio
 (defun traverse-expr (expr function &key (traverse-lists t))
   "Traverse EXPR, calling FUNCTION on each sub-expression with cycle detection.
 
@@ -664,9 +665,9 @@ then scans forward counting parens to find where the clause ends."
   (check-type violation-line integer)
   (check-type clause-keyword string)
 
-  (let* ((lines (uiop:split-string text :separator '(#\Newline)))
-         (start-line nil)
-         (end-line nil))
+  (let ((lines (uiop:split-string text :separator '(#\Newline)))
+        (start-line nil)
+        (end-line nil))
 
     ;; Search backwards from violation-line to find the clause keyword
     (loop for line-num from (1- violation-line) downto 1

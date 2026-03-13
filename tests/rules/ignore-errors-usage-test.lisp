@@ -10,8 +10,8 @@
 ;;; Helper
 
 (defun check-ignore-errors (code)
-  (let* ((forms (parser:parse-forms code #p"test.lisp"))
-         (rule (make-instance 'rules:ignore-errors-usage-rule)))
+  (let ((forms (parser:parse-forms code #p"test.lisp"))
+        (rule (make-instance 'rules:ignore-errors-usage-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))

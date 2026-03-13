@@ -10,8 +10,8 @@
 ;;; Helper
 
 (defun check-eval (code)
-  (let* ((forms (parser:parse-forms code #p"test.lisp"))
-         (rule (make-instance 'rules:eval-usage-rule)))
+  (let ((forms (parser:parse-forms code #p"test.lisp"))
+        (rule (make-instance 'rules:eval-usage-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))

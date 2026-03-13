@@ -192,7 +192,7 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
                    "ALEXANDRIA"))))
 
   (testing "Empty forms produce empty context"
-    (let* ((ctx (runtime-intern:build-package-context '())))
+    (let ((ctx (runtime-intern:build-package-context '())))
       (ok (zerop (hash-table-count (runtime-intern:package-context-local-nicknames ctx))))
       (ok (zerop (hash-table-count (runtime-intern:package-context-imported-symbols ctx))))))
 
@@ -235,8 +235,8 @@ IMPORTS is an alist of (sym . pkg) e.g. ((\"SYMBOLICATE\" . \"ALEXANDRIA\"))"
 
 (defun check-intern (code)
   "Check CODE for runtime-intern violations using a fake file path (no context)."
-  (let* ((forms (parser:parse-forms code #p"test.lisp"))
-         (rule (make-instance 'rules:runtime-intern-rule)))
+  (let ((forms (parser:parse-forms code #p"test.lisp"))
+        (rule (make-instance 'rules:runtime-intern-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
