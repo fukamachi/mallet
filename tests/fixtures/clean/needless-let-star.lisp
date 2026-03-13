@@ -23,3 +23,8 @@
 (case op
   (:let* (do-something))
   (otherwise nil))
+
+;; Dependency via nested function call
+(let* ((var (first spec))
+       (bindings (list (list var))))
+  bindings)

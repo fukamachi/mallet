@@ -45,6 +45,24 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
+  (testing "Dependency via list constructor is recognized"
+    (let* ((code "(let* ((var (first spec))
+                        (bindings (list (list var))))
+                   bindings)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:needless-let*-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Dependency in nested function call is recognized"
+    (let* ((code "(let* ((x (foo))
+                        (y (bar x)))
+                   y)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:needless-let*-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
   (testing "Empty binding list is ignored"
     (let* ((code "(let* ()
                      (do-something))")
