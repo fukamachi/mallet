@@ -7,6 +7,25 @@
    (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/rules/needless-let-star)
 
+(deftest needless-let-star-keyword-symbol
+  (testing "Keyword :let* in ecase clauses should not be flagged"
+    (let* ((code "(ecase op
+                    (:let* (do-something))
+                    (:other (do-other)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:needless-let*-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Keyword :let* in case clauses should not be flagged"
+    (let* ((code "(case op
+                    (:let* (do-something))
+                    (otherwise nil))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:needless-let*-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
+
 (deftest needless-let-star-valid
   (testing "Let* with sequential dependency is allowed"
     (let* ((code "(let* ((x 1)
@@ -21,6 +40,24 @@
     (let* ((code "(let* ((x 1)
                         (x (+ x 1)))
                      x)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:needless-let*-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Dependency via list constructor is recognized"
+    (let* ((code "(let* ((var (first spec))
+                        (bindings (list (list var))))
+                   bindings)")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:needless-let*-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Dependency in nested function call is recognized"
+    (let* ((code "(let* ((x (foo))
+                        (y (bar x)))
+                   y)")
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:needless-let*-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))

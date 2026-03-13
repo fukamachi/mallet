@@ -461,20 +461,104 @@
                (t (incf i))))
     (values openers closers)))
 
-(defun %semicolon-in-string-p (line semi-pos)
+(defun %semicolon-in-string-p (line semi-pos &optional (initial-in-string-p nil))
   "Return T if the character at SEMI-POS in LINE is inside a double-quoted string.
-   Counts unescaped double-quote characters before SEMI-POS; odd count = inside string."
-  (let ((quote-count 0)
+
+   INITIAL-IN-STRING-P: when T, we begin scanning already inside a string
+   (i.e., the opening quote was on a previous line).
+
+   Scans characters in LINE before SEMI-POS, toggling string state at each
+   unescaped double-quote.  Character literals of the form #\\x (including #\\\"
+   and #\\\\) are skipped so they do not affect string state.  Returns T when the
+   final state is in-string."
+  (let ((in-string initial-in-string-p)
         (i 0))
     (loop while (< i semi-pos)
           do (cond
-               ((and (char= (char line i) #\\) (< (1+ i) semi-pos))
-                (incf i 2))
-               ((char= (char line i) #\")
-                (incf quote-count)
-                (incf i))
-               (t (incf i))))
-    (oddp quote-count)))
+               ;; Inside a string: only backslash-escape and closing quote matter
+               (in-string
+                (cond
+                  ((and (char= (char line i) #\\) (< (1+ i) semi-pos))
+                   (incf i 2))
+                  ((char= (char line i) #\")
+                   (setf in-string nil)
+                   (incf i))
+                  (t (incf i))))
+               ;; Outside a string: skip #\x character literals, handle opening quote
+               (t
+                (cond
+                  ;; #\x character literal: skip '#', '\', and the next char
+                  ((and (char= (char line i) #\#)
+                        (< (1+ i) semi-pos)
+                        (char= (char line (1+ i)) #\\))
+                   (if (>= (+ i 2) semi-pos)
+                       ;; The semicolon at semi-pos is consumed by #\;
+                       (return-from %semicolon-in-string-p t)
+                       (incf i 3)))
+                  ((char= (char line i) #\")
+                   (setf in-string t)
+                   (incf i))
+                  (t (incf i))))))
+    in-string))
+
+(defun %string-state-after-line (line initial-in-string-p
+                                 &optional (block-comment-depth 0))
+  "Return the string-literal state at the end of LINE.
+
+   Scans the entire LINE starting with INITIAL-IN-STRING-P and
+   BLOCK-COMMENT-DEPTH, skipping characters inside block comments.
+   Returns T if the line ends inside an unclosed double-quoted string,
+   NIL otherwise.  Backslash escapes inside strings are honoured."
+  (let ((len (length line))
+        (in-string initial-in-string-p)
+        (depth block-comment-depth)
+        (i 0))
+    (loop while (< i len)
+          do (cond
+               ;; Inside a block comment: look for nested #| or closing |#
+               ((plusp depth)
+                (cond
+                  ((and (< (1+ i) len)
+                        (char= (char line i) #\|)
+                        (char= (char line (1+ i)) #\#))
+                   (decf depth)
+                   (incf i 2))
+                  ((and (< (1+ i) len)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf depth)
+                   (incf i 2))
+                  (t (incf i))))
+               ;; Inside a string: handle escapes and closing quote
+               (in-string
+                (cond
+                  ((and (char= (char line i) #\\) (< (1+ i) len))
+                   (incf i 2))
+                  ((char= (char line i) #\")
+                   (setf in-string nil)
+                   (incf i))
+                  (t (incf i))))
+               ;; Outside both: handle line comments, block comment openers,
+               ;; char literals, string openers
+               (t
+                (cond
+                  ;; Line comment: rest of line is comment, stop scanning
+                  ((char= (char line i) #\;)
+                   (return))
+                  ((and (< (1+ i) len)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf depth)
+                   (incf i 2))
+                  ((and (char= (char line i) #\#)
+                        (< (+ i 2) len)
+                        (char= (char line (1+ i)) #\\))
+                   (incf i 3))
+                  ((char= (char line i) #\")
+                   (setf in-string t)
+                   (incf i))
+                  (t (incf i))))))
+    in-string))
 
 (defun parse-comment-directives (source-text)
   "Parse mallet comment directives from SOURCE-TEXT.
@@ -494,28 +578,37 @@
    LIMITATIONS:
    - Lines inside #| ... |# block comments are skipped. A directive on the same
      line as a #| opener is only skipped if the #| precedes the semicolon.
-   - A directive-like pattern inside a double-quoted string literal is not matched
-     (unescaped double-quotes before the semicolon are counted)."
+   - Directive-like patterns inside double-quoted string literals are not matched,
+     including continuation lines of multi-line strings (docstrings) that start
+     with no quote character on that line."
   (let ((result nil)
         (line-number 0)
-        (block-comment-depth 0))
+        (block-comment-depth 0)
+        (in-string-p nil))
     (with-input-from-string (stream source-text)
       (loop for line = (read-line stream nil nil)
             while line
             do (incf line-number)
-               (let ((depth-at-start block-comment-depth))
+               (let ((depth-at-start block-comment-depth)
+                     (in-string-at-start in-string-p))
                  ;; Update block-comment-depth for this line
                  (multiple-value-bind (openers closers)
                      (%count-block-comment-delimiters line)
                    (incf block-comment-depth openers)
                    (setf block-comment-depth (max 0 (- block-comment-depth closers))))
+                 ;; Update cross-line string state for next line.
+                 ;; Pass block-comment depth so quotes inside block comments
+                 ;; are skipped, and strings that open after |# are tracked.
+                 (setf in-string-p
+                       (%string-state-after-line line in-string-at-start
+                                                 depth-at-start))
                  ;; Skip lines inside a block comment
                  (when (zerop depth-at-start)
                    (let ((semi-pos (cl-ppcre:scan
                                     ";+\\s*mallet:(suppress|disable|enable)"
                                     line)))
                      (when (and semi-pos
-                                (not (%semicolon-in-string-p line semi-pos)))
+                                (not (%semicolon-in-string-p line semi-pos in-string-at-start)))
                        (multiple-value-bind (matched groups)
                            (cl-ppcre:scan-to-strings
                             ";+\\s*mallet:(suppress|disable|enable)\\s*(.*)"

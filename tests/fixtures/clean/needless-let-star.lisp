@@ -13,3 +13,18 @@
 ;; Empty bindings are fine
 (let* ()
   (do-something))
+
+;; Keyword :let* in ecase clause is not a let* form
+(ecase op
+  (:let* (do-something))
+  (:other (do-other)))
+
+;; Keyword :let* in case clause is not a let* form
+(case op
+  (:let* (do-something))
+  (otherwise nil))
+
+;; Dependency via nested function call
+(let* ((var (first spec))
+       (bindings (list (list var))))
+  bindings)
