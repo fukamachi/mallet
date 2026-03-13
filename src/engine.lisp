@@ -276,6 +276,7 @@ Returns updated violations list."
   violations)
 
 
+; mallet:suppress cyclomatic-complexity comment-ratio
 (defun lint-file (file &key config)
   "Lint a single FILE using CONFIG.
 Returns (values violations ignored-p).
@@ -362,8 +363,8 @@ If ignored-p is T, the file was ignored and violations will be NIL."
               (prev-end-line 0))
 
           (dolist (form forms)
-            (let* ((form-start-line (parser:form-line form))
-                   (form-expr (parser:form-expr form)))
+            (let ((form-start-line (parser:form-line form))
+                  (form-expr (parser:form-expr form)))
 
               ;; Consume comment directives that apply to this form
               (multiple-value-setq (pending-directives pending-suppress-records)

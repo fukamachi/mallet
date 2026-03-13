@@ -303,8 +303,8 @@
         (ok (not (null fix)))
 
         ;; Apply the fix using replace-form (parens on next line)
-        (let* ((lines (uiop:split-string text :separator '(#\Newline)))
-               (fix-type (violation:violation-fix-type fix)))
+        (let ((lines (uiop:split-string text :separator '(#\Newline)))
+              (fix-type (violation:violation-fix-type fix)))
           (cond
             ((eq fix-type :replace-form)
              (let* ((start-line (violation:violation-fix-start-line fix))

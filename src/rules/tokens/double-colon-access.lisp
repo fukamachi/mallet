@@ -29,6 +29,7 @@ fragile and violating encapsulation. Prefer using only exported symbols (single 
 Test files are exempt by default because they legitimately need to access internals
 for white-box testing. Set :include-tests T to check even in test files."))
 
+; mallet:suppress comment-ratio
 (defun double-colon-symbol-p (raw)
   "Check if RAW is a symbol with double-colon package qualifier.
 Returns T if RAW contains '::' which indicates internal symbol access.

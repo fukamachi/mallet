@@ -47,8 +47,8 @@
 
 (deftest interned-package-symbol-keyword-violations
   (testing "Keywords in defpackage and in-package are flagged"
-    (let* ((violations
-             (collect-violations "(defpackage :keyword-pkg
+    (let ((violations
+            (collect-violations "(defpackage :keyword-pkg
                                     (:use :cl)
                                     (:local-nicknames
                                      (:a :alexandria))
@@ -67,8 +67,8 @@
 
 (deftest interned-package-symbol-bare-violations
   (testing "Bare symbols are flagged via source text"
-    (let* ((violations
-             (collect-violations "(defpackage bare-pkg
+    (let ((violations
+            (collect-violations "(defpackage bare-pkg
                                     (:use cl)
                                     (:export foo))
                                   (in-package bare-pkg)")))
@@ -76,8 +76,8 @@
 
 (deftest interned-package-symbol-qualified-violations
   (testing "Qualified symbols are flagged"
-    (let* ((violations
-             (collect-violations "(defpackage #:qualified-pkg
+    (let ((violations
+            (collect-violations "(defpackage #:qualified-pkg
                                     (:use cl-user:helpers)
                                     (:import-from cl-user:helpers
                                      cl-user:do-it)
@@ -90,8 +90,8 @@
 
 (deftest interned-package-symbol-uiop-clauses
   (testing "UIOP-specific clauses are checked"
-    (let* ((violations
-             (collect-violations "(uiop:define-package #:uiop-pkg
+    (let ((violations
+            (collect-violations "(uiop:define-package #:uiop-pkg
                                     (:mix :cl)
                                     (:reexport :cl)
                                     (:use-reexport :cl)

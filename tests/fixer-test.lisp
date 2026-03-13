@@ -115,11 +115,11 @@ keep me
 
 (deftest apply-fixes-ordering-test
   (testing "Multiple fixes applied bottom-to-top"
-    (let* ((text "line 1
+    (let ((text "line 1
 line 2
 line 3
 ")
-           (v1 (make-instance 'violation:violation
+          (v1 (make-instance 'violation:violation
                               :rule :trailing-whitespace
                               :file #P"/tmp/test.lisp"
                               :line 1
@@ -165,18 +165,18 @@ line 3
 line 2
 " out))
 
-      (let* ((fixable (make-instance 'violation:violation
-                                     :rule :trailing-whitespace
-                                     :file temp-file
-                                     :line 1
-                                     :column 0
-                                     :severity :format
-                                     :message "fixable"
-                                     :fix (violation:make-violation-fix
-                                           :type :replace-line
-                                           :line-number 1
-                                           :replacement-content "fixed")))
-             (unfixable (make-instance 'violation:violation
+      (let ((fixable (make-instance 'violation:violation
+                                    :rule :trailing-whitespace
+                                    :file temp-file
+                                    :line 1
+                                    :column 0
+                                    :severity :format
+                                    :message "fixable"
+                                    :fix (violation:make-violation-fix
+                                          :type :replace-line
+                                          :line-number 1
+                                          :replacement-content "fixed")))
+            (unfixable (make-instance 'violation:violation
                                        :rule :unused-variables
                                        :file temp-file
                                        :line 2

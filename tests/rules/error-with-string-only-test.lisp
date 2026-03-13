@@ -9,8 +9,8 @@
 
 (defun check-error-string (code)
   "Check CODE for error-with-string-only violations."
-  (let* ((forms (parser:parse-forms code #p"test.lisp"))
-         (rule (make-instance 'rules:error-with-string-only-rule)))
+  (let ((forms (parser:parse-forms code #p"test.lisp"))
+        (rule (make-instance 'rules:error-with-string-only-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))

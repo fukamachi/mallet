@@ -84,6 +84,7 @@
       (ok (= 1 (length forms)))
       (ok (string= "hello world" (parser:form-expr (first forms))))))
 
+  ;; mallet:disable bare-float-literal
   (testing "Various number types"
     (let* ((text "42 3.14 1/2 #x2A")
            (forms (parser:parse-forms text #P"test.lisp")))
@@ -92,6 +93,7 @@
       (ok (= 3.14 (parser:form-expr (second forms))))
       (ok (eql 1/2 (parser:form-expr (third forms))))
       (ok (eql 42 (parser:form-expr (fourth forms)))))))
+  ;; mallet:enable bare-float-literal
 
 (deftest parse-with-source-tracking
   (testing "Source text extraction"
