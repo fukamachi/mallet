@@ -757,7 +757,7 @@
 (deftest set-severity-applies-to-for-paths
   (testing ":set-severity propagates into :for-paths rules"
     (let* ((sexp '(:mallet-config
-                   (:enable :trailing-whitespace)    ; :format, default :warning
+                   (:enable :trailing-whitespace)    ; :format, default :info
                    (:set-severity :format :error)
                    (:for-paths ("tests/**/*.lisp")
                     (:enable :unused-variables))))   ; :cleanliness, unaffected category

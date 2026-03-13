@@ -108,10 +108,10 @@ for file in "$VIOLATIONS_DIR"/*.lisp "$VIOLATIONS_DIR"/*.asd; do
         fi
 
         # Determine expected exit code based on highest severity
-        # Default --fail-on is error: exit 1 only for errors, not warnings/info
+        # Default --fail-on is warning: exit 1 for errors or warnings, not info
         EXPECTED_EXIT_CODE=0
         if [ -f "$expected_file" ]; then
-            if grep -q ' error$' "$expected_file" 2>/dev/null; then
+            if grep -q ' error$' "$expected_file" 2>/dev/null || grep -q ' warning$' "$expected_file" 2>/dev/null; then
                 EXPECTED_EXIT_CODE=1
             fi
         fi

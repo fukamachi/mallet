@@ -2,61 +2,88 @@
 
 Rules are organized by category. Each rule shows its severity and default preset status.
 
-**Severity levels**: `error` (exit code 2), `warning` (exit code 1), `info` (exit code 0)
+**Severity levels**: `error`, `warning`, `info`
 
 **Suppressing violations**: Any rule can be suppressed using `#+mallet (declaim (mallet:suppress-next :rule-name))`. See the README for details.
 
-## Table of Contents
+## Rule List
 
-- [Correctness](#correctness) — Objectively wrong code
-  - [`:wrong-otherwise`](#wrong-otherwise) - `ecase`/`etypecase` with `otherwise`/`t` clause
-  - [`:mixed-optional-and-key`](#mixed-optional-and-key) - Mixing `&optional` and `&key` parameters
-  - [`:asdf-if-feature-keyword`](#asdf-if-feature-keyword) - Feature expressions must use keywords in defsystem
-- [Suspicious](#suspicious) — Likely wrong or dangerous patterns
-  - [`:eval-usage`](#eval-usage) - Runtime use of `cl:eval`
-  - [`:runtime-intern`](#runtime-intern) - Runtime use of symbol-interning functions
-  - [`:runtime-unintern`](#runtime-unintern) - Runtime use of `cl:unintern`
-- [Practice](#practice) — Commonly accepted best practices
-  - [`:no-package-use`](#no-package-use) - Use of `:use` in `defpackage`
-  - [`:ignore-errors-usage`](#ignore-errors-usage) - Use of `cl:ignore-errors`
-  - [`:allow-other-keys`](#allow-other-keys) - Use of `&allow-other-keys` in lambda lists
-  - [`:double-colon-access`](#double-colon-access) - Accessing internal symbols via `::`
-  - [`:error-with-string-only`](#error-with-string-only) - Calling `error` with only a format string
-  - [`:missing-exported-docstring`](#missing-exported-docstring) - Exported definitions missing docstrings
-  - [`:asdf-operate-in-perform`](#asdf-operate-in-perform) - Calling `asdf:operate` and friends inside `:perform`
-  - [`:asdf-reader-conditional`](#asdf-reader-conditional) - Using `#+`/`#-` reader conditionals in defsystem
-- [Cleanliness](#cleanliness) — Dead code and unused definitions
-  - [`:unused-variables`](#unused-variables) - Variables that are never used
-  - [`:unused-local-functions`](#unused-local-functions) - Local functions that are never called
-  - [`:unused-local-nicknames`](#unused-local-nicknames) - Local nicknames that are never used
-  - [`:unused-imported-symbols`](#unused-imported-symbols) - Imported symbols that are never used
-  - [`:unused-loop-variables`](#unused-loop-variables) - Loop variables that are never used
-- [Style](#style) — Idiomatic patterns and naming
-  - [`:if-without-else`](#if-without-else) - Use `when`/`unless` instead of `if` without else
-  - [`:bare-progn`](#bare-progn) - Use `cond`/`when`/`unless` instead of `if`/`and`/`or` with bare `progn`
-  - [`:missing-otherwise`](#missing-otherwise) - `case`/`typecase` without `otherwise` clause
-  - [`:interned-package-symbol`](#interned-package-symbol) - Use uninterned symbols in package definitions
-  - [`:needless-let*`](#needless-let) - Use `let` when bindings are independent
-  - [`:special-variable-naming`](#special-variable-naming) - Special variables should be named `*foo*`
-  - [`:constant-naming`](#constant-naming) - Constants should be named `+foo+`
-  - [`:asdf-component-strings`](#asdf-component-strings) - ASDF components should use strings
-  - [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) - Redundant package prefixes in `.asd` files
-  - [`:asdf-secondary-system-name`](#asdf-secondary-system-name) - Secondary system names must follow `primary/suffix` convention
-  - [`:bare-float-literal`](#bare-float-literal) - Float literals should have explicit type markers
-  - [`:missing-docstring`](#missing-docstring) - Top-level definitions missing docstrings
-- [Format](#format) — Whitespace and file formatting
-  - [`:trailing-whitespace`](#trailing-whitespace) - Lines should not have trailing whitespace
-  - [`:no-tabs`](#no-tabs) - Use spaces instead of tab characters
-  - [`:final-newline`](#final-newline) - Files must end with a newline
-  - [`:closing-paren-on-own-line`](#closing-paren-on-own-line) - Closing parens should follow the last expression
-  - [`:line-length`](#line-length) - Lines should not exceed maximum length
-  - [`:consecutive-blank-lines`](#consecutive-blank-lines) - Limit consecutive blank lines
-- [Metrics](#metrics) — Code quality measurements
-  - [`:function-length`](#function-length) - Function exceeds maximum line count
-  - [`:cyclomatic-complexity`](#cyclomatic-complexity) - Function has high cyclomatic complexity
-  - [`:comment-ratio`](#comment-ratio) - Function has too many comments relative to code
-- [CLEANLINESS](#cleanliness)
-  - [`:stale-suppression`](#stale-suppression) - Suppression directive has no effect
+### [Correctness](#correctness) — Objectively wrong code
+
+| Rule | Description | Severity | Default | Options |
+|------|-------------|----------|---------|---------|
+| [`:wrong-otherwise`](#wrong-otherwise) | `ecase`/`etypecase` with `otherwise`/`t` clause | error | on | |
+| [`:mixed-optional-and-key`](#mixed-optional-and-key) | Mixing `&optional` and `&key` parameters | error | on | |
+| [`:asdf-if-feature-keyword`](#asdf-if-feature-keyword) | Feature expressions must use keywords in defsystem | warning | on | |
+
+### [Suspicious](#suspicious) — Likely wrong or dangerous patterns
+
+| Rule | Description | Severity | Default | Options |
+|------|-------------|----------|---------|---------|
+| [`:eval-usage`](#eval-usage) | Runtime use of `cl:eval` | warning | on | |
+| [`:runtime-intern`](#runtime-intern) | Runtime use of symbol-interning functions | warning | off | |
+| [`:runtime-unintern`](#runtime-unintern) | Runtime use of `cl:unintern` | warning | off | |
+
+### [Practice](#practice) — Commonly accepted best practices
+
+| Rule | Description | Severity | Default | Options |
+|------|-------------|----------|---------|---------|
+| [`:no-package-use`](#no-package-use) | Use of `:use` in `defpackage` | warning | on | |
+| [`:ignore-errors-usage`](#ignore-errors-usage) | Use of `cl:ignore-errors` | warning | on | |
+| [`:allow-other-keys`](#allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | on | |
+| [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | on | |
+| [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
+| [`:missing-exported-docstring`](#missing-exported-docstring) | Exported definitions missing docstrings | warning | on | |
+| [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
+| [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | warning | off | |
+
+### [Cleanliness](#cleanliness) — Dead code and unused definitions
+
+| Rule | Description | Severity | Default | Fix | Options |
+|------|-------------|----------|---------|-----|---------|
+| [`:unused-variables`](#unused-variables) | Variables that are never used | warning | on | | |
+| [`:unused-local-functions`](#unused-local-functions) | Local functions that are never called | warning | on | | |
+| [`:unused-local-nicknames`](#unused-local-nicknames) | Local nicknames that are never used | warning | on | yes | |
+| [`:unused-imported-symbols`](#unused-imported-symbols) | Imported symbols that are never used | warning | on | yes | |
+| [`:unused-loop-variables`](#unused-loop-variables) | Loop variables that are never used | info | off | | |
+| [`:stale-suppression`](#stale-suppression) | Suppression directive has no effect | warning | on | | |
+
+### [Style](#style) — Idiomatic patterns and naming
+
+| Rule | Description | Severity | Default | Options |
+|------|-------------|----------|---------|---------|
+| [`:if-without-else`](#if-without-else) | Use `when`/`unless` instead of `if` without else | warning | on | |
+| [`:bare-progn`](#bare-progn) | Use `cond`/`when`/`unless` instead of bare `progn` | info | off | |
+| [`:missing-otherwise`](#missing-otherwise) | `case`/`typecase` without `otherwise` clause | info | off | |
+| [`:interned-package-symbol`](#interned-package-symbol) | Use uninterned symbols in package definitions | info | off | |
+| [`:needless-let*`](#needless-let) | Use `let` when bindings are independent | warning | on | |
+| [`:special-variable-naming`](#special-variable-naming) | Special variables should be named `*foo*` | info | off | |
+| [`:constant-naming`](#constant-naming) | Constants should be named `+foo+` | info | off | |
+| [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
+| [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) | Redundant package prefixes in `.asd` files | info | on | |
+| [`:asdf-secondary-system-name`](#asdf-secondary-system-name) | Secondary systems must use `primary/suffix` name | warning | on | |
+| [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
+| [`:missing-docstring`](#missing-docstring) | Top-level definitions missing docstrings | info | off | |
+| [`:redundant-progn`](#redundant-progn) | `progn` with a single body form is redundant | info | on | |
+
+### [Format](#format) — Whitespace and file formatting
+
+| Rule | Description | Severity | Default | Fix | Options |
+|------|-------------|----------|---------|-----|---------|
+| [`:trailing-whitespace`](#trailing-whitespace) | Lines with trailing whitespace | info | on | yes | |
+| [`:no-tabs`](#no-tabs) | Tab characters in source | info | on | | |
+| [`:final-newline`](#final-newline) | Files must end with a newline | info | on | yes | |
+| [`:closing-paren-on-own-line`](#closing-paren-on-own-line) | Closing parens on their own line | info | on | | |
+| [`:line-length`](#line-length) | Lines exceeding maximum length | info | off | | `:max` (100) |
+| [`:consecutive-blank-lines`](#consecutive-blank-lines) | Excessive consecutive blank lines | info | off | yes | `:max` (2) |
+
+### [Metrics](#metrics) — Code quality measurements
+
+| Rule | Description | Severity | Default | Options |
+|------|-------------|----------|---------|---------|
+| [`:function-length`](#function-length) | Function exceeds maximum line count | info | off | `:max` (50) |
+| [`:cyclomatic-complexity`](#cyclomatic-complexity) | Function has high cyclomatic complexity | info | off | `:max` (20), `:variant` (standard) |
+| [`:comment-ratio`](#comment-ratio) | Function has too many comments | info | off | `:max` (0.3), `:min-lines` (5), `:include-docstrings` (nil) |
 
 ## Correctness
 
@@ -440,6 +467,30 @@ Loop variables should be used within the loop body.
 
 **Severity**: info | **Default**: disabled
 
+### `:stale-suppression`
+
+A suppression directive (inline comment or `#+mallet` form) has no effect because no matching violation was found at the suppressed location.
+
+This rule fires when:
+- A `; mallet:suppress rule-name` comment is present but the named rule produces no violation on that form.
+- A `; mallet:disable` / `; mallet:enable` region contains no violations for the listed rules.
+
+Enable this rule to catch outdated suppression comments left behind after code changes.
+
+```lisp
+;; Bad: no violation here, suppression is stale
+(let ((x (foo))     ; mallet:suppress needless-let*
+      (y (bar)))
+  (list x y))
+
+;; Good: violation exists, suppression is meaningful
+(let* ((x (foo))    ; mallet:suppress needless-let*
+       (y (bar)))
+  (list x y))
+```
+
+**Severity**: warning | **Default**: enabled
+
 ## Style
 
 Rules for idiomatic patterns and naming conventions.
@@ -686,6 +737,24 @@ Top-level definitions should have docstrings. Applies to `defun`, `defmacro`, `d
 
 **Severity**: info | **Default**: disabled
 
+### `:redundant-progn`
+
+`progn` with a single body form is redundant — the `progn` wrapper can be removed.
+
+```lisp
+;; Bad: progn with one form
+(progn
+  (do-something))
+
+;; Good: no wrapper needed
+(do-something)
+```
+
+**Exclusions**:
+- `progn` wrapping a single `,@splice` (unquote-splicing) is allowed, since the splice may expand to multiple forms
+
+**Severity**: info | **Default**: enabled
+
 ## Format
 
 Rules for whitespace and file formatting. These follow strong community consensus (Emacs/SLIME standards).
@@ -696,13 +765,13 @@ Lines should not have trailing whitespace.
 
 **Auto-fixable**: `--fix` removes trailing whitespace.
 
-**Severity**: warning | **Default**: enabled
+**Severity**: info | **Default**: enabled
 
 ### `:no-tabs`
 
 Use spaces instead of tab characters.
 
-**Severity**: warning | **Default**: enabled
+**Severity**: info | **Default**: enabled
 
 ### `:final-newline`
 
@@ -710,7 +779,7 @@ Files must end with a newline.
 
 **Auto-fixable**: `--fix` appends a newline.
 
-**Severity**: warning | **Default**: enabled
+**Severity**: info | **Default**: enabled
 
 ### `:closing-paren-on-own-line`
 
@@ -737,7 +806,7 @@ Closing parentheses should follow the last expression on the same line, not appe
     ))
 ```
 
-**Severity**: warning | **Default**: enabled
+**Severity**: info | **Default**: enabled
 
 ### `:line-length`
 
@@ -822,36 +891,6 @@ Nested `flet`/`labels` functions are counted separately.
 
 Notes:
 - Functions with fewer qualifying lines (comment + code) than `:min-lines` are skipped. Docstring lines are not counted toward the threshold unless `:include-docstrings t` is set.
-- Nested `flet`/`labels` functions are counted separately
 
 **Severity**: info | **Default**: disabled
 
-## CLEANLINESS
-
-Rules that detect housekeeping issues in suppression directives. These are opt-in and pair with the inline comment suppression feature.
-
-### `:stale-suppression`
-
-A suppression directive (inline comment or `#+mallet` form) has no effect because no matching violation was found at the suppressed location.
-
-This rule fires when:
-- A `; mallet:suppress rule-name` comment is present but the named rule produces no violation on that form.
-- A `; mallet:disable` / `; mallet:enable` region contains no violations for the listed rules.
-
-Enable this rule to catch outdated suppression comments left behind after code changes.
-
-```lisp
-;; Bad: no violation here, suppression is stale
-(let ((x (foo))     ; mallet:suppress needless-let*
-      (y (bar)))
-  (list x y))
-
-;; Good: violation exists, suppression is meaningful
-(let* ((x (foo))    ; mallet:suppress needless-let*
-       (y (bar)))
-  (list x y))
-```
-
-**Category**: `:cleanliness`
-**Severity**: `:warning`
-**Default**: enabled (`:warning` severity; included in `:default` and `:all` presets)
