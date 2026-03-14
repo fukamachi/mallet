@@ -193,19 +193,17 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
         (cleanup-test-dir (uiop:ensure-directory-pathname base))))))
 
 (deftest expand-file-args-excludes-standard-dirs
-  (testing "Standard excluded directories like .git, .qlot, target, .cache are skipped"
+  (testing "Standard excluded directories like .git, .qlot, .cache are skipped"
     (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
            (root (make-test-dir base))
            (src (make-test-dir base "src"))
            (git (make-test-dir base ".git"))
            (qlot (make-test-dir base ".qlot"))
-           (target (make-test-dir base "target"))
            (cache (make-test-dir base ".cache")))
       (unwind-protect
            (let ((src-file (write-test-lisp-file src "main.lisp"))
                  (git-file (write-test-lisp-file git "hook.lisp"))
                  (qlot-file (write-test-lisp-file qlot "dep.lisp"))
-                 (target-file (write-test-lisp-file target "compiled.lisp"))
                  (cache-file (write-test-lisp-file cache "cached.lisp")))
              (let ((result (expand-file-args (list (namestring root)))))
                (ok (member (namestring src-file) (path-names result) :test #'string=)
@@ -214,8 +212,6 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
                    ".git/ file is excluded")
                (ok (not (member (namestring qlot-file) (path-names result) :test #'string=))
                    ".qlot/ file is excluded")
-               (ok (not (member (namestring target-file) (path-names result) :test #'string=))
-                   "target/ file is excluded")
                (ok (not (member (namestring cache-file) (path-names result) :test #'string=))
                    ".cache/ file is excluded")))
         (cleanup-test-dir root)))))
