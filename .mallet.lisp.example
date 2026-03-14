@@ -13,7 +13,7 @@
  (:enable :constant-naming)
 
  ;; Disable specific rules
- (:disable :bare-progn)
+ (:disable :progn-in-conditional)
 
  ;; Path-specific overrides for test files
  (:for-paths ("tests")

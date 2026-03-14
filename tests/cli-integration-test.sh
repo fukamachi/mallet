@@ -232,12 +232,12 @@ else
     test_fail "Expected if-without-else violations"
 fi
 
-test_start "Bare-progn-in-if rule detects violations"
+test_start "Progn-in-conditional rule detects violations"
 OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "cond.*progn" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
-    test_fail "Expected bare-progn-in-if violations"
+    test_fail "Expected progn-in-conditional violations"
 fi
 
 test_start "Missing-otherwise rule detects violations"

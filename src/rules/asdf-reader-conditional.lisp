@@ -13,7 +13,7 @@
   (:default-initargs
    :name :asdf-reader-conditional
    :description "Avoid #+/#- reader conditionals in defsystem; use :if-feature or :feature instead"
-   :severity :warning
+   :severity :info
    :category :practice
    :type :text
    :file-types '(:asd))
@@ -116,7 +116,6 @@ still have ASDF alternatives and should be flagged."
   (or (string-equal tok ":perform")
       (string-equal tok ":around-compile")))
 
-; mallet:suppress comment-ratio
 (defun process-token (state tok)
   "Handle a completed token TOK, updating STATE accordingly."
   (when (plusp (length tok))

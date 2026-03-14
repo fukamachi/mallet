@@ -472,7 +472,7 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
 (defclass comment-ratio-rule (base:rule)
   ((max-ratio
     :initarg :max
-    :initform 0.3d0
+    :initform 0.5d0
     :accessor max-ratio)
    (min-lines
     :initarg :min-lines
@@ -493,7 +493,7 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
    :category :metrics
    :type :form)
   (:documentation "Rule to detect functions with an unusually high comment density.
-Flags functions where comment lines exceed :max ratio (default 0.3) of total lines,
+Flags functions where comment lines exceed :max ratio (default 0.5) of total lines,
 suggesting code may be over-commented or poorly expressed."))
 
 (defmethod base:check-form ((rule comment-ratio-rule) form file)

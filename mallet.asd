@@ -114,7 +114,7 @@
     :components
     ((:file "line-length-test")
      (:file "if-without-else-test")
-     (:file "bare-progn-test")
+     (:file "progn-in-conditional-test")
      (:file "redundant-progn-test")
      (:file "missing-otherwise-test")
      (:file "wrong-otherwise-test")

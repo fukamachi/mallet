@@ -33,9 +33,9 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:allow-other-keys`](#allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | on | |
 | [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | on | |
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
-| [`:missing-exported-docstring`](#missing-exported-docstring) | Exported definitions missing docstrings | warning | on | |
+| [`:missing-exported-docstring`](#missing-exported-docstring) | Exported definitions missing docstrings | warning | off | |
 | [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
-| [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | warning | off | |
+| [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
 
 ### [Cleanliness](#cleanliness) — Dead code and unused definitions
 
@@ -53,14 +53,14 @@ Rules are organized by category. Each rule shows its severity and default preset
 | Rule | Description | Severity | Default | Options |
 |------|-------------|----------|---------|---------|
 | [`:if-without-else`](#if-without-else) | Use `when`/`unless` instead of `if` without else | warning | on | |
-| [`:bare-progn`](#bare-progn) | Use `cond`/`when`/`unless` instead of bare `progn` | info | off | |
-| [`:missing-otherwise`](#missing-otherwise) | `case`/`typecase` without `otherwise` clause | info | off | |
+| [`:progn-in-conditional`](#progn-in-conditional) | Use `cond`/`when`/`unless` instead of bare `progn` in `if`/`and`/`or` | info | off | |
+| [`:missing-otherwise`](#missing-otherwise) | `case`/`typecase` without `otherwise` clause | warning | off | |
 | [`:interned-package-symbol`](#interned-package-symbol) | Use uninterned symbols in package definitions | info | off | |
 | [`:needless-let*`](#needless-let) | Use `let` when bindings are independent | warning | on | |
 | [`:special-variable-naming`](#special-variable-naming) | Special variables should be named `*foo*` | info | off | |
 | [`:constant-naming`](#constant-naming) | Constants should be named `+foo+` | info | off | |
 | [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
-| [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) | Redundant package prefixes in `.asd` files | info | on | |
+| [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) | Redundant package prefixes in `.asd` files | info | off | |
 | [`:asdf-secondary-system-name`](#asdf-secondary-system-name) | Secondary systems must use `primary/suffix` name | warning | on | |
 | [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
 | [`:missing-docstring`](#missing-docstring) | Top-level definitions missing docstrings | info | off | |
@@ -83,7 +83,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 |------|-------------|----------|---------|---------|
 | [`:function-length`](#function-length) | Function exceeds maximum line count | info | off | `:max` (50) |
 | [`:cyclomatic-complexity`](#cyclomatic-complexity) | Function has high cyclomatic complexity | info | off | `:max` (20), `:variant` (standard) |
-| [`:comment-ratio`](#comment-ratio) | Function has too many comments | info | off | `:max` (0.3), `:min-lines` (5), `:include-docstrings` (nil) |
+| [`:comment-ratio`](#comment-ratio) | Function has too many comments | info | off | `:max` (0.5), `:min-lines` (5), `:include-docstrings` (nil) |
 
 ## Correctness
 
@@ -322,7 +322,7 @@ Exported definitions should have docstrings. Exported symbols form the public AP
   (open-connection host port))
 ```
 
-**Severity**: warning | **Default**: enabled
+**Severity**: warning | **Default**: disabled
 
 ### `:asdf-operate-in-perform`
 
@@ -369,7 +369,7 @@ Avoid `#+`/`#-` reader conditionals inside `defsystem` bodies in `.asd` files. R
 - Reader conditionals outside `defsystem` forms are ignored
 - Comments, string literals, and character literals are not scanned
 
-**Severity**: warning | **Default**: disabled
+**Severity**: info | **Default**: disabled
 
 ## Cleanliness
 
@@ -511,7 +511,7 @@ Use `when` or `unless` instead of `if` without else.
 
 **Severity**: warning | **Default**: enabled
 
-### `:bare-progn`
+### `:progn-in-conditional`
 
 Use `cond` instead of `if` with bare `progn`. Use `when` instead of `and` with bare `progn` as the last argument. Use `unless` instead of `or` with bare `progn` as the last argument.
 
@@ -570,7 +570,7 @@ Use `cond` instead of `if` with bare `progn`. Use `when` instead of `and` with b
   (otherwise nil))
 ```
 
-**Severity**: info | **Default**: disabled
+**Severity**: warning | **Default**: disabled
 
 ### `:interned-package-symbol`
 
@@ -670,7 +670,7 @@ Package prefixes `asdf:`, `cl:`, `common-lisp:`, and `uiop:` are redundant in `.
   :description (format nil "tests"))
 ```
 
-**Severity**: info | **Default**: enabled
+**Severity**: info | **Default**: disabled
 
 ### `:asdf-secondary-system-name`
 
@@ -881,7 +881,7 @@ Nested `flet`/`labels` functions are counted separately.
 Functions should not have too many comments relative to code. Useful for catching AI-generated code padded with excessive inline commentary.
 
 **Options**:
-- `:max` (default: 0.3) - Maximum comment ratio (0.0–1.0)
+- `:max` (default: 0.5) - Maximum comment ratio (0.0–1.0)
 - `:min-lines` (default: 5) - Minimum qualifying lines before the rule applies
 - `:include-docstrings` (default: `nil`) - Count docstring lines as comments
 

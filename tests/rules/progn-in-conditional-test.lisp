@@ -1,19 +1,19 @@
-(defpackage #:mallet/tests/rules/bare-progn
+(defpackage #:mallet/tests/rules/progn-in-conditional
   (:use #:cl
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
-(in-package #:mallet/tests/rules/bare-progn)
+(in-package #:mallet/tests/rules/progn-in-conditional)
 
-(deftest bare-progn-valid
+(deftest progn-in-conditional-valid
   (testing "Valid: if without progn"
     (let* ((code "(if condition
                      (do-something)
                      (do-else))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
@@ -24,7 +24,7 @@
                       (do-another))
                      (t (do-else)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
@@ -36,39 +36,39 @@
                          (do-another)))
                      (do-else))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
   (testing "Valid: and without progn"
     (let* ((code "(and x y)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
   (testing "Valid: or without progn"
     (let* ((code "(or x y)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
   (testing "Valid: and with progn in non-last position"
     (let* ((code "(and (progn (a) (b)) x)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
   (testing "Valid: or with progn in non-last position"
     (let* ((code "(or (progn (a) (b)) x)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)))))
 
-(deftest bare-progn-invalid
+(deftest progn-in-conditional-invalid
   (testing "Invalid: progn in then clause of if"
     (let* ((code "(if condition
                      (progn
@@ -76,11 +76,11 @@
                        (do-another))
                      (do-else))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :bare-progn))
+              :progn-in-conditional))
       (ok (string= (violation:violation-message (first violations))
                    "Use 'cond' instead of 'if' with bare 'progn'"))))
 
@@ -91,11 +91,11 @@
                        (do-else-1)
                        (do-else-2)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :bare-progn))))
+              :progn-in-conditional))))
 
   (testing "Invalid: progn in both clauses of if"
     (let* ((code "(if condition
@@ -106,7 +106,7 @@
                        (do-else-1)
                        (do-else-2)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; Should only report one violation per IF form, even if both clauses have progn
       (ok (= (length violations) 1))))
@@ -114,43 +114,43 @@
   (testing "Invalid: and with progn as last argument"
     (let* ((code "(and x (progn (a) (b)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :bare-progn))
+              :progn-in-conditional))
       (ok (string= (violation:violation-message (first violations))
                    "Use 'when' instead of 'and' with bare 'progn'"))))
 
   (testing "Invalid: or with progn as last argument"
     (let* ((code "(or x (progn (a) (b)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :bare-progn))
+              :progn-in-conditional))
       (ok (string= (violation:violation-message (first violations))
                    "Use 'unless' instead of 'or' with bare 'progn'"))))
 
   (testing "Invalid: and with multiple args, last is progn"
     (let* ((code "(and x y (progn (a) (b)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :bare-progn))
+              :progn-in-conditional))
       (ok (string= (violation:violation-message (first violations))
                    "Use 'when' instead of 'and' with bare 'progn'"))))
 
   (testing "Invalid: or with multiple args, last is progn"
     (let* ((code "(or x y (progn (a) (b)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:bare-progn-rule))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :bare-progn))
+              :progn-in-conditional))
       (ok (string= (violation:violation-message (first violations))
                    "Use 'unless' instead of 'or' with bare 'progn'")))))
