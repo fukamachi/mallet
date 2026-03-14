@@ -5,7 +5,8 @@
                 #:parse-rule-options
                 #:parse-rule-name
                 #:parse-rule-spec
-                #:should-fail-p))
+                #:should-fail-p
+                #:expand-file-args))
 (in-package #:mallet/tests/cli-parsing)
 
 ;;; Tests for parse-option-value
@@ -108,4 +109,120 @@
     (ok (should-fail-p :info nil t t))   ; warnings
     (ok (should-fail-p :info nil nil t)) ; any violations
     (ok (not (should-fail-p :info nil nil nil)))))  ; no violations
+
+;;; Tests for expand-file-args directory exclusion logic
+
+(defun make-test-dir (base &rest parts)
+  "Create a directory under BASE from PARTS path components, returning its pathname."
+  (let ((path (uiop:ensure-directory-pathname
+               (apply #'concatenate 'string base
+                      (mapcar (lambda (p) (concatenate 'string p "/")) parts)))))
+    (ensure-directories-exist path)
+    path))
+
+(defun write-test-lisp-file (dir name)
+  "Create an empty .lisp file named NAME under DIR, returning its truename pathname.
+Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
+  (let ((path (merge-pathnames name dir)))
+    (with-open-file (out path :direction :output :if-exists :supersede)
+      (write-string ";; test\n" out))
+    (truename path)))
+
+(defun cleanup-test-dir (dir)
+  "Remove DIR and all its contents."
+  (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))
+
+(defun path-names (pathnames)
+  "Return a sorted list of file namestrings for comparison."
+  (sort (mapcar #'namestring pathnames) #'string<))
+
+(deftest expand-file-args-basic-directory
+  (testing "Scanning a plain directory returns all .lisp files"
+    (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
+           (root (make-test-dir base))
+           (src (make-test-dir base "src")))
+      (unwind-protect
+           (let ((f1 (write-test-lisp-file root "top.lisp"))
+                 (f2 (write-test-lisp-file src "src.lisp")))
+             (let ((result (expand-file-args (list (namestring root)))))
+               (ok (member (namestring f1) (path-names result) :test #'string=)
+                   "top-level file is included")
+               (ok (member (namestring f2) (path-names result) :test #'string=)
+                   "file in src/ subdirectory is included")))
+        (cleanup-test-dir root)))))
+
+(deftest expand-file-args-excludes-dot-claude-when-scanning-parent
+  (testing "Files under .claude/ are excluded when scanning from the parent project root"
+    (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
+           (root (make-test-dir base))
+           (src (make-test-dir base "src"))
+           (claude (make-test-dir base ".claude"))
+           (worktree (make-test-dir base ".claude" "worktrees" "agent-x" "src")))
+      (unwind-protect
+           (let ((src-file (write-test-lisp-file src "project.lisp"))
+                 (claude-file (write-test-lisp-file claude "config.lisp"))
+                 (worktree-file (write-test-lisp-file worktree "foo.lisp")))
+             (let ((result (expand-file-args (list (namestring root)))))
+               (ok (member (namestring src-file) (path-names result) :test #'string=)
+                   "src/ file is included")
+               (ok (not (member (namestring claude-file) (path-names result) :test #'string=))
+                   ".claude/ file is excluded")
+               (ok (not (member (namestring worktree-file) (path-names result) :test #'string=))
+                   "worktree file under .claude/ is excluded")))
+        (cleanup-test-dir root)))))
+
+(deftest expand-file-args-worktree-not-excluded-when-scanning-from-within
+  (testing "Files inside a worktree are NOT excluded when scanning from the worktree root"
+    ;; The worktree directory itself is under .claude/worktrees/ in the parent project,
+    ;; but when mallet is invoked from inside the worktree, files within it must be found.
+    (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
+           ;; Simulate: parent/.claude/worktrees/agent-x/ is the worktree root
+           (worktree-root (make-test-dir base ".claude" "worktrees" "agent-x"))
+           (worktree-src (make-test-dir base ".claude" "worktrees" "agent-x" "src")))
+      (unwind-protect
+           (let ((f1 (write-test-lisp-file worktree-root "main.lisp"))
+                 (f2 (write-test-lisp-file worktree-src "impl.lisp")))
+             ;; Scan from the worktree root (not the parent project root)
+             (let ((result (expand-file-args (list (namestring worktree-root)))))
+               (ok (member (namestring f1) (path-names result) :test #'string=)
+                   "worktree root file is included when scanning from worktree root")
+               (ok (member (namestring f2) (path-names result) :test #'string=)
+                   "worktree src/ file is included when scanning from worktree root")))
+        (cleanup-test-dir (uiop:ensure-directory-pathname
+                           (concatenate 'string base ".claude/worktrees/agent-x/")))
+        (cleanup-test-dir (uiop:ensure-directory-pathname base))))))
+
+(deftest expand-file-args-excludes-standard-dirs
+  (testing "Standard excluded directories like .git, .qlot, .cache are skipped"
+    (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
+           (root (make-test-dir base))
+           (src (make-test-dir base "src"))
+           (git (make-test-dir base ".git"))
+           (qlot (make-test-dir base ".qlot"))
+           (cache (make-test-dir base ".cache")))
+      (unwind-protect
+           (let ((src-file (write-test-lisp-file src "main.lisp"))
+                 (git-file (write-test-lisp-file git "hook.lisp"))
+                 (qlot-file (write-test-lisp-file qlot "dep.lisp"))
+                 (cache-file (write-test-lisp-file cache "cached.lisp")))
+             (let ((result (expand-file-args (list (namestring root)))))
+               (ok (member (namestring src-file) (path-names result) :test #'string=)
+                   "src/ file is included")
+               (ok (not (member (namestring git-file) (path-names result) :test #'string=))
+                   ".git/ file is excluded")
+               (ok (not (member (namestring qlot-file) (path-names result) :test #'string=))
+                   ".qlot/ file is excluded")
+               (ok (not (member (namestring cache-file) (path-names result) :test #'string=))
+                   ".cache/ file is excluded")))
+        (cleanup-test-dir root)))))
+
+(deftest expand-file-args-single-file
+  (testing "A single file path returns just that file"
+    (uiop:with-temporary-file (:stream out :pathname path :type "lisp" :keep t)
+      (write-string ";; test\n" out)
+      (finish-output out)
+      (let ((result (expand-file-args (list (namestring path)))))
+        (ok (= 1 (length result)) "exactly one file returned")
+        (ok (string= (namestring (truename path)) (namestring (first result)))
+            "returned file matches input")))))
 
