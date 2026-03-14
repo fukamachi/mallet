@@ -339,12 +339,17 @@ Examples:
 Handles wildcards and directories, excluding common non-source directories."
   (let ((files '())
         (excluded-dirs '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".claude")))
-    (labels ((should-exclude-p (path)
-               "Check if PATH is in an excluded directory."
-               (let ((path-string (namestring path)))
-                 (some (lambda (excluded)
-                         (search (concatenate 'string "/" excluded "/") path-string))
-                       excluded-dirs))))
+    (labels ((should-exclude-p (path base-dir)
+               "Check if PATH has an excluded directory component relative to BASE-DIR."
+               (let* ((path-string (namestring path))
+                      (base-string (namestring base-dir))
+                      (rel-path (if (and (>= (length path-string) (length base-string))
+                                         (string= path-string base-string :end1 (length base-string)))
+                                    (subseq path-string (length base-string))
+                                    path-string)))
+                 (some (lambda (component)
+                         (member component excluded-dirs :test #'string=))
+                       (uiop:split-string rel-path :separator "/")))))
       (dolist (arg file-args)
         (let ((path (uiop:parse-native-namestring arg)))
           (cond
@@ -352,7 +357,7 @@ Handles wildcards and directories, excluding common non-source directories."
             ((uiop:directory-exists-p path)
              (let* ((dir-path (uiop:ensure-directory-pathname path))
                     (all-files (uiop:directory-files dir-path "**/*.lisp"))
-                    (filtered-files (remove-if #'should-exclude-p all-files)))
+                    (filtered-files (remove-if (lambda (f) (should-exclude-p f dir-path)) all-files)))
                (setf files (nconc files filtered-files))))
             ;; Wildcard pattern - expand using directory
             ((or (find #\* arg) (find #\? arg))
