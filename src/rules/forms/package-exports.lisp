@@ -59,26 +59,38 @@ Collects all symbols from all :export clauses."
 NOTE: A parallel list exists in the EXCLUDED-DIRS local binding inside EXPAND-FILE-ARGS
 in src/main.lisp. Keep both lists in sync whenever adding or removing entries.")
 
+(defun run-file-lister (argv)
+  "Run ARGV as a subprocess and return a list of pathnames from its stdout lines.
+Returns NIL if the process cannot be launched or exits with code > 1."
+  (multiple-value-bind (output error-output exit-code)
+      (handler-case
+          (uiop:run-program argv
+                            :output :string
+                            :error-output nil
+                            :ignore-error-status t)
+        (error () (values nil nil nil)))
+    (declare (ignore error-output))
+    ;; exit 0 = matches found, exit 1 = no matches (grep convention) — both are OK
+    (when (and output (member exit-code '(0 1)))
+      (loop for line in (uiop:split-string output :separator '(#\Newline))
+            when (plusp (length line))
+            collect (pathname line)))))
+
 (defun collect-lisp-files-with-rg (root)
   "Use ripgrep to list .lisp files under ROOT, respecting *EXCLUDED-DIRS*.
 Returns a list of pathnames, or NIL if rg is unavailable or fails."
   (let ((exclude-globs (loop for d in *excluded-dirs*
-                             append (list "--glob" (concatenate 'string "!" d "/**"))))
-        (root-str (namestring root)))
-    (multiple-value-bind (output error-output exit-code)
-        (handler-case
-            (uiop:run-program
-             `("rg" "--files" "--no-ignore" "--glob" "*.lisp"
-               ,@exclude-globs ,root-str)
-             :output :string
-             :error-output nil
-             :ignore-error-status t)
-          (error () (values nil nil nil)))
-      (declare (ignore error-output))
-      (when (and output (eql exit-code 0))
-        (loop for line in (uiop:split-string output :separator '(#\Newline))
-              when (plusp (length line))
-              collect (pathname line))))))
+                             append (list "--glob" (concatenate 'string "!" d "/**")))))
+    (run-file-lister `("rg" "--files" "--no-ignore" "--glob" "*.lisp"
+                       ,@exclude-globs ,(namestring root)))))
+
+(defun collect-lisp-files-with-grep (root)
+  "Use grep to list .lisp files under ROOT, respecting *EXCLUDED-DIRS*.
+Returns a list of pathnames, or NIL if grep is unavailable or fails."
+  (let ((exclude-dir-args (loop for d in *excluded-dirs*
+                                append (list "--exclude-dir" d))))
+    (run-file-lister `("grep" "-rl" "--include=*.lisp"
+                       ,@exclude-dir-args "" ,(namestring root)))))
 
 (defun collect-lisp-files-with-uiop (root)
   "Recursively collect .lisp files under ROOT using UIOP, skipping *EXCLUDED-DIRS*."
@@ -98,9 +110,10 @@ Returns a list of pathnames, or NIL if rg is unavailable or fails."
 
 (defun collect-lisp-files (project-root)
   "Return list of .lisp file pathnames under PROJECT-ROOT, excluding build/VCS directories.
-Tries rg (ripgrep) first for speed; falls back to UIOP directory traversal."
+Tries rg, then grep, then UIOP directory traversal as fallback."
   (let ((root (uiop:ensure-directory-pathname project-root)))
     (or (collect-lisp-files-with-rg root)
+        (collect-lisp-files-with-grep root)
         (collect-lisp-files-with-uiop root))))
 
 ;;; Build the exports index for a project
