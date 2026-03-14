@@ -83,12 +83,12 @@
         (ok (member :no-tabs rule-names))
         (ok (member :unused-variables rule-names))
         (ok (member :if-without-else rule-names))
-        ;; missing-exported-docstring is in the default preset
-        (ok (member :missing-exported-docstring rule-names))
+        ;; missing-exported-docstring is opt-in; must not be in default
+        (ok (not (member :missing-exported-docstring rule-names)))
         ;; missing-docstring is opt-in only; must not be in default
         (ok (not (member :missing-docstring rule-names)))
         ;; ASDF best-practices rules in the default preset
-        (ok (member :asdf-redundant-package-prefix rule-names))
+        (ok (not (member :asdf-redundant-package-prefix rule-names)))
         (ok (member :asdf-operate-in-perform rule-names))
         (ok (member :asdf-secondary-system-name rule-names))
         (ok (member :asdf-if-feature-keyword rule-names))

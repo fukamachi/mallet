@@ -6,7 +6,7 @@
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation))
   (:export #:if-without-else-rule
-           #:bare-progn-rule
+           #:progn-in-conditional-rule
            #:redundant-progn-rule
            #:missing-otherwise-rule
            #:wrong-otherwise-rule))
@@ -89,17 +89,17 @@ Suppressions are handled automatically by the :around method."
 
 ;;; Bare-progn rule
 
-(defclass bare-progn-rule (base:rule)
+(defclass progn-in-conditional-rule (base:rule)
   ()
   (:default-initargs
-   :name :bare-progn
+   :name :progn-in-conditional
    :description "Bare 'progn' in 'if', 'and', or 'or' can be simplified"
    :severity :info
    :category :style
    :type :form)
   (:documentation "Rule to detect bare 'progn' in 'if', 'and', or 'or' clauses."))
 
-(defmethod base:check-form ((rule bare-progn-rule) form file)
+(defmethod base:check-form ((rule progn-in-conditional-rule) form file)
   "Check that IF/AND/OR forms don't have bare PROGN in key positions."
   (check-type form parser:form)
   (check-type file pathname)
@@ -114,7 +114,7 @@ Suppressions are handled automatically by the :around method."
                              nil  ; function-name
                              (parser:form-position-map form)))
 
-(defmethod base:check-form-recursive ((rule bare-progn-rule) expr file line column &optional function-name position-map)
+(defmethod base:check-form-recursive ((rule progn-in-conditional-rule) expr file line column &optional function-name position-map)
   "Recursively check for bare PROGN in IF/AND/OR clauses.
 Suppressions are handled automatically by the :around method."
   (declare (ignore function-name))
@@ -148,7 +148,7 @@ Suppressions are handled automatically by the :around method."
                                           (is-progn-p else-clause))
                                       (base:should-create-violation-p rule))
                              (push (make-instance 'violation:violation
-                                                  :rule :bare-progn
+                                                  :rule :progn-in-conditional
                                                   :file file
                                                   :line actual-line
                                                   :column actual-column
@@ -164,7 +164,7 @@ Suppressions are handled automatically by the :around method."
                                   (is-progn-p (car (last rest-args)))
                                   (base:should-create-violation-p rule))
                          (push (make-instance 'violation:violation
-                                              :rule :bare-progn
+                                              :rule :progn-in-conditional
                                               :file file
                                               :line actual-line
                                               :column actual-column
@@ -180,7 +180,7 @@ Suppressions are handled automatically by the :around method."
                                   (is-progn-p (car (last rest-args)))
                                   (base:should-create-violation-p rule))
                          (push (make-instance 'violation:violation
-                                              :rule :bare-progn
+                                              :rule :progn-in-conditional
                                               :file file
                                               :line actual-line
                                               :column actual-column
@@ -289,7 +289,7 @@ Suppressions are handled automatically by the :around method."
   (:default-initargs
    :name :missing-otherwise
    :description "case/typecase should have 'otherwise' clause"
-   :severity :info
+   :severity :warning
    :category :style
    :type :form)
   (:documentation "Rule to detect case/typecase without otherwise clause."))

@@ -2,11 +2,11 @@
 # Format: line:column rule-name severity
 
 11:2 if-without-else warning
-18:2 bare-progn info
-28:2 bare-progn info
-35:2 bare-progn info
-44:2 missing-otherwise info
-51:2 missing-otherwise info
-57:2 missing-otherwise info
+18:2 progn-in-conditional info
+28:2 progn-in-conditional info
+35:2 progn-in-conditional info
+44:2 missing-otherwise warning
+51:2 missing-otherwise warning
+57:2 missing-otherwise warning
 66:2 wrong-otherwise error
 73:2 wrong-otherwise error

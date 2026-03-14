@@ -386,7 +386,6 @@ Style preferences are disabled to keep output clean."
             :unused-local-nicknames
             :unused-imported-symbols
             :asdf-component-strings
-            :asdf-redundant-package-prefix
             :asdf-operate-in-perform
             :asdf-secondary-system-name
             :asdf-if-feature-keyword
@@ -398,23 +397,24 @@ Style preferences are disabled to keep output clean."
             :needless-let*
             :double-colon-access
             :stale-suppression
-            :redundant-progn
-            ;; Documentation rules
-            :missing-exported-docstring))
+            :redundant-progn))
         (disabled-rules
           '(;; Style preferences - disabled (too noisy, no consensus)
             :line-length
             :consecutive-blank-lines
-            :bare-progn
+            :progn-in-conditional
             :interned-package-symbol
             :missing-otherwise
             :constant-naming
             :special-variable-naming
             :missing-docstring
+            ;; Documentation - exported-only check has false positive risk
+            :missing-exported-docstring
+            ;; ASDF practice - disabled by default
+            :asdf-redundant-package-prefix
+            :asdf-reader-conditional
             ;; LOOP variables - disabled
-            :unused-loop-variables
-            ;; ASDF practice - disabled by default (reader conditionals are sometimes intentional)
-            :asdf-reader-conditional)))
+            :unused-loop-variables)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
@@ -445,7 +445,7 @@ Useful for exploration and discovering what rules exist."
             :unused-loop-variables
             ;; Style
             :if-without-else
-            :bare-progn
+            :progn-in-conditional
             :redundant-progn
             :missing-otherwise
             :interned-package-symbol

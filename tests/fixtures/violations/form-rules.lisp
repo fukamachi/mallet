@@ -11,7 +11,7 @@
   (if (> x 0)
       (print "positive")))
 
-;;; bare-progn rule violations
+;;; progn-in-conditional rule violations
 
 (defun handle-value (x)
   "Bad: bare progn in if should use cond."

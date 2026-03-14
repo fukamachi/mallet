@@ -53,8 +53,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
     ;; Form rules
     (:if-without-else
      (apply #'make-instance 'if-without-else-rule options))
-    (:bare-progn
-     (apply #'make-instance 'bare-progn-rule options))
+    (:progn-in-conditional
+     (apply #'make-instance 'progn-in-conditional-rule options))
     (:redundant-progn
      (apply #'make-instance 'redundant-progn-rule options))
     (:missing-otherwise

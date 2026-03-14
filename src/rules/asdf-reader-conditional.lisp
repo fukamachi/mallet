@@ -13,7 +13,7 @@
   (:default-initargs
    :name :asdf-reader-conditional
    :description "Avoid #+/#- reader conditionals in defsystem; use :if-feature or :feature instead"
-   :severity :warning
+   :severity :info
    :category :practice
    :type :text
    :file-types '(:asd))
