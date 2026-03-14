@@ -341,7 +341,7 @@ Handles wildcards and directories, excluding common non-source directories."
   (let ((files '())
         ;; NOTE: A parallel list exists as *EXCLUDED-DIRS* in
         ;; src/rules/forms/package-exports.lisp. Keep both in sync.
-        (excluded-dirs '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".claude" ".cache" "target" ".zig-cache")))
+        (excluded-dirs '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".claude" ".cache" ".zig-cache")))
     (labels ((collect-lisp-files (dir)
                "Recursively collect .lisp files under DIR, skipping excluded subdirectories."
                (let ((result '()))

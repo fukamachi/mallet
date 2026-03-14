@@ -54,7 +54,7 @@ Collects all symbols from all :export clauses."
 
 (defparameter *excluded-dirs*
   '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".cache" ".claude"
-    "target" ".zig-cache")
+    ".zig-cache")
   "Directory names to skip when scanning for Lisp files.
 NOTE: A parallel list exists in the EXCLUDED-DIRS local binding inside EXPAND-FILE-ARGS
 in src/main.lisp. Keep both lists in sync whenever adding or removing entries.")
