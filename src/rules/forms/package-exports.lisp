@@ -53,22 +53,30 @@ Collects all symbols from all :export clauses."
 ;;; File scanning
 
 (defparameter *excluded-dirs*
-  '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".cache" ".claude")
-  "Directory names to skip when scanning for Lisp files.")
-
-(defun should-exclude-path-p (path)
-  "Return T if PATH is inside an excluded directory."
-  (let ((path-string (namestring path)))
-    (some (lambda (excluded)
-            (search (concatenate 'string "/" excluded "/") path-string))
-          *excluded-dirs*)))
+  '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".cache" ".claude"
+    "target" ".zig-cache")
+  "Directory names to skip when scanning for Lisp files.
+NOTE: A parallel list exists in the EXCLUDED-DIRS local binding inside EXPAND-FILE-ARGS
+in src/main.lisp. Keep both lists in sync whenever adding or removing entries.")
 
 (defun collect-lisp-files (project-root)
-  "Return list of .lisp file pathnames under PROJECT-ROOT, excluding build/VCS directories."
-  (let* ((dir (uiop:ensure-directory-pathname project-root))
-         (all-files (handler-case (uiop:directory-files dir "**/*.lisp")
-                      (error () nil))))
-    (remove-if #'should-exclude-path-p (or all-files '()))))
+  "Return list of .lisp file pathnames under PROJECT-ROOT, excluding build/VCS directories.
+Performs a recursive traversal that stops at excluded directory names, avoiding
+the cost of descending into large build artifact trees."
+  (let ((result '())
+        (dir (uiop:ensure-directory-pathname project-root)))
+    (labels ((recurse (d)
+               (handler-case
+                   (progn
+                     (dolist (f (uiop:directory-files d "*.lisp"))
+                       (push f result))
+                     (dolist (subdir (uiop:subdirectories d))
+                       (let ((name (car (last (pathname-directory subdir)))))
+                         (unless (member name *excluded-dirs* :test #'string=)
+                           (recurse subdir)))))
+                 (error () nil))))
+      (recurse dir))
+    result))
 
 ;;; Build the exports index for a project
 
