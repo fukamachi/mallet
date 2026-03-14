@@ -58,7 +58,8 @@
            #:parse-forms
            #:analyze-text
            ;; CLI helpers (exported for testing)
-           #:should-fail-p))
+           #:should-fail-p
+           #:expand-file-args))
 (in-package #:mallet)
 
 ;;; Special variables
