@@ -121,11 +121,12 @@
     path))
 
 (defun write-test-lisp-file (dir name)
-  "Create an empty .lisp file named NAME under DIR, returning its pathname."
+  "Create an empty .lisp file named NAME under DIR, returning its truename pathname.
+Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
   (let ((path (merge-pathnames name dir)))
     (with-open-file (out path :direction :output :if-exists :supersede)
       (write-string ";; test\n" out))
-    path))
+    (truename path)))
 
 (defun cleanup-test-dir (dir)
   "Remove DIR and all its contents."
@@ -226,6 +227,6 @@
       (finish-output out)
       (let ((result (expand-file-args (list (namestring path)))))
         (ok (= 1 (length result)) "exactly one file returned")
-        (ok (string= (namestring path) (namestring (first result)))
+        (ok (string= (namestring (truename path)) (namestring (first result)))
             "returned file matches input")))))
 
