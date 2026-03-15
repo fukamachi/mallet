@@ -404,7 +404,7 @@ echo ""
 
 test_start "--enable eval-usage (alias name) does not produce a fatal error"
 EXIT_CODE=0
-"$CLI" --none --enable eval-usage "$CLEAN_DIR/unused-variables.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+"$CLI" --none --enable eval-usage "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
 if [ "$EXIT_CODE" -ne 3 ]; then
     test_pass
 else
@@ -413,7 +413,7 @@ fi
 
 test_start "--disable if-without-else (alias name) does not produce a fatal error"
 EXIT_CODE=0
-"$CLI" --none --disable if-without-else "$CLEAN_DIR/unused-variables.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+"$CLI" --none --disable if-without-else "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
 if [ "$EXIT_CODE" -ne 3 ]; then
     test_pass
 else
@@ -422,7 +422,7 @@ fi
 
 test_start "--enable interned-package-symbol (alias name) does not produce a fatal error"
 EXIT_CODE=0
-"$CLI" --none --enable interned-package-symbol "$CLEAN_DIR/unused-variables.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+"$CLI" --none --enable interned-package-symbol "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
 if [ "$EXIT_CODE" -ne 3 ]; then
     test_pass
 else
