@@ -1,3 +1,5 @@
+;; Tests for text-formatting rules: :trailing-whitespace, :no-tabs,
+;; :missing-final-newline (formerly :final-newline), and :consecutive-blank-lines.
 (defpackage #:mallet/tests/rules/text-formatting
   (:use #:cl
         #:rove)

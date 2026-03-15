@@ -1,3 +1,5 @@
+;; Tests for the :no-ignore-errors rule (formerly :ignore-errors-usage).
+;; The file and package retain the old name to avoid an mallet.asd rename.
 (defpackage #:mallet/tests/rules/ignore-errors-usage
   (:use #:cl
         #:rove)

@@ -1,3 +1,5 @@
+;; Tests for lambda-list rules: :mixed-optional-and-key and :no-allow-other-keys.
+;; The :no-allow-other-keys rule was formerly known as :allow-other-keys.
 (defpackage #:mallet/tests/rules/lambda-list
   (:use #:cl
         #:rove)

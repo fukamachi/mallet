@@ -1,3 +1,5 @@
+;; Tests for the :defpackage-interned-symbol rule (formerly :interned-package-symbol).
+;; The file and package retain the old name to avoid an mallet.asd rename.
 (defpackage #:mallet/tests/rules/interned-package-symbol
   (:use #:cl #:rove)
   (:local-nicknames

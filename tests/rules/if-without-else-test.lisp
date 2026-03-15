@@ -1,3 +1,5 @@
+;; Tests for the :missing-else rule (formerly :if-without-else).
+;; The file and package retain the old name to avoid an mallet.asd rename.
 (defpackage #:mallet/tests/rules/if-without-else
   (:use #:cl
         #:rove)

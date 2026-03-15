@@ -1,3 +1,5 @@
+;; Tests for the :no-eval rule (formerly :eval-usage).
+;; The file and package retain the old name to avoid an mallet.asd rename.
 (defpackage #:mallet/tests/rules/eval-usage
   (:use #:cl
         #:rove)
