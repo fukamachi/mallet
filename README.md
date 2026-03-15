@@ -93,7 +93,7 @@ mallet -a --fix src/              # Fix with all rules enabled
 
 **Fixable rules:**
 - `:trailing-whitespace` - Remove trailing whitespace from lines
-- `:final-newline` - Ensure files end with a newline
+- `:missing-final-newline` - Ensure files end with a newline
 - `:consecutive-blank-lines` - Reduce excessive blank lines
 - `:unused-local-nicknames` - Remove unused package nicknames from `defpackage`
 - `:unused-imported-symbols` - Remove unused imports from `defpackage`
@@ -161,7 +161,7 @@ Use `#+mallet` with `declaim` or `declare` to suppress specific rules. The `#+ma
 **Suppress next form:**
 ```lisp
 #+mallet
-(declaim (mallet:suppress-next :if-without-else))
+(declaim (mallet:suppress-next :missing-else))
 (defun foo () (if x (print "yes")))  ; Suppressed
 ```
 
@@ -198,7 +198,7 @@ Mallet also supports lightweight inline comment directives as an alternative to 
 ```lisp
 (let* ((x (foo))) x) ; mallet:suppress needless-let*
 
-; mallet:suppress if-without-else
+; mallet:suppress missing-else
 (if condition (do-something))
 ```
 

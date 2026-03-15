@@ -20,19 +20,19 @@
       (ng (suppression:rule-suppressed-p state :line-length))
 
       ;; Disable some rules
-      (suppression:set-region-disabled state '(:line-length :if-without-else))
+      (suppression:set-region-disabled state '(:line-length :missing-else))
       (ok (suppression:rule-suppressed-p state :line-length))
-      (ok (suppression:rule-suppressed-p state :if-without-else))
+      (ok (suppression:rule-suppressed-p state :missing-else))
       (ng (suppression:rule-suppressed-p state :unused-variables))
 
       ;; Enable one rule
       (suppression:enable-region-rules state '(:line-length))
       (ng (suppression:rule-suppressed-p state :line-length))
-      (ok (suppression:rule-suppressed-p state :if-without-else))
+      (ok (suppression:rule-suppressed-p state :missing-else))
 
       ;; Enable all
-      (suppression:enable-region-rules state '(:if-without-else))
-      (ng (suppression:rule-suppressed-p state :if-without-else)))))
+      (suppression:enable-region-rules state '(:missing-else))
+      (ng (suppression:rule-suppressed-p state :missing-else)))))
 
 (deftest suppression-state-region-all
   (testing "Region-based :all suppression"
@@ -118,13 +118,13 @@
       ;; Add first rule
       (suppression:add-function-suppression state 'factorial '(:line-length))
       ;; Add second rule for same function
-      (suppression:add-function-suppression state 'factorial '(:if-without-else))
+      (suppression:add-function-suppression state 'factorial '(:missing-else))
 
       ;; Both rules should be suppressed
       (ok (suppression:rule-suppressed-p state :line-length
                                          :form-type :function-body
                                          :function-name 'factorial))
-      (ok (suppression:rule-suppressed-p state :if-without-else
+      (ok (suppression:rule-suppressed-p state :missing-else
                                          :form-type :function-body
                                          :function-name 'factorial)))))
 
@@ -151,7 +151,7 @@
       (suppression:push-scope-suppression state '(:unused-variables))
 
       ;; Function adds if-without-else for specific function
-      (suppression:add-function-suppression state 'foo '(:if-without-else))
+      (suppression:add-function-suppression state 'foo '(:missing-else))
 
       ;; Check combinations
       ;; 1. In function foo: all three rules suppressed
@@ -161,7 +161,7 @@
       (ok (suppression:rule-suppressed-p state :unused-variables
                                          :form-type :function-body
                                          :function-name 'foo))
-      (ok (suppression:rule-suppressed-p state :if-without-else
+      (ok (suppression:rule-suppressed-p state :missing-else
                                          :form-type :function-body
                                          :function-name 'foo))
 
@@ -172,7 +172,7 @@
       (ok (suppression:rule-suppressed-p state :unused-variables
                                          :form-type :function-body
                                          :function-name 'bar))
-      (ng (suppression:rule-suppressed-p state :if-without-else
+      (ng (suppression:rule-suppressed-p state :missing-else
                                          :form-type :function-body
                                          :function-name 'bar))
 
@@ -189,15 +189,15 @@
   (testing "Next-form suppression"
     (let ((state (suppression:make-suppression-state)))
       ;; Set next-form suppression
-      (suppression:set-next-form-suppression state '(:line-length :if-without-else))
+      (suppression:set-next-form-suppression state '(:line-length :missing-else))
 
       ;; Should be in pending state (not active yet)
-      (ok (equal '(:line-length :if-without-else)
+      (ok (equal '(:line-length :missing-else)
                  (suppression:next-form-suppressions state)))
 
       ;; Consume it (simulates processing next form)
       (let ((rules (suppression:consume-next-form-suppression state)))
-        (ok (equal '(:line-length :if-without-else) rules))
+        (ok (equal '(:line-length :missing-else) rules))
         ;; Should be cleared after consumption
         (ok (null (suppression:next-form-suppressions state)))))))
 
@@ -207,7 +207,7 @@
   (testing "register-suppression returns unique integer IDs"
     (let ((state (suppression:make-suppression-state)))
       (let ((id1 (suppression:register-suppression state 10 '(:line-length) nil :inline-comment))
-            (id2 (suppression:register-suppression state 20 '(:if-without-else) "reason" :inline-comment)))
+            (id2 (suppression:register-suppression state 20 '(:missing-else) "reason" :inline-comment)))
         (ok (integerp id1))
         (ok (integerp id2))
         (ng (= id1 id2))))))
@@ -218,7 +218,7 @@
       (ok (null (suppression:collect-stale-suppressions state)))
       (suppression:register-suppression state 5 '(:line-length) "too long" :inline-comment)
       (ok (= 1 (length (suppression:collect-stale-suppressions state))))
-      (suppression:register-suppression state 10 '(:if-without-else) nil :inline-comment)
+      (suppression:register-suppression state 10 '(:missing-else) nil :inline-comment)
       (ok (= 2 (length (suppression:collect-stale-suppressions state)))))))
 
 (deftest mark-suppression-used-basic
@@ -235,7 +235,7 @@
   (testing "collect-stale-suppressions returns all unused entries"
     (let ((state (suppression:make-suppression-state)))
       (suppression:register-suppression state 5 '(:line-length) nil :inline-comment)
-      (suppression:register-suppression state 15 '(:if-without-else) nil :inline-comment)
+      (suppression:register-suppression state 15 '(:missing-else) nil :inline-comment)
       (let ((stale (suppression:collect-stale-suppressions state)))
         (ok (= 2 (length stale)))))))
 
@@ -243,7 +243,7 @@
   (testing "collect-stale-suppressions returns only unused entries"
     (let ((state (suppression:make-suppression-state)))
       (let ((id1 (suppression:register-suppression state 5 '(:line-length) nil :inline-comment))
-            (id2 (suppression:register-suppression state 15 '(:if-without-else) nil :inline-comment)))
+            (id2 (suppression:register-suppression state 15 '(:missing-else) nil :inline-comment)))
         ;; Mark only id1 as used
         (suppression:mark-suppression-used state id1)
         (let ((stale (suppression:collect-stale-suppressions state)))
@@ -288,7 +288,7 @@
     (let ((state (suppression:make-suppression-state)))
       (suppression:register-suppression state 10 '(:line-length) nil :inline-comment)
       ;; Different rule — no match
-      (ng (suppression:rule-suppressed-p state :if-without-else)))))
+      (ng (suppression:rule-suppressed-p state :missing-else)))))
 
 (deftest rule-suppressed-p-registered-all-keyword
   (testing "rule-suppressed-p matches :all keyword in registered suppressions"
@@ -318,7 +318,7 @@
     (let ((state (suppression:make-suppression-state)))
       (suppression:set-region-disabled state '(:line-length))
       (ok (suppression:rule-suppressed-p state :line-length))
-      (ng (suppression:rule-suppressed-p state :if-without-else)))))
+      (ng (suppression:rule-suppressed-p state :missing-else)))))
 
 (deftest feature-flag-reading
   (testing "#+mallet feature flag works with *features*"

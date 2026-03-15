@@ -52,8 +52,8 @@
                    msg))))
 
   (testing "Message with reason"
-    (let ((msg (ss:make-stale-suppression-message :if-without-else "not needed here")))
-      (ok (string= "suppression for :IF-WITHOUT-ELSE has no effect (no matching violation found) (reason: \"not needed here\")"
+    (let ((msg (ss:make-stale-suppression-message :missing-else "not needed here")))
+      (ok (string= "suppression for :MISSING-ELSE has no effect (no matching violation found) (reason: \"not needed here\")"
                    msg)))))
 
 ;;; Config integration tests

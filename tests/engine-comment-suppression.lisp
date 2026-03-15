@@ -31,11 +31,11 @@
 
 (defun make-if-without-else-config ()
   (config:make-config
-   :rules (list (rules:make-rule :if-without-else))))
+   :rules (list (rules:make-rule :missing-else))))
 
 (defun make-if-without-else-and-stale-config ()
   (config:make-config
-   :rules (list (rules:make-rule :if-without-else)
+   :rules (list (rules:make-rule :missing-else)
                 (rules:make-rule :stale-suppression))))
 
 (defun make-line-length-and-stale-config ()
@@ -148,7 +148,7 @@
            (violations (engine:lint-file file :config config)))
 
       (let ((iwe-violations (remove-if-not
-                              (lambda (v) (eq :if-without-else (violation:violation-rule v)))
+                              (lambda (v) (eq :missing-else (violation:violation-rule v)))
                               violations)))
         ;; before-disable and after-enable should both be flagged
         ;; during-disable should be suppressed
@@ -162,7 +162,7 @@
 
       (let ((iwe-violations (sort
                               (remove-if-not
-                               (lambda (v) (eq :if-without-else (violation:violation-rule v)))
+                               (lambda (v) (eq :missing-else (violation:violation-rule v)))
                                violations)
                               #'< :key #'violation:violation-line)))
         (when (= 2 (length iwe-violations))

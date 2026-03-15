@@ -1,17 +1,17 @@
-(defpackage #:mallet/tests/rules/ignore-errors-usage
+(defpackage #:mallet/tests/rules/no-ignore-errors
   (:use #:cl
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
-(in-package #:mallet/tests/rules/ignore-errors-usage)
+(in-package #:mallet/tests/rules/no-ignore-errors)
 
 ;;; Helper
 
 (defun check-ignore-errors (code)
   (let ((forms (parser:parse-forms code #p"test.lisp"))
-        (rule (make-instance 'rules:ignore-errors-usage-rule)))
+        (rule (make-instance 'rules:no-ignore-errors-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
@@ -46,7 +46,7 @@
   (testing "Direct (ignore-errors ...) call"
     (let ((violations (check-ignore-errors "(ignore-errors (risky-op))")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :ignore-errors-usage))
+      (ok (eq (violation:violation-rule (first violations)) :no-ignore-errors))
       (ok (eq (violation:violation-severity (first violations)) :warning))
       (ok (search "ignore-errors" (violation:violation-message (first violations))))))
 
@@ -54,7 +54,7 @@
     (let ((violations (check-ignore-errors
                        "(defun dangerous (op) (ignore-errors (funcall op)))")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :ignore-errors-usage))))
+      (ok (eq (violation:violation-rule (first violations)) :no-ignore-errors))))
 
   (testing "Multiple ignore-errors calls"
     (let ((violations (check-ignore-errors
@@ -64,30 +64,30 @@
   (testing "ignore-errors with no body"
     (let ((violations (check-ignore-errors "(ignore-errors)")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :ignore-errors-usage)))))
+      (ok (eq (violation:violation-rule (first violations)) :no-ignore-errors)))))
 
 (deftest ignore-errors-usage-category
   (testing "Rule has :practice category"
-    (let ((rule (make-instance 'rules:ignore-errors-usage-rule)))
+    (let ((rule (make-instance 'rules:no-ignore-errors-rule)))
       (ok (eq (rules:rule-category rule) :practice))))
 
   (testing "Rule has :warning severity"
-    (let ((rule (make-instance 'rules:ignore-errors-usage-rule)))
+    (let ((rule (make-instance 'rules:no-ignore-errors-rule)))
       (ok (eq (rules:rule-severity rule) :warning)))))
 
 ;;; Registration tests
 
 (deftest ignore-errors-usage-registration
-  (testing ":ignore-errors-usage is in default config"
+  (testing ":no-ignore-errors is in default config"
     (let* ((cfg (mallet/config:get-built-in-config :default))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
-      (ok (member :ignore-errors-usage rule-names))))
+      (ok (member :no-ignore-errors rule-names))))
 
-  (testing ":ignore-errors-usage is in :all config"
+  (testing ":no-ignore-errors is in :all config"
     (let* ((cfg (mallet/config:get-built-in-config :all))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
-      (ok (member :ignore-errors-usage rule-names))))
+      (ok (member :no-ignore-errors rule-names))))
 
-  (testing ":ignore-errors-usage rule has :practice category"
-    (let ((rule (rules:make-rule :ignore-errors-usage)))
+  (testing ":no-ignore-errors rule has :practice category"
+    (let ((rule (rules:make-rule :no-ignore-errors)))
       (ok (eq :practice (rules:rule-category rule))))))

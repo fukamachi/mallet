@@ -17,11 +17,11 @@
   (testing "Create config with rules"
     (let ((cfg (config:make-config
                 :rules (list (rules:make-rule :line-length :max 100)
-                             (rules:make-rule :if-without-else))
-                :disabled-rules '(:if-without-else))))
+                             (rules:make-rule :missing-else))
+                :disabled-rules '(:missing-else))))
       (ok (not (null cfg)))
       (ok (= 2 (length (config:config-rules cfg))))
-      (ok (member :if-without-else (config:config-disabled-rules cfg))))))
+      (ok (member :missing-else (config:config-disabled-rules cfg))))))
 
 ;;; Config parsing tests
 
@@ -37,9 +37,9 @@
 
   (testing "Parse config with :disable"
     (let* ((sexp '(:mallet-config
-                   (:disable :if-without-else)))
+                   (:disable :missing-else)))
            (cfg (config:parse-config sexp)))
-      (ok (member :if-without-else (config:config-disabled-rules cfg)))))
+      (ok (member :missing-else (config:config-disabled-rules cfg)))))
 
   (testing "Parse config with severity override"
     (let* ((sexp '(:mallet-config
@@ -82,7 +82,7 @@
         (ok (member :trailing-whitespace rule-names))
         (ok (member :no-tabs rule-names))
         (ok (member :unused-variables rule-names))
-        (ok (member :if-without-else rule-names))
+        (ok (member :missing-else rule-names))
         ;; missing-exported-docstring is opt-in; must not be in default
         (ok (not (member :missing-exported-docstring rule-names)))
         ;; missing-docstring is opt-in only; must not be in default
@@ -109,7 +109,7 @@
       (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
         (ok (member :line-length rule-names))
         (ok (member :trailing-whitespace rule-names))
-        (ok (member :if-without-else rule-names))
+        (ok (member :missing-else rule-names))
         ;; Both docstring rules are in the all preset
         (ok (member :missing-exported-docstring rule-names))
         (ok (member :missing-docstring rule-names))
@@ -559,19 +559,19 @@
   (testing ":for-paths inherits project-wide :disable settings"
     (let* ((sexp '(:mallet-config
                    (:extends :default)
-                   (:disable :if-without-else)  ; Project-wide disable
+                   (:disable :missing-else)  ; Project-wide disable
                    (:for-paths ("src/main.lisp")
                     (:enable :line-length :max 100))))
            (cfg (config:parse-config sexp)))
-      ;; For src/main.lisp, :if-without-else should be disabled (inherited from project-wide)
+      ;; For src/main.lisp, :missing-else should be disabled (inherited from project-wide)
       (let* ((rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
              (rule-names (mapcar #'rules:rule-name rules)))
-        (ok (not (member :if-without-else rule-names)) "Project-wide :disable should apply to :for-paths")
+        (ok (not (member :missing-else rule-names)) "Project-wide :disable should apply to :for-paths")
         (ok (member :line-length rule-names) ":for-paths :enable should work"))
-      ;; For other files, :if-without-else should also be disabled
+      ;; For other files, :missing-else should also be disabled
       (let* ((rules (config:get-rules-for-file cfg #P"/src/other.lisp"))
              (rule-names (mapcar #'rules:rule-name rules)))
-        (ok (not (member :if-without-else rule-names)) "Project-wide :disable should apply to all files"))))
+        (ok (not (member :missing-else rule-names)) "Project-wide :disable should apply to all files"))))
 
   (testing ":for-paths inherits project-wide :enable settings"
     (let* ((sexp '(:mallet-config
@@ -834,13 +834,13 @@
   (testing "Complex combination of CLI overrides"
     (let* ((base-config (config:get-built-in-config :default))
            (cli-rules '(:enable-rules ((:line-length :max 120))
-                        :disable-rules (:if-without-else)))
+                        :disable-rules (:missing-else)))
            (merged (config:apply-cli-overrides base-config cli-rules)))
       ;; line-length enabled with custom option
       (ok (find :line-length (config:config-rules merged)
                 :key #'rules:rule-name))
       ;; if-without-else disabled
-      (ok (member :if-without-else (config:config-disabled-rules merged))))))
+      (ok (member :missing-else (config:config-disabled-rules merged))))))
 
 ;;; Severity precedence contract tests:
 ;;; per-rule :severity > :set-severity > rule default

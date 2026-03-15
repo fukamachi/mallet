@@ -9,7 +9,8 @@
    #:proper-list-of-min-length-p
    #:proper-list-of-exact-length-p
    #:proper-list-of-length-range-p
-   #:debug-mode-p))
+   #:debug-mode-p
+   #:resolve-rule-alias))
 (in-package #:mallet/utils)
 
 (defun symbol-name-from-string (str)
@@ -96,3 +97,22 @@ This combines proper-list-p and length checking in a single traversal for effici
   "Check if debug mode is enabled."
   (and (find-symbol "*DEBUG-MODE*" "MALLET")
        (symbol-value (find-symbol "*DEBUG-MODE*" "MALLET"))))
+
+(defparameter *rule-aliases*
+  '((:eval-usage          . :no-eval)
+    (:ignore-errors-usage . :no-ignore-errors)
+    (:allow-other-keys    . :no-allow-other-keys)
+    (:if-without-else     . :missing-else)
+    (:final-newline       . :missing-final-newline)
+    (:interned-package-symbol . :defpackage-interned-symbol))
+  "Deprecated rule name aliases mapping old-name to canonical new-name.")
+
+(defun resolve-rule-alias (name)
+  "Resolve NAME to its canonical form, emitting a deprecation warning if it is an alias.
+
+   If NAME is a known deprecated alias, warns and returns the canonical name.
+   Otherwise returns NAME unchanged."
+  (let ((canonical (cdr (assoc name *rule-aliases*))))
+    (when canonical
+      (warn "Rule name ~S is deprecated; use ~S instead." name canonical))
+    (or canonical name)))
