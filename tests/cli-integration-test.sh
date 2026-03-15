@@ -224,12 +224,12 @@ else
 fi
 
 # Form-level rules
-test_start "If-without-else rule detects violations"
+test_start "missing-else rule detects violations"
 OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "when.*unless" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
-    test_fail "Expected if-without-else violations"
+    test_fail "Expected missing-else violations"
 fi
 
 test_start "Progn-in-conditional rule detects violations"
