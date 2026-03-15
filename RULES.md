@@ -20,7 +20,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 
 | Rule | Description | Severity | Default | Options |
 |------|-------------|----------|---------|---------|
-| [`:eval-usage`](#eval-usage) | Runtime use of `cl:eval` | warning | on | |
+| [`:no-eval`](#no-eval) | Runtime use of `cl:eval` | warning | on | |
 | [`:runtime-intern`](#runtime-intern) | Runtime use of symbol-interning functions | warning | off | |
 | [`:runtime-unintern`](#runtime-unintern) | Runtime use of `cl:unintern` | warning | off | |
 
@@ -29,8 +29,8 @@ Rules are organized by category. Each rule shows its severity and default preset
 | Rule | Description | Severity | Default | Options |
 |------|-------------|----------|---------|---------|
 | [`:no-package-use`](#no-package-use) | Use of `:use` in `defpackage` | warning | on | |
-| [`:ignore-errors-usage`](#ignore-errors-usage) | Use of `cl:ignore-errors` | warning | on | |
-| [`:allow-other-keys`](#allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | on | |
+| [`:no-ignore-errors`](#no-ignore-errors) | Use of `cl:ignore-errors` | warning | on | |
+| [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | on | |
 | [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | on | |
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
 | [`:missing-exported-docstring`](#missing-exported-docstring) | Exported definitions missing docstrings | warning | off | |
@@ -52,10 +52,10 @@ Rules are organized by category. Each rule shows its severity and default preset
 
 | Rule | Description | Severity | Default | Options |
 |------|-------------|----------|---------|---------|
-| [`:if-without-else`](#if-without-else) | Use `when`/`unless` instead of `if` without else | warning | on | |
+| [`:missing-else`](#missing-else) | Use `when`/`unless` instead of `if` without else | warning | on | |
 | [`:progn-in-conditional`](#progn-in-conditional) | Use `cond`/`when`/`unless` instead of bare `progn` in `if`/`and`/`or` | info | off | |
 | [`:missing-otherwise`](#missing-otherwise) | `case`/`typecase` without `otherwise` clause | warning | off | |
-| [`:interned-package-symbol`](#interned-package-symbol) | Use uninterned symbols in package definitions | info | off | |
+| [`:defpackage-interned-symbol`](#defpackage-interned-symbol) | Use uninterned symbols in package definitions | info | off | |
 | [`:needless-let*`](#needless-let) | Use `let` when bindings are independent | warning | on | |
 | [`:special-variable-naming`](#special-variable-naming) | Special variables should be named `*foo*` | info | off | |
 | [`:constant-naming`](#constant-naming) | Constants should be named `+foo+` | info | off | |
@@ -72,7 +72,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 |------|-------------|----------|---------|-----|---------|
 | [`:trailing-whitespace`](#trailing-whitespace) | Lines with trailing whitespace | info | on | yes | |
 | [`:no-tabs`](#no-tabs) | Tab characters in source | info | on | | |
-| [`:final-newline`](#final-newline) | Files must end with a newline | info | on | yes | |
+| [`:missing-final-newline`](#missing-final-newline) | Files must end with a newline | info | on | yes | |
 | [`:closing-paren-on-own-line`](#closing-paren-on-own-line) | Closing parens on their own line | info | on | | |
 | [`:line-length`](#line-length) | Lines exceeding maximum length | info | off | | `:max` (100) |
 | [`:consecutive-blank-lines`](#consecutive-blank-lines) | Excessive consecutive blank lines | info | off | yes | `:max` (2) |
@@ -148,7 +148,9 @@ Feature expressions in `:if-feature` and `(:feature ...)` dependency forms must 
 
 Rules that detect likely wrong or dangerous patterns — code that probably indicates a bug or a security risk.
 
-### `:eval-usage`
+### `:no-eval`
+
+> **Deprecated alias**: `:eval-usage` (use `:no-eval`)
 
 Avoid using `cl:eval` at runtime. Runtime evaluation of arbitrary code is a common source of security vulnerabilities (code injection) and makes programs hard to reason about. This rule detects direct calls as well as indirect invocation via `funcall` and `apply`.
 
@@ -237,7 +239,9 @@ The packages `#:cl`, `#:common-lisp`, `#:coalton`, and `#:coalton-prelude` are e
 
 **Severity**: warning | **Default**: enabled
 
-### `:ignore-errors-usage`
+### `:no-ignore-errors`
+
+> **Deprecated alias**: `:ignore-errors-usage` (use `:no-ignore-errors`)
 
 Avoid using `cl:ignore-errors` at runtime. `ignore-errors` silently swallows all errors and returns `nil`, making it very difficult to diagnose problems. Use `handler-case` with specific condition types instead.
 
@@ -256,7 +260,9 @@ Avoid using `cl:ignore-errors` at runtime. `ignore-errors` silently swallows all
 
 **Severity**: warning | **Default**: enabled
 
-### `:allow-other-keys`
+### `:no-allow-other-keys`
+
+> **Deprecated alias**: `:allow-other-keys` (use `:no-allow-other-keys`)
 
 Avoid `&allow-other-keys` in lambda lists. It disables keyword argument checking, hiding typos and invalid arguments that would otherwise be caught at call sites.
 
@@ -495,7 +501,9 @@ Enable this rule to catch outdated suppression comments left behind after code c
 
 Rules for idiomatic patterns and naming conventions.
 
-### `:if-without-else`
+### `:missing-else`
+
+> **Deprecated alias**: `:if-without-else` (use `:missing-else`)
 
 Use `when` or `unless` instead of `if` without else.
 
@@ -572,7 +580,9 @@ Use `cond` instead of `if` with bare `progn`. Use `when` instead of `and` with b
 
 **Severity**: warning | **Default**: disabled
 
-### `:interned-package-symbol`
+### `:defpackage-interned-symbol`
+
+> **Deprecated alias**: `:interned-package-symbol` (use `:defpackage-interned-symbol`)
 
 Use uninterned symbols (`#:symbol`) in package definitions instead of keywords or bare symbols.
 
@@ -773,7 +783,9 @@ Use spaces instead of tab characters.
 
 **Severity**: info | **Default**: enabled
 
-### `:final-newline`
+### `:missing-final-newline`
+
+> **Deprecated alias**: `:final-newline` (use `:missing-final-newline`)
 
 Files must end with a newline.
 
