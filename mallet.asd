@@ -87,6 +87,7 @@
   :pathname "tests"
   :components
   ((:file "errors-test")
+   (:file "utils-test")
    (:file "config-test")
    (:file "config-ignore-test")
    (:file "cli-parsing-test")
