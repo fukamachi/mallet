@@ -30,7 +30,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 |------|-------------|----------|---------|---------|
 | [`:no-package-use`](#no-package-use) | Use of `:use` in `defpackage` | warning | on | |
 | [`:no-ignore-errors`](#no-ignore-errors) | Use of `cl:ignore-errors` | warning | on | |
-| [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | on | |
+| [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | off | |
 | [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | on | |
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
 | [`:missing-exported-docstring`](#missing-exported-docstring) | Exported definitions missing docstrings | warning | off | |
