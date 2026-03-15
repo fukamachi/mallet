@@ -1,3 +1,4 @@
+;; Defines the :no-eval rule (file and package retain the old :eval-usage name for historical continuity).
 (defpackage #:mallet/rules/forms/eval-usage
   (:use #:cl)
   (:local-nicknames

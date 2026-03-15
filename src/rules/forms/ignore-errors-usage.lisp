@@ -1,3 +1,4 @@
+;; Defines the :no-ignore-errors rule (file and package retain the old :ignore-errors-usage name for historical continuity).
 (defpackage #:mallet/rules/forms/ignore-errors-usage
   (:use #:cl)
   (:local-nicknames
