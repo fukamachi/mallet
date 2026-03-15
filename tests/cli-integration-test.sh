@@ -429,6 +429,33 @@ else
     test_fail "Expected no fatal error (exit 3) for alias name 'interned-package-symbol', got exit $EXIT_CODE"
 fi
 
+test_start "--enable ignore-errors-usage (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable ignore-errors-usage "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'ignore-errors-usage', got exit $EXIT_CODE"
+fi
+
+test_start "--enable allow-other-keys (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable allow-other-keys "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'allow-other-keys', got exit $EXIT_CODE"
+fi
+
+test_start "--enable final-newline (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable final-newline "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'final-newline', got exit $EXIT_CODE"
+fi
+
 # Cross-file test-package detection
 echo ""
 echo "Testing cross-file test-package detection..."
