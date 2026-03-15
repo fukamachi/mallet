@@ -396,6 +396,39 @@ else
     test_fail "Expected :comment-ratio entry with options in RULES.md"
 fi
 
+# Backward-compatible alias name tests
+# These names are accepted by the tool (resolve-rule-alias maps them to canonical names).
+echo ""
+echo "Testing backward-compatible rule name aliases..."
+echo ""
+
+test_start "--enable eval-usage (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable eval-usage "$CLEAN_DIR/unused-variables.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'eval-usage', got exit $EXIT_CODE"
+fi
+
+test_start "--disable if-without-else (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --disable if-without-else "$CLEAN_DIR/unused-variables.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'if-without-else', got exit $EXIT_CODE"
+fi
+
+test_start "--enable interned-package-symbol (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable interned-package-symbol "$CLEAN_DIR/unused-variables.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'interned-package-symbol', got exit $EXIT_CODE"
+fi
+
 # Cross-file test-package detection
 echo ""
 echo "Testing cross-file test-package detection..."
