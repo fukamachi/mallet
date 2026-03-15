@@ -1,19 +1,17 @@
-;; Tests for the :no-ignore-errors rule (formerly :ignore-errors-usage).
-;; The file and package retain the old name to avoid an mallet.asd rename.
-(defpackage #:mallet/tests/rules/ignore-errors-usage
+(defpackage #:mallet/tests/rules/no-ignore-errors
   (:use #:cl
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
-(in-package #:mallet/tests/rules/ignore-errors-usage)
+(in-package #:mallet/tests/rules/no-ignore-errors)
 
 ;;; Helper
 
 (defun check-ignore-errors (code)
   (let ((forms (parser:parse-forms code #p"test.lisp"))
-        (rule (make-instance 'rules:ignore-errors-usage-rule)))
+        (rule (make-instance 'rules:no-ignore-errors-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
@@ -70,11 +68,11 @@
 
 (deftest ignore-errors-usage-category
   (testing "Rule has :practice category"
-    (let ((rule (make-instance 'rules:ignore-errors-usage-rule)))
+    (let ((rule (make-instance 'rules:no-ignore-errors-rule)))
       (ok (eq (rules:rule-category rule) :practice))))
 
   (testing "Rule has :warning severity"
-    (let ((rule (make-instance 'rules:ignore-errors-usage-rule)))
+    (let ((rule (make-instance 'rules:no-ignore-errors-rule)))
       (ok (eq (rules:rule-severity rule) :warning)))))
 
 ;;; Registration tests

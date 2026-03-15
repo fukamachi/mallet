@@ -14,10 +14,10 @@
                  #:mallet/rules/forms/asdf
                  #:mallet/rules/forms/asdf-defsystem
                  #:mallet/rules/forms/metrics
-                 #:mallet/rules/forms/eval-usage
+                 #:mallet/rules/forms/no-eval
                  #:mallet/rules/forms/runtime-intern
                  #:mallet/rules/forms/runtime-unintern
-                 #:mallet/rules/forms/ignore-errors-usage
+                 #:mallet/rules/forms/no-ignore-errors
                  #:mallet/rules/forms/error-usage
                  #:mallet/rules/forms/docstring
                  #:mallet/rules/stale-suppression
@@ -103,13 +103,13 @@ Severity and category defaults are defined in each rule class's :default-initarg
 
       ;; Safety rules
       (:no-eval
-       (apply #'make-instance 'eval-usage-rule options))
+       (apply #'make-instance 'no-eval-rule options))
       (:runtime-intern
        (apply #'make-instance 'runtime-intern-rule options))
       (:runtime-unintern
        (apply #'make-instance 'runtime-unintern-rule options))
       (:no-ignore-errors
-       (apply #'make-instance 'ignore-errors-usage-rule options))
+       (apply #'make-instance 'no-ignore-errors-rule options))
       (:error-with-string-only
        (apply #'make-instance 'error-with-string-only-rule options))
       (:missing-docstring

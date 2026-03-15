@@ -1,19 +1,17 @@
-;; Tests for the :no-eval rule (formerly :eval-usage).
-;; The file and package retain the old name to avoid an mallet.asd rename.
-(defpackage #:mallet/tests/rules/eval-usage
+(defpackage #:mallet/tests/rules/no-eval
   (:use #:cl
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
-(in-package #:mallet/tests/rules/eval-usage)
+(in-package #:mallet/tests/rules/no-eval)
 
 ;;; Helper
 
 (defun check-eval (code)
   (let ((forms (parser:parse-forms code #p"test.lisp"))
-        (rule (make-instance 'rules:eval-usage-rule)))
+        (rule (make-instance 'rules:no-eval-rule)))
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))

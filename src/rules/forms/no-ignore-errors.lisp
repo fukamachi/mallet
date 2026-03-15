@@ -1,17 +1,16 @@
-;; Defines the :no-ignore-errors rule (file and package retain the old :ignore-errors-usage name for historical continuity).
-(defpackage #:mallet/rules/forms/ignore-errors-usage
+(defpackage #:mallet/rules/forms/no-ignore-errors
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
    (#:base #:mallet/rules/base)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation))
-  (:export #:ignore-errors-usage-rule))
-(in-package #:mallet/rules/forms/ignore-errors-usage)
+  (:export #:no-ignore-errors-rule))
+(in-package #:mallet/rules/forms/no-ignore-errors)
 
-;;; ignore-errors-usage rule
+;;; No-ignore-errors rule
 
-(defclass ignore-errors-usage-rule (base:rule)
+(defclass no-ignore-errors-rule (base:rule)
   ()
   (:default-initargs
    :name :no-ignore-errors
@@ -29,7 +28,7 @@ Use handler-case with specific condition types instead."))
     (symbol (string-equal (symbol-name head) name))
     (otherwise nil)))
 
-(defmethod base:check-form ((rule ignore-errors-usage-rule) form file)
+(defmethod base:check-form ((rule no-ignore-errors-rule) form file)
   "Check for runtime uses of ignore-errors."
   (check-type form parser:form)
   (check-type file pathname)
@@ -43,7 +42,7 @@ Use handler-case with specific condition types instead."))
                              (parser:form-position-map form)))
 
 (defmethod base:check-form-recursive
-    ((rule ignore-errors-usage-rule) expr file line column
+    ((rule no-ignore-errors-rule) expr file line column
      &optional function-name position-map)
   "Recursively check for ignore-errors usage."
   (declare (ignore function-name))
