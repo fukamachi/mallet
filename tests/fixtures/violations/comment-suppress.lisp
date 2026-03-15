@@ -5,7 +5,7 @@
 (in-package #:test-comment-suppress)
 
 ;; This function's if-without-else is suppressed by inline comment
-; mallet:suppress :if-without-else
+; mallet:suppress :missing-else
 (defun suppressed-foo (x)
   (if x
       (print "yes")))   ; No else — but suppressed

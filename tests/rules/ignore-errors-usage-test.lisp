@@ -46,7 +46,7 @@
   (testing "Direct (ignore-errors ...) call"
     (let ((violations (check-ignore-errors "(ignore-errors (risky-op))")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :ignore-errors-usage))
+      (ok (eq (violation:violation-rule (first violations)) :no-ignore-errors))
       (ok (eq (violation:violation-severity (first violations)) :warning))
       (ok (search "ignore-errors" (violation:violation-message (first violations))))))
 
@@ -54,7 +54,7 @@
     (let ((violations (check-ignore-errors
                        "(defun dangerous (op) (ignore-errors (funcall op)))")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :ignore-errors-usage))))
+      (ok (eq (violation:violation-rule (first violations)) :no-ignore-errors))))
 
   (testing "Multiple ignore-errors calls"
     (let ((violations (check-ignore-errors
@@ -64,7 +64,7 @@
   (testing "ignore-errors with no body"
     (let ((violations (check-ignore-errors "(ignore-errors)")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :ignore-errors-usage)))))
+      (ok (eq (violation:violation-rule (first violations)) :no-ignore-errors)))))
 
 (deftest ignore-errors-usage-category
   (testing "Rule has :practice category"
@@ -78,16 +78,16 @@
 ;;; Registration tests
 
 (deftest ignore-errors-usage-registration
-  (testing ":ignore-errors-usage is in default config"
+  (testing ":no-ignore-errors is in default config"
     (let* ((cfg (mallet/config:get-built-in-config :default))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
-      (ok (member :ignore-errors-usage rule-names))))
+      (ok (member :no-ignore-errors rule-names))))
 
-  (testing ":ignore-errors-usage is in :all config"
+  (testing ":no-ignore-errors is in :all config"
     (let* ((cfg (mallet/config:get-built-in-config :all))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
-      (ok (member :ignore-errors-usage rule-names))))
+      (ok (member :no-ignore-errors rule-names))))
 
-  (testing ":ignore-errors-usage rule has :practice category"
-    (let ((rule (rules:make-rule :ignore-errors-usage)))
+  (testing ":no-ignore-errors rule has :practice category"
+    (let ((rule (rules:make-rule :no-ignore-errors)))
       (ok (eq :practice (rules:rule-category rule))))))

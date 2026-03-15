@@ -13,7 +13,7 @@
 (defclass ignore-errors-usage-rule (base:rule)
   ()
   (:default-initargs
-   :name :ignore-errors-usage
+   :name :no-ignore-errors
    :description "Avoid using ignore-errors; use handler-case to handle specific conditions"
    :severity :warning
    :category :practice
@@ -52,7 +52,7 @@ Use handler-case with specific condition types instead."))
 
     (labels ((make-violation (actual-line actual-column)
                (make-instance 'violation:violation
-                              :rule :ignore-errors-usage
+                              :rule :no-ignore-errors
                               :file file
                               :line actual-line
                               :column actual-column

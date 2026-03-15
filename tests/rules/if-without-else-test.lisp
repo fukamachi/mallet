@@ -77,7 +77,7 @@
            (rule (make-instance 'rules:if-without-else-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :if-without-else))
+      (ok (eq (violation:violation-rule (first violations)) :missing-else))
       (ok (string= (violation:violation-message (first violations))
                    "Use 'when' or 'unless' instead of 'if' without else clause"))))
 
@@ -90,4 +90,4 @@
            ;; Check the defun form - rule should recurse into nested forms
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :if-without-else)))))
+      (ok (eq (violation:violation-rule (first violations)) :missing-else)))))

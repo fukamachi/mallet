@@ -13,7 +13,7 @@
 (defclass eval-usage-rule (base:rule)
   ()
   (:default-initargs
-   :name :eval-usage
+   :name :no-eval
    :description "Avoid using cl:eval at runtime for safety"
    :severity :warning
    :category :suspicious
@@ -72,7 +72,7 @@ Suppressions are handled automatically by the :around method."
 
     (labels ((make-eval-violation (actual-line actual-column pattern-desc)
                (make-instance 'violation:violation
-                              :rule :eval-usage
+                              :rule :no-eval
                               :file file
                               :line actual-line
                               :column actual-column

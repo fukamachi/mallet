@@ -362,11 +362,11 @@ else
 fi
 
 test_start ":disable region suppresses forms until :enable"
-IWE_COUNT=$("$CLI" --none --enable if-without-else "$VIOLATIONS_DIR/comment-disable-enable.lisp" 2>&1 | grep -c "if-without-else" || true)
+IWE_COUNT=$("$CLI" --none --enable missing-else "$VIOLATIONS_DIR/comment-disable-enable.lisp" 2>&1 | grep -c "missing-else" || true)
 if [ "$IWE_COUNT" -eq 2 ]; then
     test_pass
 else
-    test_fail "Expected exactly 2 if-without-else violations (before-disable and after-enable), got $IWE_COUNT"
+    test_fail "Expected exactly 2 missing-else violations (before-disable and after-enable), got $IWE_COUNT"
 fi
 
 # Text/token :disable/:enable suppression tests

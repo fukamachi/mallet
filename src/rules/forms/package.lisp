@@ -28,7 +28,7 @@
 (defclass interned-package-symbol-rule (base:rule)
   ()
   (:default-initargs
-   :name :interned-package-symbol
+   :name :defpackage-interned-symbol
    :description "Use uninterned symbols (#:symbol) in package definitions"
    :severity :info
    :category :style

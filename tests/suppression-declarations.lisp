@@ -11,7 +11,7 @@
 (deftest mallet-declaim-recognition
   (testing "Recognize mallet declaim forms"
     ;; Valid mallet declaim
-    (let ((form `(declaim (,(intern "DISABLE" "MALLET") :line-length :if-without-else))))
+    (let ((form `(declaim (,(intern "DISABLE" "MALLET") :line-length :missing-else))))
       (ok (suppression:mallet-declaim-p form)))
 
     ;; Another valid mallet declaim
@@ -40,11 +40,11 @@
 
 (deftest parse-mallet-declaration-disable-enable
   (testing "Parse disable/enable declarations"
-    (let ((decl `(,(intern "DISABLE" "MALLET") :line-length :if-without-else)))
+    (let ((decl `(,(intern "DISABLE" "MALLET") :line-length :missing-else)))
       (multiple-value-bind (type rules function-names)
           (suppression:parse-mallet-declaration decl)
         (ok (eq type :disable))
-        (ok (equal rules '(:line-length :if-without-else)))
+        (ok (equal rules '(:line-length :missing-else)))
         (ok (null function-names))))
 
     (let ((decl `(,(intern "ENABLE" "MALLET") :line-length)))
@@ -56,11 +56,11 @@
 
 (deftest parse-mallet-declaration-suppress-next
   (testing "Parse suppress-next declarations"
-    (let ((decl `(,(intern "SUPPRESS-NEXT" "MALLET") :line-length :if-without-else)))
+    (let ((decl `(,(intern "SUPPRESS-NEXT" "MALLET") :line-length :missing-else)))
       (multiple-value-bind (type rules function-names)
           (suppression:parse-mallet-declaration decl)
         (ok (eq type :suppress-next))
-        (ok (equal rules '(:line-length :if-without-else)))
+        (ok (equal rules '(:line-length :missing-else)))
         (ok (null function-names))))))
 
 (deftest parse-mallet-declaration-suppress-function

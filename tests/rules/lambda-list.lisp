@@ -127,7 +127,7 @@
                (forms (parser:parse-forms text file))
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1))
-          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))
+          (ok (eq (violation:violation-rule (first violations)) :no-allow-other-keys))
           (ok (search "allow-other-keys" (violation:violation-message (first violations))))))
 
       (testing "lambda with &allow-other-keys violates"
@@ -135,28 +135,28 @@
                (forms (parser:parse-forms text file))
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1))
-          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+          (ok (eq (violation:violation-rule (first violations)) :no-allow-other-keys))))
 
       (testing "defmethod with &allow-other-keys violates"
         (let* ((text "(defmethod foo ((obj string) &key bar &allow-other-keys) obj)")
                (forms (parser:parse-forms text file))
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1))
-          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+          (ok (eq (violation:violation-rule (first violations)) :no-allow-other-keys))))
 
       (testing "defmacro with &allow-other-keys violates"
         (let* ((text "(defmacro with-opts (name &key opt &allow-other-keys) `(list ,name ,opt))")
                (forms (parser:parse-forms text file))
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1))
-          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+          (ok (eq (violation:violation-rule (first violations)) :no-allow-other-keys))))
 
       (testing "flet with &allow-other-keys violates"
         (let* ((text "(flet ((helper (a &key b &allow-other-keys) (list a b))) (helper 1))")
                (forms (parser:parse-forms text file))
                (violations (rules:check-form rule (first forms) file)))
           (ok (= (length violations) 1))
-          (ok (eq (violation:violation-rule (first violations)) :allow-other-keys))))
+          (ok (eq (violation:violation-rule (first violations)) :no-allow-other-keys))))
 
       (testing "violation severity is :warning"
         (let* ((text "(defun foo (a &key b &allow-other-keys) b)")
@@ -168,16 +168,16 @@
 ;;; Registration tests
 
 (deftest allow-other-keys-registration
-  (testing ":allow-other-keys is NOT in default config"
+  (testing ":no-allow-other-keys is NOT in default config"
     (let* ((cfg (mallet/config:get-built-in-config :default))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
-      (ok (not (member :allow-other-keys rule-names)))))
+      (ok (not (member :no-allow-other-keys rule-names)))))
 
-  (testing ":allow-other-keys is in :all config"
+  (testing ":no-allow-other-keys is in :all config"
     (let* ((cfg (mallet/config:get-built-in-config :all))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
-      (ok (member :allow-other-keys rule-names))))
+      (ok (member :no-allow-other-keys rule-names))))
 
-  (testing ":allow-other-keys rule has :practice category"
-    (let ((rule (rules:make-rule :allow-other-keys)))
+  (testing ":no-allow-other-keys rule has :practice category"
+    (let ((rule (rules:make-rule :no-allow-other-keys)))
       (ok (eq :practice (rules:rule-category rule))))))
