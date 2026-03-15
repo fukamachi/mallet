@@ -14,11 +14,11 @@
 
 (defun make-if-without-else-config ()
   (config:make-config
-   :rules (list (rules:make-rule :if-without-else))))
+   :rules (list (rules:make-rule :missing-else))))
 
 (defun make-if-and-stale-config ()
   (config:make-config
-   :rules (list (rules:make-rule :if-without-else)
+   :rules (list (rules:make-rule :missing-else)
                 (rules:make-rule :stale-suppression))))
 
 (defun make-needless-let*-config ()
@@ -40,7 +40,7 @@
 
       ;; suppressed-foo should NOT produce a violation
       (let ((foo-violations (remove-if-not
-                              (lambda (v) (eq :if-without-else (violation:violation-rule v)))
+                              (lambda (v) (eq :missing-else (violation:violation-rule v)))
                               (remove-if-not
                                 (lambda (v) (< (violation:violation-line v) 15))
                                 violations))))
@@ -48,7 +48,7 @@
 
       ;; Exactly 1 if-without-else violation: the unsuppressed-bar function
       (let ((iwe-violations (remove-if-not
-                              (lambda (v) (eq :if-without-else (violation:violation-rule v)))
+                              (lambda (v) (eq :missing-else (violation:violation-rule v)))
                               violations)))
         (ok (= 1 (length iwe-violations))
             "Exactly 1 if-without-else violation (unsuppressed-bar only)")
@@ -78,7 +78,7 @@
            (violations (engine:lint-file file :config config)))
 
       (let ((iwe-violations (remove-if-not
-                              (lambda (v) (eq :if-without-else (violation:violation-rule v)))
+                              (lambda (v) (eq :missing-else (violation:violation-rule v)))
                               violations)))
         ;; Expect 2 violations: before-disable and after-enable; during-disable is suppressed
         (ok (= 2 (length iwe-violations))
@@ -94,7 +94,7 @@
 
       ;; No if-without-else violations (clean-function has else clause)
       (let ((iwe-violations (remove-if-not
-                              (lambda (v) (eq :if-without-else (violation:violation-rule v)))
+                              (lambda (v) (eq :missing-else (violation:violation-rule v)))
                               violations)))
         (ok (null iwe-violations) "No if-without-else violations (else present)"))
 

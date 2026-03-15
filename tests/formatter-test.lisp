@@ -65,7 +65,7 @@
                               :message "Error message"
                               :file file))
            (v3 (make-instance 'violation:violation
-                              :rule :if-without-else
+                              :rule :missing-else
                               :severity :warning
                               :line 20
                               :column 0

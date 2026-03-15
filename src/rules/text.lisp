@@ -183,7 +183,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
 (defclass final-newline-rule (base:rule)
   ()
   (:default-initargs
-   :name :final-newline
+   :name :missing-final-newline
    :description "Files must end with a newline"
    :severity :info
    :category :format
@@ -203,7 +203,7 @@ Returns the line content as a string, or NIL if line doesn't exist."
                   :type :append-to-file
                   :appended-content (string #\Newline))))
         (push (make-instance 'violation:violation
-                             :rule :final-newline
+                             :rule :missing-final-newline
                              :file file
                              :line (count #\Newline text)
                              :column 0

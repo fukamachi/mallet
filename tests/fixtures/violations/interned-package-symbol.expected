@@ -1,12 +1,12 @@
-# Expected violations for interned-package-symbol.lisp
-3:12 interned-package-symbol info
-4:8 interned-package-symbol info
-5:11 interned-package-symbol info
-5:16 interned-package-symbol info
-6:12 interned-package-symbol info
-8:12 interned-package-symbol info
-9:8 interned-package-symbol info
-10:11 interned-package-symbol info
-11:12 interned-package-symbol info
-14:8 interned-package-symbol info
-15:12 interned-package-symbol info
+# Expected violations for defpackage-interned-symbol.lisp
+3:12 defpackage-interned-symbol info
+4:8 defpackage-interned-symbol info
+5:11 defpackage-interned-symbol info
+5:16 defpackage-interned-symbol info
+6:12 defpackage-interned-symbol info
+8:12 defpackage-interned-symbol info
+9:8 defpackage-interned-symbol info
+10:11 defpackage-interned-symbol info
+11:12 defpackage-interned-symbol info
+14:8 defpackage-interned-symbol info
+15:12 defpackage-interned-symbol info

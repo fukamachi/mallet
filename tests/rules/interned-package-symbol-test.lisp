@@ -56,7 +56,7 @@
                                   (in-package :keyword-pkg)")))
       (ok (= (length violations) 7))
       (ok (every (lambda (v)
-                   (eq (violation:violation-rule v) :interned-package-symbol))
+                   (eq (violation:violation-rule v) :defpackage-interned-symbol))
                  violations))
       (ok (some (lambda (v)
                   (search "keyword" (violation:violation-message v)))

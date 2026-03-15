@@ -8,7 +8,8 @@
    (#:config #:mallet/config)
    (#:formatter #:mallet/formatter)
    (#:fixer #:mallet/fixer)
-   (#:errors #:mallet/errors))
+   (#:errors #:mallet/errors)
+   (#:utils #:mallet/utils))
   (:export #:main
            #:lint-file
            #:lint-files
@@ -103,9 +104,11 @@
     (nreverse result)))
 
 (defun parse-rule-name (name-str)
-  "Parse rule name string to keyword. Validates it exists."
+  "Parse rule name string to keyword. Validates it exists.
+Resolves deprecated rule name aliases to their canonical names."
   (check-type name-str string)
-  (let ((keyword (intern (string-upcase name-str) :keyword)))
+  (let* ((raw-keyword (intern (string-upcase name-str) :keyword))
+         (keyword (utils:resolve-rule-alias raw-keyword)))
     ;; Validate rule exists (check against make-rule)
     (handler-case
         (progn

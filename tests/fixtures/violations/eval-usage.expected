@@ -1,6 +1,6 @@
-# Expected violations for eval-usage.lisp
+# Expected violations for no-eval.lisp
 # Format: line:column rule-name severity
 
-5:2 eval-usage warning
-9:2 eval-usage warning
-13:2 eval-usage warning
+5:2 no-eval warning
+9:2 no-eval warning
+13:2 no-eval warning

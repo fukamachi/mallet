@@ -17,7 +17,7 @@
 (defclass if-without-else-rule (base:rule)
   ()
   (:default-initargs
-   :name :if-without-else
+   :name :missing-else
    :description "Use 'when' or 'unless' instead of 'if' without else clause"
    :severity :warning
    :category :style
@@ -62,7 +62,7 @@ Suppressions are handled automatically by the :around method."
                        (when (and (= (length rest-args) 2)
                                   (base:should-create-violation-p rule))
                          (push (make-instance 'violation:violation
-                                              :rule :if-without-else
+                                              :rule :missing-else
                                               :file file
                                               :line actual-line
                                               :column actual-column
