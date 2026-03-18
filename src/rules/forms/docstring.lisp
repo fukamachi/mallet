@@ -30,7 +30,8 @@
    #:should-check-definition-p
    ;; Rule classes
    #:missing-docstring-rule
-   #:missing-exported-docstring-rule))
+   #:missing-exported-docstring-rule
+   #:missing-package-docstring-rule))
 (in-package #:mallet/rules/forms/docstring)
 
 ;;; Docstring Detection Utilities
@@ -438,3 +439,38 @@ Tracks the current package via in-package forms during traversal."))
                                                        form-head name)
                                       :fix nil))))))))
       (t nil))))
+
+;;; --- missing-package-docstring-rule ---
+
+(defclass missing-package-docstring-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :missing-package-docstring
+   :description "Package definitions should have docstrings"
+   :severity :info
+   :category :style
+   :type :form)
+  (:documentation "Rule to detect defpackage and define-package forms lacking docstrings.
+A package docstring appears as a (:documentation \"string\") option in the body.
+Documents the package's purpose and public API."))
+
+(defmethod base:check-form ((rule missing-package-docstring-rule) form file)
+  "Emit a violation when a defpackage or define-package is missing a :documentation option."
+  (check-type form parser:form)
+  (check-type file pathname)
+  (let ((expr (parser:form-expr form)))
+    (when (and (pkg-exports:defpackage-or-define-package-p expr)
+               (not (defpackage-has-docstring-p expr))
+               (base:should-create-violation-p rule))
+      (let ((form-type (form-type-string expr))
+            (name (definition-name expr)))
+        (when (and form-type name)
+          (list (make-instance 'violation:violation
+                               :rule (base:rule-name rule)
+                               :file file
+                               :line (parser:form-line form)
+                               :column (parser:form-column form)
+                               :severity (base:rule-severity rule)
+                               :message (format nil "~A ~A is missing a docstring"
+                                                form-type name)
+                               :fix nil)))))))
