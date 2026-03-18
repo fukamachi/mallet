@@ -6,7 +6,7 @@
 
 ;; This function has if-without-else but is suppressed
 #+mallet
-(declaim (mallet:suppress-next :if-without-else))
+(declaim (mallet:suppress-next :missing-else))
 (defun foo (x)
   (if x
       (print "yes")))  ; No else clause - but suppressed!

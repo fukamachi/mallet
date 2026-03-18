@@ -1,6 +1,0 @@
-# Expected violations for ignore-errors-usage.lisp
-# Format: line:column rule-name severity
-
-5:2 ignore-errors-usage warning
-9:2 ignore-errors-usage warning
-13:2 ignore-errors-usage warning

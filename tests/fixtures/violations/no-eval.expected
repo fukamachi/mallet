@@ -1,0 +1,6 @@
+# Expected violations for no-eval.lisp
+# Format: line:column rule-name severity
+
+5:2 no-eval warning
+9:2 no-eval warning
+13:2 no-eval warning

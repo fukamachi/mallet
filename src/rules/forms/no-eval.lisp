@@ -1,19 +1,19 @@
-(defpackage #:mallet/rules/forms/eval-usage
+(defpackage #:mallet/rules/forms/no-eval
   (:use #:cl)
   (:local-nicknames
    (#:a #:alexandria)
    (#:base #:mallet/rules/base)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation))
-  (:export #:eval-usage-rule))
-(in-package #:mallet/rules/forms/eval-usage)
+  (:export #:no-eval-rule))
+(in-package #:mallet/rules/forms/no-eval)
 
-;;; Eval-usage rule
+;;; No-eval rule
 
-(defclass eval-usage-rule (base:rule)
+(defclass no-eval-rule (base:rule)
   ()
   (:default-initargs
-   :name :eval-usage
+   :name :no-eval
    :description "Avoid using cl:eval at runtime for safety"
    :severity :warning
    :category :suspicious
@@ -49,7 +49,7 @@ Handles:
            (form-head-name-p (first expr) "QUOTE")
            (base:symbol-matches-p (second expr) "EVAL"))))
 
-(defmethod base:check-form ((rule eval-usage-rule) form file)
+(defmethod base:check-form ((rule no-eval-rule) form file)
   "Check for runtime uses of cl:eval."
   (check-type form parser:form)
   (check-type file pathname)
@@ -62,7 +62,7 @@ Handles:
                              nil
                              (parser:form-position-map form)))
 
-(defmethod base:check-form-recursive ((rule eval-usage-rule) expr file line column &optional function-name position-map)
+(defmethod base:check-form-recursive ((rule no-eval-rule) expr file line column &optional function-name position-map)
   "Recursively check for runtime eval usage.
 Suppressions are handled automatically by the :around method."
   (declare (ignore function-name))
@@ -72,7 +72,7 @@ Suppressions are handled automatically by the :around method."
 
     (labels ((make-eval-violation (actual-line actual-column pattern-desc)
                (make-instance 'violation:violation
-                              :rule :eval-usage
+                              :rule :no-eval
                               :file file
                               :line actual-line
                               :column actual-column

@@ -7,14 +7,14 @@
 
 ;; Suppress if-without-else violation
 #+mallet
-(declaim (mallet:suppress-next :if-without-else))
+(declaim (mallet:suppress-next :missing-else))
 (defun conditional-print (x)
   (if x
       (print "yes")))  ; No else - suppressed!
 
 ;; Suppress multiple violations at once
 #+mallet
-(declaim (mallet:suppress-next :if-without-else :progn-in-conditional))
+(declaim (mallet:suppress-next :missing-else :progn-in-conditional))
 (defun complex-conditional (x y)
   (if (and x y)
       (progn
@@ -23,7 +23,7 @@
 
 ;; Multiple suppress-next declarations in sequence
 #+mallet
-(declaim (mallet:suppress-next :if-without-else))
+(declaim (mallet:suppress-next :missing-else))
 #+mallet
 (declaim (mallet:suppress-next :progn-in-conditional))
 (defun another-conditional (x)

@@ -201,7 +201,7 @@ Returns (line column message) if violation found, NIL otherwise."
 (defclass allow-other-keys-rule (base:rule)
   ()
   (:default-initargs
-   :name :allow-other-keys
+   :name :no-allow-other-keys
    :description "Avoid &allow-other-keys in lambda lists (silently ignores unknown keywords)"
    :severity :warning
    :category :practice
@@ -227,7 +227,7 @@ which can hide bugs. Prefer explicit key validation or documented interfaces."))
         (visited (make-hash-table :test 'eq)))
     (labels ((make-violation (vline vcol msg)
                (make-instance 'violation:violation
-                              :rule :allow-other-keys
+                              :rule :no-allow-other-keys
                               :file file
                               :line vline
                               :column vcol

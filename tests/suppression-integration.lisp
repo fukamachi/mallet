@@ -14,7 +14,7 @@
                        (asdf:system-source-directory :mallet)))
            ;; Create config with if-without-else rule enabled
            (config (config:make-config
-                    :rules (list (mallet/rules:make-rule :if-without-else))))
+                    :rules (list (mallet/rules:make-rule :missing-else))))
            (violations (engine:lint-file test-file :config config)))
 
       ;; Debug: print violations count
@@ -32,5 +32,5 @@
       ;; The violation should be for the second function (bar)
       (when (>= (length violations) 1)
         (let ((v (first violations)))
-          (ok (eq (violation:violation-rule v) :if-without-else))
+          (ok (eq (violation:violation-rule v) :missing-else))
           (ok (= (violation:violation-line v) 16) "Should be line 16 (if form)"))))))

@@ -183,24 +183,24 @@
     (let ((rule (rules:make-rule :wrong-otherwise)))
       (ok (eq :correctness (base:rule-category rule)))))
 
-  (testing ":eval-usage rule has :suspicious category"
-    (let ((rule (rules:make-rule :eval-usage)))
+  (testing ":no-eval rule has :suspicious category"
+    (let ((rule (rules:make-rule :no-eval)))
       (ok (eq :suspicious (base:rule-category rule)))))
 
   (testing ":trailing-whitespace rule has :format category"
     (let ((rule (rules:make-rule :trailing-whitespace)))
       (ok (eq :format (base:rule-category rule)))))
 
-  (testing ":if-without-else rule has :style category"
-    (let ((rule (rules:make-rule :if-without-else)))
+  (testing ":missing-else rule has :style category"
+    (let ((rule (rules:make-rule :missing-else)))
       (ok (eq :style (base:rule-category rule)))))
 
   (testing ":no-package-use rule has :practice category"
     (let ((rule (rules:make-rule :no-package-use)))
       (ok (eq :practice (base:rule-category rule)))))
 
-  (testing ":allow-other-keys rule has :practice category"
-    (let ((rule (rules:make-rule :allow-other-keys)))
+  (testing ":no-allow-other-keys rule has :practice category"
+    (let ((rule (rules:make-rule :no-allow-other-keys)))
       (ok (eq :practice (base:rule-category rule)))))
 
   (testing ":cyclomatic-complexity rule has :metrics category"

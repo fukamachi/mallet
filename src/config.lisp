@@ -2,7 +2,8 @@
   (:use #:cl)
   (:local-nicknames
    (#:glob #:trivial-glob)
-   (#:rules #:mallet/rules))
+   (#:rules #:mallet/rules)
+   (#:utils #:mallet/utils))
   (:export #:config
            #:make-config
            #:parse-config
@@ -112,11 +113,11 @@ Returns (values rules disabled-rules explicit-severity-names) where:
           (let ((key (first form)))
             (case key
               (:enable
-               (let ((rule-name (second form))
+               (let ((rule-name (utils:resolve-rule-alias (second form)))
                      (options (cddr form)))
                  (push (cons rule-name options) override-specs)))
               (:disable
-               (let ((rule-name (second form)))
+               (let ((rule-name (utils:resolve-rule-alias (second form))))
                  (push rule-name disabled)))))))
 
       ;; Build final rule list
@@ -197,7 +198,7 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                                         (load-config extends-value)))))
                    (:enable
                     ;; New syntax: (:enable :rule-name :option value ...)
-                    (let ((rule-name (second item))
+                    (let ((rule-name (utils:resolve-rule-alias (second item)))
                           (options (cddr item)))
                       (push (cons rule-name options) rule-specs)
                       ;; Track rules with explicit :severity — they take precedence
@@ -206,7 +207,7 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                         (push rule-name explicit-severity-rules))))
                    (:disable
                     ;; New syntax: (:disable :rule-name)
-                    (let ((rule-name (second item)))
+                    (let ((rule-name (utils:resolve-rule-alias (second item))))
                       (push rule-name disabled-rules)))
                    (:set-severity
                     ;; Already collected in pre-pass above; skip here.
@@ -378,7 +379,7 @@ Style preferences are disabled to keep output clean."
           '(;; Universally accepted - keep enabled
             :trailing-whitespace
             :no-tabs
-            :final-newline
+            :missing-final-newline
             :closing-paren-on-own-line
             :wrong-otherwise
             :unused-variables
@@ -390,9 +391,9 @@ Style preferences are disabled to keep output clean."
             :asdf-secondary-system-name
             :asdf-if-feature-keyword
             :mixed-optional-and-key
-            :if-without-else
-            :eval-usage
-            :ignore-errors-usage
+            :missing-else
+            :no-eval
+            :no-ignore-errors
             :no-package-use
             :needless-let*
             :double-colon-access
@@ -403,7 +404,7 @@ Style preferences are disabled to keep output clean."
             :line-length
             :consecutive-blank-lines
             :progn-in-conditional
-            :interned-package-symbol
+            :defpackage-interned-symbol
             :missing-otherwise
             :constant-naming
             :special-variable-naming
@@ -428,15 +429,15 @@ Useful for exploration and discovering what rules exist."
             :mixed-optional-and-key
             :asdf-if-feature-keyword
             ;; Practice
-            :allow-other-keys
+            :no-allow-other-keys
             :missing-exported-docstring
             :asdf-operate-in-perform
             :asdf-reader-conditional
             ;; Suspicious
-            :eval-usage
+            :no-eval
             :runtime-intern
             :runtime-unintern
-            :ignore-errors-usage
+            :no-ignore-errors
             ;; Cleanliness
             :unused-variables
             :unused-local-functions
@@ -444,11 +445,11 @@ Useful for exploration and discovering what rules exist."
             :unused-imported-symbols
             :unused-loop-variables
             ;; Style
-            :if-without-else
+            :missing-else
             :progn-in-conditional
             :redundant-progn
             :missing-otherwise
-            :interned-package-symbol
+            :defpackage-interned-symbol
             :special-variable-naming
             :constant-naming
             :asdf-component-strings
@@ -464,7 +465,7 @@ Useful for exploration and discovering what rules exist."
             ;; Format
             :no-tabs
             :trailing-whitespace
-            :final-newline
+            :missing-final-newline
             :closing-paren-on-own-line
             :line-length
             :consecutive-blank-lines

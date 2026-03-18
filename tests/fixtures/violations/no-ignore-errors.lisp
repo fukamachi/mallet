@@ -1,4 +1,4 @@
-;;; Test file for ignore-errors-usage rule
+;;; Test file for no-ignore-errors rule
 
 ;; Bad: direct ignore-errors
 (defun run-safely (op)

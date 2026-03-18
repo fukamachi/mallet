@@ -1,4 +1,4 @@
-;;; Test file for eval-usage rule
+;;; Test file for no-eval rule
 
 ;; Bad: direct eval
 (defun run-code (expr)

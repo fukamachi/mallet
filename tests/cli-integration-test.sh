@@ -224,12 +224,12 @@ else
 fi
 
 # Form-level rules
-test_start "If-without-else rule detects violations"
+test_start "missing-else rule detects violations"
 OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "when.*unless" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
-    test_fail "Expected if-without-else violations"
+    test_fail "Expected missing-else violations"
 fi
 
 test_start "Progn-in-conditional rule detects violations"
@@ -362,11 +362,11 @@ else
 fi
 
 test_start ":disable region suppresses forms until :enable"
-IWE_COUNT=$("$CLI" --none --enable if-without-else "$VIOLATIONS_DIR/comment-disable-enable.lisp" 2>&1 | grep -c "if-without-else" || true)
+IWE_COUNT=$("$CLI" --none --enable missing-else "$VIOLATIONS_DIR/comment-disable-enable.lisp" 2>&1 | grep -c "missing-else" || true)
 if [ "$IWE_COUNT" -eq 2 ]; then
     test_pass
 else
-    test_fail "Expected exactly 2 if-without-else violations (before-disable and after-enable), got $IWE_COUNT"
+    test_fail "Expected exactly 2 missing-else violations (before-disable and after-enable), got $IWE_COUNT"
 fi
 
 # Text/token :disable/:enable suppression tests
@@ -394,6 +394,66 @@ if grep -q ":comment-ratio" "$PROJECT_DIR/RULES.md" && grep -q ":min-lines" "$PR
     test_pass
 else
     test_fail "Expected :comment-ratio entry with options in RULES.md"
+fi
+
+# Backward-compatible alias name tests
+# These names are accepted by the tool (resolve-rule-alias maps them to canonical names).
+echo ""
+echo "Testing backward-compatible rule name aliases..."
+echo ""
+
+test_start "--enable eval-usage (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable eval-usage "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'eval-usage', got exit $EXIT_CODE"
+fi
+
+test_start "--disable if-without-else (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --disable if-without-else "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'if-without-else', got exit $EXIT_CODE"
+fi
+
+test_start "--enable interned-package-symbol (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable interned-package-symbol "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'interned-package-symbol', got exit $EXIT_CODE"
+fi
+
+test_start "--enable ignore-errors-usage (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable ignore-errors-usage "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'ignore-errors-usage', got exit $EXIT_CODE"
+fi
+
+test_start "--enable allow-other-keys (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable allow-other-keys "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'allow-other-keys', got exit $EXIT_CODE"
+fi
+
+test_start "--enable final-newline (alias name) does not produce a fatal error"
+EXIT_CODE=0
+"$CLI" --none --enable final-newline "$CLEAN_DIR/basic.lisp" > /dev/null 2>&1 || EXIT_CODE=$?
+if [ "$EXIT_CODE" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected no fatal error (exit 3) for alias name 'final-newline', got exit $EXIT_CODE"
 fi
 
 # Cross-file test-package detection

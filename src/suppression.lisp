@@ -287,21 +287,22 @@
        ;; Convert all args to keywords
        (values type
                (loop for arg in args
-                     collect (cond
-                               ;; Already a keyword - return as-is
-                               ((keywordp arg) arg)
-                               ;; Symbol - intern in keyword package
-                               ((symbolp arg)
-                                (intern (symbol-name arg) :keyword))
-                               ;; String from parser - convert to keyword
-                               ;; Strip leading colon if present
-                               ((stringp arg)
-                                (let ((name (string-upcase arg)))
-                                  (intern (if (utils:keyword-string-p name)
-                                              (subseq name 1)
-                                              name)
-                                          :keyword)))
-                               (t arg)))
+                     collect (utils:resolve-rule-alias
+                               (cond
+                                 ;; Already a keyword - return as-is
+                                 ((keywordp arg) arg)
+                                 ;; Symbol - intern in keyword package
+                                 ((symbolp arg)
+                                  (intern (symbol-name arg) :keyword))
+                                 ;; String from parser - convert to keyword
+                                 ;; Strip leading colon if present
+                                 ((stringp arg)
+                                  (let ((name (string-upcase arg)))
+                                    (intern (if (utils:keyword-string-p name)
+                                                (subseq name 1)
+                                                name)
+                                            :keyword)))
+                                 (t arg))))
                nil))
 
       (:suppress-function
@@ -310,20 +311,21 @@
        (let ((rule-arg (first args))
              (fn-names (rest args)))
          (values type
-                 (list (cond
-                         ;; Already a keyword - return as-is
-                         ((keywordp rule-arg) rule-arg)
-                         ;; Symbol - intern in keyword package
-                         ((symbolp rule-arg)
-                          (intern (symbol-name rule-arg) :keyword))
-                         ;; String from parser - convert to keyword
-                         ((stringp rule-arg)
-                          (let ((name (string-upcase rule-arg)))
-                            (intern (if (utils:keyword-string-p name)
-                                        (subseq name 1)
-                                        name)
-                                    :keyword)))
-                         (t rule-arg)))
+                 (list (utils:resolve-rule-alias
+                         (cond
+                           ;; Already a keyword - return as-is
+                           ((keywordp rule-arg) rule-arg)
+                           ;; Symbol - intern in keyword package
+                           ((symbolp rule-arg)
+                            (intern (symbol-name rule-arg) :keyword))
+                           ;; String from parser - convert to keyword
+                           ((stringp rule-arg)
+                            (let ((name (string-upcase rule-arg)))
+                              (intern (if (utils:keyword-string-p name)
+                                          (subseq name 1)
+                                          name)
+                                      :keyword)))
+                           (t rule-arg))))
                  fn-names))))))
 
 (defun extract-mallet-declare (form)
@@ -380,21 +382,22 @@
                       ((stringp first-elem)
                        (search "MALLET:suppress-next" first-elem :test #'char-equal)))))
           append (loop for arg in (rest declaration)
-                       collect (cond
-                                 ;; Already a keyword - return as-is
-                                 ((keywordp arg) arg)
-                                 ;; Symbol - intern in keyword package
-                                 ((symbolp arg)
-                                  (intern (symbol-name arg) :keyword))
-                                 ;; String from parser - convert to keyword
-                                 ;; Strip leading colon if present
-                                 ((stringp arg)
-                                  (let ((name (string-upcase arg)))
-                                    (intern (if (utils:keyword-string-p name)
-                                                (subseq name 1)
-                                                name)
-                                            :keyword)))
-                                 (t arg)))))
+                       collect (utils:resolve-rule-alias
+                                 (cond
+                                   ;; Already a keyword - return as-is
+                                   ((keywordp arg) arg)
+                                   ;; Symbol - intern in keyword package
+                                   ((symbolp arg)
+                                    (intern (symbol-name arg) :keyword))
+                                   ;; String from parser - convert to keyword
+                                   ;; Strip leading colon if present
+                                   ((stringp arg)
+                                    (let ((name (string-upcase arg)))
+                                      (intern (if (utils:keyword-string-p name)
+                                                  (subseq name 1)
+                                                  name)
+                                              :keyword)))
+                                   (t arg))))))
 
 (defun update-suppression-for-declaim (declaim-form state)
   "Update SUPPRESSION-STATE for disable/enable/suppress-function declarations.
@@ -634,11 +637,12 @@
                                ;; Silently ignore directives with no rules
                                (when rule-strings
                                  (let ((rules (mapcar (lambda (r)
-                                                       (let ((name (string-upcase r)))
-                                                         (intern (if (utils:keyword-string-p name)
-                                                                     (subseq name 1)
-                                                                     name)
-                                                                 :keyword)))
+                                                       (utils:resolve-rule-alias
+                                                         (let ((name (string-upcase r)))
+                                                           (intern (if (utils:keyword-string-p name)
+                                                                       (subseq name 1)
+                                                                       name)
+                                                                   :keyword))))
                                                      rule-strings)))
                                    (push (list line-number type rules reason) result)))))))))))))
     (sort result #'< :key #'first)))

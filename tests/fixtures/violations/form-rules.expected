@@ -1,7 +1,7 @@
 # Expected violations for form-rules.lisp
 # Format: line:column rule-name severity
 
-11:2 if-without-else warning
+11:2 missing-else warning
 18:2 progn-in-conditional info
 28:2 progn-in-conditional info
 35:2 progn-in-conditional info

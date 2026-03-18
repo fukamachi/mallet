@@ -11,13 +11,13 @@
   (if x
       (print "yes")))
 
-; mallet:disable :if-without-else
+; mallet:disable :missing-else
 ;; This violation is inside the disabled region — should be suppressed
 (defun during-disable (x)
   (if x
       (print "also yes")))
 
-; mallet:enable :if-without-else
+; mallet:enable :missing-else
 ;; This violation is after re-enable — should be flagged again
 (defun after-enable (x)
   (if x
