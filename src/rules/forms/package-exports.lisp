@@ -4,7 +4,8 @@
    (#:utils #:mallet/utils)
    (#:parser #:mallet/parser)
    (#:base #:mallet/rules/base))
-  (:export #:exported-symbol-p
+  (:export #:defpackage-or-define-package-p
+           #:exported-symbol-p
            #:clear-package-export-cache
            #:test-package-p
            #:find-project-root-for-file))
