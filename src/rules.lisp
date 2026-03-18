@@ -114,6 +114,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
        (apply #'make-instance 'error-with-string-only-rule options))
       (:missing-docstring
        (apply #'make-instance 'missing-docstring-rule options))
+      (:missing-package-docstring
+       (apply #'make-instance 'missing-package-docstring-rule options))
 
       ;; Practice rules
       (:missing-exported-docstring

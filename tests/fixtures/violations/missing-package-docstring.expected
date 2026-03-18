@@ -1,0 +1,5 @@
+# Expected violations for missing-package-docstring.lisp
+# Format: line:column rule-name severity
+
+4:0 missing-package-docstring info
+13:0 missing-package-docstring info

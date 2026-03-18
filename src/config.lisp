@@ -409,6 +409,7 @@ Style preferences are disabled to keep output clean."
             :constant-naming
             :special-variable-naming
             :missing-docstring
+            :missing-package-docstring
             ;; Documentation - exported-only check has false positive risk
             :missing-exported-docstring
             ;; ASDF practice - disabled by default
@@ -461,6 +462,7 @@ Useful for exploration and discovering what rules exist."
             :double-colon-access
             :error-with-string-only
             :missing-docstring
+            :missing-package-docstring
             :stale-suppression
             ;; Format
             :no-tabs
