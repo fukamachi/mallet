@@ -108,11 +108,11 @@
         (ok (member :line-length rule-names))
         (ok (member :trailing-whitespace rule-names))
         (ok (member :missing-else rule-names))
-        ;; Both docstring rules are in the all preset
-        ;; :missing-exported-docstring is a backward-compatible alias for missing-docstring-rule
-        ;; with :exported-only t; it retains its own rule name for config compatibility
-        (ok (member :missing-exported-docstring rule-names))
+        ;; Docstring rules are in the all preset
         (ok (member :missing-docstring rule-names))
+        (ok (member :missing-package-docstring rule-names))
+        (ok (member :missing-variable-docstring rule-names))
+        (ok (member :missing-struct-docstring rule-names))
         ;; All 5 ASDF best-practices rules are in the all preset
         (ok (member :asdf-redundant-package-prefix rule-names))
         (ok (member :asdf-operate-in-perform rule-names))

@@ -9,6 +9,9 @@
  (:disable :special-variable-naming)
  (:disable :constant-naming)
  (:disable :missing-docstring)
+ (:disable :missing-package-docstring)
+ (:disable :missing-variable-docstring)
+ (:disable :missing-struct-docstring)
  (:for-paths ("/src/parser.lisp")
   (:disable :unused-local-nicknames))
  (:for-paths ("src/main.lisp")
@@ -16,3 +19,4 @@
   (:enable :no-package-use :allow ("mallet/violation" "mallet/parser" "mallet/rules")))
  (:for-paths ("tests/rules/text-formatting-test.lisp")
   (:disable :consecutive-blank-lines)))
+

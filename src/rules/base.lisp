@@ -431,7 +431,6 @@ Becomes:
 
 ;;; Generic traversal with cycle detection
 
-; mallet:suppress comment-ratio
 (defun traverse-expr (expr function &key (traverse-lists t))
   "Traverse EXPR, calling FUNCTION on each sub-expression with cycle detection.
 

@@ -410,6 +410,8 @@ Style preferences are disabled to keep output clean."
             :special-variable-naming
             :missing-docstring
             :missing-package-docstring
+            :missing-variable-docstring
+            :missing-struct-docstring
             ;; ASDF practice - disabled by default
             :asdf-redundant-package-prefix
             :asdf-reader-conditional
@@ -429,7 +431,6 @@ Useful for exploration and discovering what rules exist."
             :asdf-if-feature-keyword
             ;; Practice
             :no-allow-other-keys
-            :missing-exported-docstring
             :asdf-operate-in-perform
             :asdf-reader-conditional
             ;; Suspicious
@@ -461,6 +462,8 @@ Useful for exploration and discovering what rules exist."
             :error-with-string-only
             :missing-docstring
             :missing-package-docstring
+            :missing-variable-docstring
+            :missing-struct-docstring
             :stale-suppression
             ;; Format
             :no-tabs
