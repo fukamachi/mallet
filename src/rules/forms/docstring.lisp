@@ -289,14 +289,13 @@ repeated filesystem walks."))
 When exported-only is non-nil, definitions are only checked if their symbol is
 exported from the current package. Tracks the current package via in-package forms."))
 
-(defmethod initialize-instance :after ((mixin exported-only-mixin) &rest initargs)
-  "Auto-upgrade severity to :warning when exported-only is set and no explicit severity provided.
-Note: :default-initargs values in a subclass are included in INITARGS, so this upgrade
-fires only when the mixin is instantiated standalone (no :severity in :default-initargs)
-or when the subclass inherits no :severity default. Rule classes that declare their own
-:severity in :default-initargs will suppress this auto-upgrade, which is correct."
-  (unless (or (not (rule-exported-only-p mixin))
-              (member :severity initargs))
+(defmethod initialize-instance :after ((mixin exported-only-mixin) &key &allow-other-keys)
+  "Auto-upgrade severity from :info to :warning when exported-only is set.
+When a rule is created with :exported-only t and its severity is still the
+default :info, upgrade to :warning to match the convention that exported-only
+checks are more important (public API contract)."
+  (when (and (rule-exported-only-p mixin)
+             (eq (base:rule-severity mixin) :info))
     (setf (base:rule-severity mixin) :warning)))
 
 (defgeneric update-package-tracking (mixin form file)

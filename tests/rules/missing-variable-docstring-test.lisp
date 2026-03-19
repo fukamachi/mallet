@@ -203,6 +203,6 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "with :exported-only t — exported-only is set on rule instance"
+  (testing "with :exported-only t — severity auto-upgrades to :warning"
     (let ((rule (make-instance 'rules:missing-variable-docstring-rule :exported-only t)))
-      (ok (rules:rule-exported-only-p rule)))))
+      (ok (eq :warning (rules:rule-severity rule))))))

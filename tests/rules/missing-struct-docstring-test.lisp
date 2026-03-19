@@ -197,6 +197,6 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "exported-only: severity stays :info (default-initargs take precedence over mixin auto-upgrade)"
+  (testing "exported-only: severity auto-upgrades to :warning"
     (let ((rule (make-instance 'docstring:missing-struct-docstring-rule :exported-only t)))
-      (ok (eq :info (rules:rule-severity rule))))))
+      (ok (eq :warning (rules:rule-severity rule))))))

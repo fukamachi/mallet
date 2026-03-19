@@ -280,9 +280,13 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "severity auto-upgrade to :warning when :exported-only t (no default severity)"
+  (testing "severity auto-upgrade to :warning when :exported-only t"
     (let ((rule (make-instance 'rules:missing-docstring-rule :exported-only t)))
-      (ok (rules:rule-exported-only-p rule))))
+      (ok (eq :warning (rules:rule-severity rule)))))
+
+  (testing "severity stays :info when :exported-only is nil"
+    (let ((rule (make-instance 'rules:missing-docstring-rule)))
+      (ok (eq :info (rules:rule-severity rule)))))
 
   (testing "with :exported-only t — in-package forms are skipped without error"
     (let ((dir (make-temp-dir)))
