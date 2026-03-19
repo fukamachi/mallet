@@ -1,0 +1,5 @@
+# Expected violations for coalton-missing-to-boolean.lisp
+# Format: line:column rule-name severity
+
+3:4 coalton-missing-to-boolean warning
+5:4 coalton-missing-to-boolean warning

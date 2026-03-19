@@ -434,6 +434,7 @@ Useful for exploration and discovering what rules exist."
             :mixed-optional-and-key
             :asdf-if-feature-keyword
             :asdf-secondary-system-name
+            :coalton-missing-to-boolean
             ;; Suspicious
             :no-eval
             :runtime-intern

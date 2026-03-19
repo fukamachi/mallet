@@ -20,6 +20,7 @@
                  #:mallet/rules/forms/no-ignore-errors
                  #:mallet/rules/forms/error-usage
                  #:mallet/rules/forms/docstring
+                 #:mallet/rules/forms/coalton-to-boolean
                  #:mallet/rules/stale-suppression
                  #:mallet/rules/asdf-reader-conditional
                  #:mallet/rules/forms/coalton)
@@ -127,6 +128,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
       ;; Coalton rules
       (:coalton-missing-declare
        (apply #'make-instance 'coalton-missing-declare-rule options))
+      (:coalton-missing-to-boolean
+       (apply #'make-instance 'coalton-missing-to-boolean-rule options))
 
       ;; Suppression rules
       (:stale-suppression

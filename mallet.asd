@@ -66,7 +66,8 @@
        (:file "no-ignore-errors")
        (:file "error-usage")
        (:file "docstring")
-       (:file "coalton")))
+       (:file "coalton")
+       (:file "coalton-to-boolean")))
      (:file "stale-suppression")
      (:file "asdf-reader-conditional")))
    (:file "rules")
@@ -154,6 +155,7 @@
      (:file "stale-suppression-test")
      (:file "package-exports-test")
      (:file "coalton-rule-base-test")
-     (:file "coalton-missing-declare-test"))))
+     (:file "coalton-missing-declare-test")
+     (:file "coalton-missing-to-boolean-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
