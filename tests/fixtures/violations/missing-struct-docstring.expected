@@ -1,0 +1,6 @@
+# Expected violations for missing-struct-docstring.lisp
+# Format: line:column rule-name severity
+
+4:0 missing-struct-docstring info
+16:0 missing-struct-docstring info
+26:0 missing-struct-docstring info
