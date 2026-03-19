@@ -91,7 +91,9 @@
         (ok (member :asdf-secondary-system-name rule-names))
         (ok (member :asdf-if-feature-keyword rule-names))
         ;; asdf-reader-conditional is disabled in default
-        (ok (not (member :asdf-reader-conditional rule-names))))
+        (ok (not (member :asdf-reader-conditional rule-names)))
+        ;; package-per-file is opt-in only; must not be in default
+        (ok (not (member :package-per-file rule-names))))
       ;; Check that some rules are disabled
       (let ((disabled (config:config-disabled-rules cfg)))
         (ok (member :line-length disabled))
@@ -113,6 +115,8 @@
         (ok (member :missing-package-docstring rule-names))
         (ok (member :missing-variable-docstring rule-names))
         (ok (member :missing-struct-docstring rule-names))
+        ;; package-per-file is in the all preset
+        (ok (member :package-per-file rule-names))
         ;; All 5 ASDF best-practices rules are in the all preset
         (ok (member :asdf-redundant-package-prefix rule-names))
         (ok (member :asdf-operate-in-perform rule-names))

@@ -35,6 +35,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
 | [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
+| [`:package-per-file`](#package-per-file) | Files should define their own package | warning | off | |
 
 ### [Cleanliness](#cleanliness) — Dead code and unused definitions
 
@@ -356,6 +357,27 @@ Avoid `#+`/`#-` reader conditionals inside `defsystem` bodies in `.asd` files. R
 - Comments, string literals, and character literals are not scanned
 
 **Severity**: info | **Default**: disabled
+
+### `:package-per-file`
+
+Each `.lisp` file should start with `defpackage` or `uiop:define-package`, defining its own package. Files that begin with `in-package` without a preceding `defpackage` in the same file are flagged.
+
+```lisp
+;; Bad: in-package without a preceding defpackage
+(in-package #:my-app/utils)
+
+(defun helper () ...)
+
+;; Good: file defines its own package
+(defpackage #:my-app/utils
+  (:use #:cl)
+  (:export #:helper))
+(in-package #:my-app/utils)
+
+(defun helper () ...)
+```
+
+**Severity**: warning | **Default**: disabled (available via `--all` or `--enable package-per-file`)
 
 ## Cleanliness
 
@@ -778,8 +800,7 @@ Struct definitions should have docstrings. Checks both the body string position 
   x y)
 
 ;; Also good: :documentation in options
-(defstruct (point (:constructor make-point))
-  (:documentation "A two-dimensional point.")
+(defstruct (point (:constructor make-point) (:documentation "A two-dimensional point."))
   x y)
 ```
 
