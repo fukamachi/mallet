@@ -289,7 +289,7 @@ repeated filesystem walks."))
 When exported-only is non-nil, definitions are only checked if their symbol is
 exported from the current package. Tracks the current package via in-package forms."))
 
-(defmethod initialize-instance :after ((mixin exported-only-mixin) &key &allow-other-keys)
+(defmethod initialize-instance :after ((mixin exported-only-mixin) &key &allow-other-keys) ; mallet:suppress no-allow-other-keys
   "Auto-upgrade severity from :info to :warning when exported-only is set.
 When a rule is created with :exported-only t and its severity is still the
 default :info, upgrade to :warning to match the convention that exported-only
