@@ -39,6 +39,7 @@
            #:tokens-use-test-framework-p
            ;; Coalton rule base class
            #:coalton-rule
+           #:coalton-aware-p
            ;; Auto-fix helpers
            #:find-clause-boundaries
            #:find-clause-line-range
@@ -89,6 +90,12 @@
     :type list
     :documentation "List of file extensions this rule applies to (e.g., :lisp, :asd, :coal)"))
   (:documentation "Base class for linting rules."))
+
+(defgeneric coalton-aware-p (rule)
+  (:documentation "Return T if RULE can process Coalton toplevel forms.
+By default rules skip Coalton forms (return NIL). Rules that understand Coalton
+syntax can override this method to return T, which bypasses the Coalton skip.")
+  (:method ((rule rule)) nil))
 
 (defclass coalton-rule (rule)
   ()
@@ -185,13 +192,15 @@ Example:
     (declare (ignore text file violation))
     nil))
 
-;; Skip Coalton forms for all form-level rules
+;; Skip Coalton forms for all form-level rules unless the rule opts in.
 ;; Coalton has different semantics (variable scoping, control flow, etc.)
-;; so Common Lisp linting rules don't apply.
+;; so Common Lisp linting rules don't apply by default.
 ;; coalton-rule subclasses are excluded: they have their own :around below.
+;; Rules may opt in by implementing (coalton-aware-p rule) => T.
 (defmethod check-form :around ((rule rule) form file)
-  "Skip Coalton toplevel forms - they have different semantics from Common Lisp."
+  "Skip Coalton toplevel forms unless the rule opts in via coalton-aware-p."
   (if (and (not (typep rule 'coalton-rule))
+           (not (coalton-aware-p rule))
            (coalton-form-p form))
       nil  ; Return empty violations list for Coalton forms
       (call-next-method)))  ; Call the actual rule implementation
