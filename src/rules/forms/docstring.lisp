@@ -30,7 +30,8 @@
    #:should-check-definition-p
    ;; Rule classes
    #:missing-docstring-rule
-   #:missing-package-docstring-rule))
+   #:missing-package-docstring-rule
+   #:missing-variable-docstring-rule))
 (in-package #:mallet/rules/forms/docstring)
 
 ;;; Docstring Detection Utilities
@@ -398,6 +399,41 @@ Documents the package's purpose and public API."))
   (let ((expr (parser:form-expr form)))
     (when (and (pkg-exports:defpackage-or-define-package-p expr)
                (not (defpackage-has-docstring-p expr))
+               (base:should-create-violation-p rule))
+      (let ((form-type (form-type-string expr))
+            (name (definition-name expr)))
+        (when (and form-type name)
+          (list (make-instance 'violation:violation
+                               :rule (base:rule-name rule)
+                               :file file
+                               :line (parser:form-line form)
+                               :column (parser:form-column form)
+                               :severity (base:rule-severity rule)
+                               :message (format nil "~A ~A is missing a docstring"
+                                                form-type name)
+                               :fix nil)))))))
+
+;;; --- missing-variable-docstring-rule ---
+
+(defclass missing-variable-docstring-rule (base:rule)
+  ()
+  (:default-initargs
+   :name :missing-variable-docstring
+   :description "defvar and defparameter forms should have docstrings"
+   :severity :info
+   :category :style
+   :type :form)
+  (:documentation "Rule to detect defvar and defparameter forms lacking docstrings.
+Checks that each special variable definition includes a documentation string.
+Skips defvar forms without an initial value, which cannot have a docstring."))
+
+(defmethod base:check-form ((rule missing-variable-docstring-rule) form file)
+  "Check FORM for missing docstring on a defvar or defparameter."
+  (check-type form parser:form)
+  (check-type file pathname)
+  (let ((expr (parser:form-expr form)))
+    (when (and (or (defvar-p expr) (defparameter-p expr))
+               (not (variable-has-docstring-p expr))
                (base:should-create-violation-p rule))
       (let ((form-type (form-type-string expr))
             (name (definition-name expr)))
