@@ -16,6 +16,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:mixed-optional-and-key`](#mixed-optional-and-key) | Mixing `&optional` and `&key` parameters | error | on | |
 | [`:asdf-if-feature-keyword`](#asdf-if-feature-keyword) | Feature expressions must use keywords in defsystem | warning | on | |
 | [`:asdf-secondary-system-name`](#asdf-secondary-system-name) | Secondary systems must use `primary/suffix` name | warning | on | |
+| [`:coalton-missing-to-boolean`](#coalton-missing-to-boolean) | Coalton `lisp Boolean` form missing `to-boolean` | warning | off | |
 
 ### [Suspicious](#suspicious) — Likely wrong or dangerous patterns
 
@@ -38,6 +39,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
 | [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
+| [`:coalton-missing-declare`](#coalton-missing-declare) | Coalton function `define` missing `declare` type signature | warning | off | |
 
 ### [Cleanliness](#cleanliness) — Dead code and unused definitions
 
@@ -171,6 +173,29 @@ Secondary system names in a `.asd` file must follow the `primary/suffix` convent
 ```
 
 **Severity**: warning | **Default**: enabled
+
+### `:coalton-missing-to-boolean`
+
+`(lisp Boolean (...) body)` forms inside `coalton-toplevel` must use `to-boolean` to convert CL generalized booleans to Coalton `True`/`False`. Without it, CL predicates return `nil` instead of `False`, causing incorrect runtime behavior.
+
+```lisp
+(coalton-toplevel
+  ;; Bad: CL predicate returns nil, not False
+  (declare even? (Integer -> Boolean))
+  (define (even? n)
+    (lisp Boolean (n)
+      (cl:evenp n)))
+
+  ;; Good: to-boolean converts nil/T to False/True
+  (declare even? (Integer -> Boolean))
+  (define (even? n)
+    (lisp Boolean (n)
+      (to-boolean (cl:evenp n)))))
+```
+
+**Detection**: Recursively searches all nesting levels inside `coalton-toplevel` for `(lisp Boolean (...) body)` patterns. Recognizes both `to-boolean` and package-qualified variants like `coalton-library/classes:to-boolean`.
+
+**Severity**: warning | **Default**: disabled (available via `--all` or `--enable coalton-missing-to-boolean`)
 
 ## Suspicious
 
@@ -412,6 +437,29 @@ Float literals should have explicit type markers (`f`, `d`, `s`, `l`). Without a
 ```
 
 **Severity**: info | **Default**: disabled
+
+### `:coalton-missing-declare`
+
+Every function `define` inside `coalton-toplevel` should have a preceding `declare` type signature. Missing declarations can cause the monomorphism restriction and lack documentation of intent.
+
+```lisp
+(coalton-toplevel
+  ;; Bad: no type declaration
+  (define (add-one x) (+ x 1))
+
+  ;; Good: declare before define
+  (declare add-one (Integer -> Integer))
+  (define (add-one x) (+ x 1)))
+```
+
+**What is not flagged**:
+- Value defines: `(define pi 314)`
+- `define-type`, `define-instance`, `define-struct` forms
+- Lambda-value defines: `(define foo (fn (x) x))`
+
+**Detection**: Each `coalton-toplevel` block is checked independently. A `declare` must appear before the corresponding `define` within the same block.
+
+**Severity**: warning | **Default**: disabled (available via `--all` or `--enable coalton-missing-declare`)
 
 ## Cleanliness
 
