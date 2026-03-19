@@ -20,6 +20,7 @@
 
 ;;; Coalton: progn in if inside coalton-toplevel is also flagged
 (coalton-toplevel
+  (declare foo (Boolean -> Integer))
   (define (foo x)
     (if x
         (progn

@@ -6,11 +6,13 @@
 
 ;; Simple Coalton function - complexity 1 (OK)
 (coalton-toplevel
+  (declare simple-fn (Integer -> Integer))
   (define (simple-fn x)
     (+ x 1)))
 
 ;; Function with 14 if expressions - complexity 15 (OK, exactly at threshold)
 (coalton-toplevel
+  (declare borderline (Integer -> Integer))
   (define (borderline cmd)
     (if (= cmd 1) 1 0)
     (if (= cmd 2) 1 0)
@@ -29,6 +31,7 @@
 
 ;; High complexity - complexity 16 (1 + 15 if expressions, VIOLATION with default 15)
 (coalton-toplevel
+  (declare handle-command (Integer -> Integer))
   (define (handle-command cmd)
     (if (= cmd 1) 1 0)
     (if (= cmd 2) 1 0)

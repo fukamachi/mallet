@@ -18,5 +18,6 @@
 
 ;;; Coalton: single-body progn inside coalton-toplevel is also flagged
 (coalton-toplevel
+  (declare foo (Integer -> Integer))
   (define (foo x)
     (progn (bar x))))

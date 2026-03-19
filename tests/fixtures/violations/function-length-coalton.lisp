@@ -4,11 +4,13 @@
 
 ;;; Short Coalton define — should not trigger
 (coalton-toplevel
+  (declare short-fn (Integer -> Integer))
   (define (short-fn x)
     (+ x 1)))
 
 ;;; Long Coalton define — should trigger (default max 50 lines)
 (coalton-toplevel
+  (declare very-long-fn (Integer -> Integer))
   (define (very-long-fn x)
     (bar 1)
     (bar 2)
