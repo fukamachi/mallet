@@ -121,18 +121,6 @@ Severity and category defaults are defined in each rule class's :default-initarg
       (:missing-struct-docstring
        (apply #'make-instance 'missing-struct-docstring-rule options))
 
-      ;; Practice rules
-      (:missing-exported-docstring
-       ;; Backward-compatible alias: creates missing-docstring-rule with :exported-only t.
-       ;; Rule name is preserved as :missing-exported-docstring and severity as :warning
-       ;; so that existing configs and expectations continue to work unchanged.
-       ;; User-supplied options come first so they can override the alias defaults.
-       (apply #'make-instance 'missing-docstring-rule
-              (append options
-                      '(:exported-only t
-                        :name :missing-exported-docstring
-                        :severity :warning))))
-
       ;; Suppression rules
       (:stale-suppression
        (apply #'make-instance 'stale-suppression-rule options))

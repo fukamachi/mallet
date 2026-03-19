@@ -33,7 +33,6 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | off | |
 | [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | on | |
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
-| [`:missing-exported-docstring`](#missing-exported-docstring) | Exported definitions missing docstrings | warning | off | |
 | [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
 
@@ -64,6 +63,9 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:asdf-secondary-system-name`](#asdf-secondary-system-name) | Secondary systems must use `primary/suffix` name | warning | on | |
 | [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
 | [`:missing-docstring`](#missing-docstring) | Top-level definitions missing docstrings | info | off | |
+| [`:missing-package-docstring`](#missing-package-docstring) | Package definitions missing docstrings | info | off | |
+| [`:missing-variable-docstring`](#missing-variable-docstring) | Variable definitions missing docstrings | info | off | |
+| [`:missing-struct-docstring`](#missing-struct-docstring) | Struct definitions missing docstrings | info | off | |
 | [`:redundant-progn`](#redundant-progn) | `progn` with a single body form is redundant | info | on | |
 
 ### [Format](#format) — Whitespace and file formatting
@@ -304,28 +306,6 @@ Avoid calling `error` with only a format string. Signaling a string creates a `s
 (define-condition connection-error (error)
   ((host :initarg :host :reader connection-error-host)))
 (error 'connection-error :host host)
-```
-
-**Severity**: warning | **Default**: disabled
-
-### `:missing-exported-docstring`
-
-Exported definitions should have docstrings. Exported symbols form the public API of a package; without docstrings, users and tools like `describe` have no documentation to show. Applies to `defun`, `defmacro`, `defgeneric`, and `defclass` forms whose name appears in the package's `:export` list. `defmethod` is exempt because methods inherit documentation from the generic function.
-
-```lisp
-;; Bad: exported function with no docstring
-(defpackage #:my-lib
-  (:use #:cl)
-  (:export #:connect))
-(in-package #:my-lib)
-
-(defun connect (host port)
-  (open-connection host port))
-
-;; Good: docstring added
-(defun connect (host port)
-  "Open a connection to HOST on PORT."
-  (open-connection host port))
 ```
 
 **Severity**: warning | **Default**: disabled
@@ -743,6 +723,64 @@ Top-level definitions should have docstrings. Applies to `defun`, `defmacro`, `d
   ((x :initarg :x)
    (y :initarg :y))
   (:documentation "A two-dimensional point."))
+```
+
+**Severity**: info | **Default**: disabled
+
+### `:missing-package-docstring`
+
+Package definitions should have a `:documentation` string. Applies to `defpackage` and `define-package` forms.
+
+```lisp
+;; Bad: no :documentation option
+(defpackage #:my-lib
+  (:use #:cl)
+  (:export #:connect))
+
+;; Good: documentation present
+(defpackage #:my-lib
+  (:use #:cl)
+  (:export #:connect)
+  (:documentation "My library for connections."))
+```
+
+**Severity**: info | **Default**: disabled
+
+### `:missing-variable-docstring`
+
+Variable definitions should have docstrings. Applies to `defvar` and `defparameter` forms. `defvar` without an initial value is exempt (cannot place a docstring there).
+
+```lisp
+;; Bad: no docstring
+(defvar *connection-timeout* 30)
+(defparameter *max-retries* 5)
+
+;; Good: docstrings present
+(defvar *connection-timeout* 30
+  "Seconds before a connection attempt times out.")
+(defparameter *max-retries* 5
+  "Number of times to retry a failed connection.")
+```
+
+**Severity**: info | **Default**: disabled
+
+### `:missing-struct-docstring`
+
+Struct definitions should have docstrings. Checks both the body string position (like `defun`) and the `(:documentation ...)` option in name-and-options. Applies to `defstruct` forms.
+
+```lisp
+;; Bad: no docstring
+(defstruct point x y)
+
+;; Good: body docstring
+(defstruct point
+  "A two-dimensional point."
+  x y)
+
+;; Also good: :documentation in options
+(defstruct (point (:constructor make-point))
+  (:documentation "A two-dimensional point.")
+  x y)
 ```
 
 **Severity**: info | **Default**: disabled
