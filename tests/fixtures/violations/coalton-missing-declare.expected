@@ -1,0 +1,5 @@
+# Expected violations for coalton-missing-declare.lisp
+# Format: line:column rule-name severity
+
+6:2 coalton-missing-declare warning
+20:2 coalton-missing-declare warning
