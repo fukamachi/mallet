@@ -7,7 +7,8 @@
   (:export #:interned-package-symbol-rule
            #:unused-local-nicknames-rule
            #:unused-imported-symbols-rule
-           #:no-package-use-rule))
+           #:no-package-use-rule
+           #:package-per-file-rule))
 (in-package #:mallet/rules/forms/package)
 
 (defun defpackage-form-p (expr)
@@ -943,3 +944,49 @@ This is used to ensure only one fix deletes the entire clause when all are unuse
 Returns a violation-fix to delete those lines, or NIL if not found.
 Uses the generic base:find-clause-line-range helper."
   (base:find-clause-line-range text violation-line ":local-nicknames"))
+
+;;; Package Per File Rule
+
+(defclass package-per-file-rule (base:rule)
+  ((files-with-defpackage
+    :initform (make-hash-table :test 'equal)
+    :accessor rule-files-with-defpackage
+    :documentation "Set of file namestrings that contain a defpackage or define-package form.
+Populated incrementally as forms are checked, so no file re-reading is needed."))
+  (:default-initargs
+   :name :package-per-file
+   :description "Each file should define its own package with defpackage before in-package"
+   :severity :warning
+   :category :practice
+   :type :form)
+  (:documentation "Rule to detect files that use in-package without a defpackage.
+Flags files where in-package is used but no preceding defpackage or uiop:define-package
+is present in the same file. Each file should define and switch to its own package."))
+
+(defmethod base:check-form ((rule package-per-file-rule) form file)
+  "Detect in-package without a corresponding defpackage earlier in the same file.
+Relies on forms being processed in file order: a defpackage seen before an in-package
+marks the file as valid; an in-package with no prior defpackage is a violation."
+  (check-type form parser:form)
+  (check-type file pathname)
+
+  (let ((expr (parser:form-expr form))
+        (file-key (namestring file)))
+    (cond
+      ((defpackage-form-p expr)
+       ;; Record that this file defines a package; no violation for defpackage itself.
+       (setf (gethash file-key (rule-files-with-defpackage rule)) t)
+       nil)
+      ((in-package-form-p expr)
+       ;; Flag if no defpackage has been seen yet for this file.
+       (unless (gethash file-key (rule-files-with-defpackage rule))
+         (list (make-instance 'violation:violation
+                              :rule (base:rule-name rule)
+                              :file file
+                              :line (parser:form-line form)
+                              :column (parser:form-column form)
+                              :end-line (parser:form-end-line form)
+                              :end-column (parser:form-end-column form)
+                              :message "File uses in-package without a defpackage in the same file; each file should define its own package"
+                              :severity (base:rule-severity rule)))))
+      (t nil))))

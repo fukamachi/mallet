@@ -416,7 +416,9 @@ Style preferences are disabled to keep output clean."
             :asdf-redundant-package-prefix
             :asdf-reader-conditional
             ;; LOOP variables - disabled
-            :unused-loop-variables)))
+            :unused-loop-variables
+            ;; Package practice - disabled by default
+            :package-per-file)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
@@ -433,6 +435,7 @@ Useful for exploration and discovering what rules exist."
             :no-allow-other-keys
             :asdf-operate-in-perform
             :asdf-reader-conditional
+            :package-per-file
             ;; Suspicious
             :no-eval
             :runtime-intern

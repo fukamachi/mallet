@@ -80,6 +80,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
        (apply #'make-instance 'unused-imported-symbols-rule options))
       (:no-package-use
        (apply #'make-instance 'no-package-use-rule options))
+      (:package-per-file
+       (apply #'make-instance 'package-per-file-rule options))
       (:special-variable-naming
        (apply #'make-instance 'special-variable-naming-rule options))
       (:constant-naming

@@ -1,0 +1,4 @@
+# Expected violations for package-per-file.lisp
+# Format: line:column rule-name severity
+
+4:0 package-per-file warning

@@ -148,6 +148,7 @@
      (:file "missing-package-docstring-test")
      (:file "missing-variable-docstring-test")
      (:file "missing-struct-docstring-test")
+     (:file "package-per-file-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test")
      (:file "package-exports-test"))))

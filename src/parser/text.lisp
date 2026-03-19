@@ -1,3 +1,4 @@
+; mallet:suppress package-per-file implementation file shares mallet/parser package defined in parser.lisp
 (in-package #:mallet/parser)
 
 (defun analyze-text (text)
