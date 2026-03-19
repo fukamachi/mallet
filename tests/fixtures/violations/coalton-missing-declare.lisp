@@ -5,10 +5,10 @@
 (coalton-toplevel
   (define (add-one x) (+ x 1))
 
-  (declare (subtract-one Integer -> Integer))
+  (declare subtract-one (Integer -> Integer))
   (define (subtract-one x) (- x 1))
 
-  (define pi 3.14)
+  (define pi 314)
 
   (define-type Color Red Green Blue)
 

@@ -5,7 +5,8 @@
    (#:rules #:mallet/rules)
    (#:base #:mallet/rules/base)
    (#:parser #:mallet/parser)
-   (#:violation #:mallet/violation)))
+   (#:violation #:mallet/violation)
+   (#:config #:mallet/config)))
 (in-package #:mallet/tests/rules/coalton-missing-declare)
 
 ;;; Helper
@@ -23,21 +24,21 @@
   (testing "function define preceded by declare — no violation"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (add-one Integer -> Integer))
+                  (declare add-one (Integer -> Integer))
                   (define (add-one x) (+ x 1)))"))))
 
   (testing "value define preceded by declare — no violation"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (pi Float))
+                  (declare pi (Float))
                   (define pi 3.14))"))))
 
   (testing "multiple defines each with a preceding declare — no violation"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (foo Integer -> Integer))
+                  (declare foo (Integer -> Integer))
                   (define (foo x) x)
-                  (declare (bar String -> Integer))
+                  (declare bar (String -> Integer))
                   (define (bar s) (length s)))"))))
 
   (testing "empty coalton-toplevel — no violation"
@@ -46,12 +47,12 @@
   (testing "only declare forms — no violation"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (foo Integer -> Integer)))"))))
+                  (declare foo (Integer -> Integer)))"))))
 
   (testing "declare before function define is matched case-insensitively"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (ADD-ONE Integer -> Integer))
+                  (declare ADD-ONE (Integer -> Integer))
                   (define (add-one x) x))"))))
 
   (testing "non-coalton forms do not trigger the rule"
@@ -61,7 +62,7 @@
   (testing "define inside function body is not checked at toplevel"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (outer Integer -> Integer))
+                  (declare outer (Integer -> Integer))
                   (define (outer x)
                     (define inner (+ x 1))
                     inner))")))))
@@ -86,7 +87,7 @@
   (testing "function define where declare is for a different name — one violation"
     (let ((violations (check-missing-declare
                        "(coalton-toplevel
-                          (declare (other-fn Integer -> Integer))
+                          (declare other-fn (Integer -> Integer))
                           (define (add-one x) (+ x 1)))")))
       (ok (= 1 (length violations)))
       (ok (eq :coalton-missing-declare (violation:violation-rule (first violations))))))
@@ -95,13 +96,13 @@
     (let ((violations (check-missing-declare
                        "(coalton-toplevel
                           (define (add-one x) (+ x 1))
-                          (declare (add-one Integer -> Integer)))")))
+                          (declare add-one (Integer -> Integer)))")))
       (ok (= 1 (length violations)))))
 
   (testing "multiple defines, only some have declares — partial violations"
     (let ((violations (check-missing-declare
                        "(coalton-toplevel
-                          (declare (foo Integer -> Integer))
+                          (declare foo (Integer -> Integer))
                           (define (foo x) x)
                           (define (bar s) (length s)))")))
       (ok (= 1 (length violations)))
@@ -158,7 +159,7 @@
   (testing "mixed qualified and unqualified — declare matches define"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (add-one Integer -> Integer))
+                  (declare add-one (Integer -> Integer))
                   (coalton:define (add-one x) (+ x 1)))"))))
 
   (testing "package-qualified coalton:coalton-toplevel is handled"
@@ -171,7 +172,7 @@
   (testing "each coalton-toplevel block is independent — declare in first does not cover second"
     (let ((violations (check-missing-declare
                        "(coalton-toplevel
-                          (declare (foo Integer -> Integer))
+                          (declare foo (Integer -> Integer))
                           (define (foo x) x))
                         (coalton-toplevel
                           (define (foo x) x))")))
@@ -190,10 +191,10 @@
   (testing "two blocks both fully declared — no violations"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (foo Integer -> Integer))
+                  (declare foo (Integer -> Integer))
                   (define (foo x) x))
                 (coalton-toplevel
-                  (declare (bar String -> String))
+                  (declare bar (String -> String))
                   (define (bar s) s))")))))
 
 (deftest robustness-edge-cases
@@ -217,14 +218,14 @@
   (testing "declare with matching name but define is a value — no violation"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (declare (x Integer))
+                  (declare x (Integer))
                   (define x 42))"))))
 
   (testing "function define where declare is for SAME name later — still a violation"
     (let ((violations (check-missing-declare
                        "(coalton-toplevel
                           (define (foo x) x)
-                          (declare (foo Integer -> Integer)))")))
+                          (declare foo (Integer -> Integer)))")))
       (ok (= 1 (length violations))))))
 
 (deftest violation-severity
@@ -246,4 +247,14 @@
 
   (testing "coalton-missing-declare-rule has :practice category"
     (let ((rule (rules:make-rule :coalton-missing-declare)))
-      (ok (eq :practice (base:rule-category rule))))))
+      (ok (eq :practice (base:rule-category rule)))))
+
+  (testing "coalton-missing-declare is in the :all preset"
+    (let ((all-config (config:get-built-in-config :all)))
+      (ok (find :coalton-missing-declare
+                (mapcar #'base:rule-name (config:config-rules all-config))))))
+
+  (testing "coalton-missing-declare is NOT in the :default preset"
+    (let ((default-config (config:get-built-in-config :default)))
+      (ok (not (find :coalton-missing-declare
+                     (mapcar #'base:rule-name (config:config-rules default-config))))))))

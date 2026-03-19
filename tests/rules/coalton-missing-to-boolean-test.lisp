@@ -321,4 +321,9 @@
   (testing "Rule is included in all-rules preset"
     (let* ((cfg (config:get-built-in-config :all))
            (rule-names (mapcar #'base:rule-name (config:config-rules cfg))))
-      (ok (member :coalton-missing-to-boolean rule-names)))))
+      (ok (member :coalton-missing-to-boolean rule-names))))
+
+  (testing "Rule is NOT in the default preset"
+    (let* ((cfg (config:get-built-in-config :default))
+           (rule-names (mapcar #'base:rule-name (config:config-rules cfg))))
+      (ok (not (member :coalton-missing-to-boolean rule-names))))))

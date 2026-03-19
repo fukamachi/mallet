@@ -33,12 +33,13 @@ Returns NIL if HEAD is not a recognisable symbol."
     (when raw (string-upcase raw))))
 
 (defun declare-defined-name (head-name sub-form)
-  "If HEAD-NAME is \"DECLARE\" and SUB-FORM is (declare (fn-name ...)),
-return the declared name as an uppercase string. Otherwise return NIL."
+  "If HEAD-NAME is \"DECLARE\" and SUB-FORM is (declare name type-sig...),
+return the declared name as an uppercase string. Otherwise return NIL.
+Coalton declare syntax: (declare name (Type -> Type))"
   (when (string-equal head-name "DECLARE")
-    (let ((sig (second sub-form)))
-      (when (consp sig)
-        (coalton-symbol-name (first sig))))))
+    (let ((name-elem (second sub-form)))
+      (when (and name-elem (not (consp name-elem)))
+        (coalton-symbol-name name-elem)))))
 
 (defun function-define-name (head-name sub-form)
   "If HEAD-NAME is \"DEFINE\" and SUB-FORM is (define (fn-name ...) body),

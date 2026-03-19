@@ -3,11 +3,10 @@
 (in-package #:test-pkg)
 
 (coalton-toplevel
-  (declare (add-one Integer -> Integer))
+  (declare add-one (Integer -> Integer))
   (define (add-one x) (+ x 1))
 
-  (declare (pi Float))
-  (define pi 3.14)
+  (define pi 314)
 
   (define-type Color Red Green Blue)
 
@@ -15,5 +14,5 @@
 
 ;; Second block with package-qualified symbols
 (coalton:coalton-toplevel
-  (coalton:declare (bar String -> String))
+  (coalton:declare bar (String -> String))
   (coalton:define (bar s) s))
