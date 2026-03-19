@@ -1,0 +1,3 @@
+# Expected violations for function-length-coalton.lisp
+
+12:2 function-length info
