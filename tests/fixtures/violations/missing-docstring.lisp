@@ -28,3 +28,27 @@
 
 ;; Good: defmethod — always skipped
 (defmethod undocumented-gf ((x integer)) (* x 2))
+
+;; Bad: deftype with 2-body forms but no docstring
+;; (2 forms allows a docstring; first form is not a string so it's missing)
+(deftype undocumented-type (n)
+  (declare (type integer n))
+  '(integer 0))
+
+;; Good: deftype with single body form (type expansion, not checkable)
+(deftype single-expansion ()
+  'integer)
+
+;; Good: deftype with docstring + expansion
+(deftype documented-type ()
+  "A documented numeric type."
+  'integer)
+
+;; Bad: define-condition without :documentation
+(define-condition undocumented-error (error)
+  ())
+
+;; Good: define-condition with :documentation
+(define-condition documented-error (error)
+  ()
+  (:documentation "A documented error condition."))

@@ -19,3 +19,16 @@
 ;; defmethod is always skipped — no docstring required
 (defmethod serialize ((p point))
   (format nil "(~A, ~A)" (point-x p) (point-y p)))
+
+;; deftype with single body form (type expansion, not checkable)
+(deftype index ()
+  '(integer 0))
+
+;; deftype with docstring + expansion
+(deftype non-negative ()
+  "A non-negative integer type."
+  '(integer 0))
+
+(define-condition app-error (error)
+  ()
+  (:documentation "Base class for application errors."))
