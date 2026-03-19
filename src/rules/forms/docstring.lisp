@@ -31,7 +31,8 @@
    ;; Rule classes
    #:missing-docstring-rule
    #:missing-package-docstring-rule
-   #:missing-variable-docstring-rule))
+   #:missing-variable-docstring-rule
+   #:missing-struct-docstring-rule))
 (in-package #:mallet/rules/forms/docstring)
 
 ;;; Docstring Detection Utilities
@@ -189,7 +190,9 @@ The docstring is the 4th element: (defvar *name* value \"doc\")."
 
 (defun defstruct-has-docstring-p (expr)
   "Return T if defstruct EXPR has a docstring.
-Checks both (:documentation \"string\") in name-and-options and a plain string in the body."
+Checks both (:documentation \"string\") in name-and-options and a plain string in the body.
+Note: only detects body docstrings that contain no colons. Docstrings like
+\"See: foo.\" are an accepted limitation (same as defun-body-has-docstring-p)."
   (when (defstruct-p expr)
     (let ((name-and-opts (second expr))
           (body (cddr expr)))
@@ -197,9 +200,12 @@ Checks both (:documentation \"string\") in name-and-options and a plain string i
        ;; Check (:documentation "string") in name-and-options list
        (and (consp name-and-opts)
             (options-have-documentation-p (cdr name-and-opts)))
-       ;; Check for plain string as first body element
+       ;; Check for plain string literal as first body element.
+       ;; Symbol representations in the parsed form always have a colon (e.g. "CURRENT:x"),
+       ;; while string literals do not (e.g. "A doc string.").
        (and (consp body)
-            (stringp (first body)))))))
+            (stringp (first body))
+            (not (find #\: (first body))))))))
 
 (defun defpackage-has-docstring-p (expr)
   "Return T if defpackage or define-package EXPR has a :documentation option."
@@ -457,3 +463,40 @@ from the current package."))
                                    :severity (base:rule-severity rule)
                                    :message msg
                                    :fix nil)))))))))
+
+;;; --- missing-struct-docstring-rule ---
+
+(defclass missing-struct-docstring-rule (exported-only-mixin base:rule)
+  ()
+  (:default-initargs
+   :name :missing-struct-docstring
+   :description "Struct definitions should have docstrings"
+   :severity :info
+   :category :style
+   :type :form)
+  (:documentation "Rule to detect defstruct definitions lacking docstrings.
+Checks both (:documentation \"string\") in name-and-options and a plain string in the body.
+Supports exported-only filtering via exported-only-mixin."))
+
+(defmethod base:check-form ((rule missing-struct-docstring-rule) form file)
+  "Check FORM for missing docstring on a defstruct definition."
+  (check-type form parser:form)
+  (check-type file pathname)
+  (unless (update-package-tracking rule form file)
+    (let ((expr (parser:form-expr form)))
+      (when (and (defstruct-p expr)
+                 (not (defstruct-has-docstring-p expr))
+                 (base:should-create-violation-p rule))
+        (let ((name (defstruct-name expr)))
+          (when (and name (should-check-definition-p rule name))
+            (list (make-instance 'violation:violation
+                                 :rule (base:rule-name rule)
+                                 :file file
+                                 :line (parser:form-line form)
+                                 :column (parser:form-column form)
+                                 :severity (base:rule-severity rule)
+                                 :message (format nil "~ADEFSTRUCT ~A is missing a docstring"
+                                                  (if (rule-exported-only-p rule) "Exported " "")
+                                                  name)
+                                 :fix nil))))))))
+

@@ -193,7 +193,8 @@
     (ok (null (check-missing-docstring
                "(deftype positive-integer ()
   \"A positive integer.\"
-  `(integer 1 *))"))))
+  '(integer 1 *))"))))
+
 
   (testing "deftype with single body form is not flagged (type expansion, not docstring)"
     (ok (null (check-missing-docstring
@@ -280,10 +281,6 @@
         (cleanup-temp-dir dir))))
 
   (testing "severity auto-upgrade to :warning when :exported-only t (no default severity)"
-    ;; missing-docstring-rule has :default-initargs :severity :info, so severity-p is always T
-    ;; in initialize-instance :after. The auto-upgrade only fires for classes without a
-    ;; :severity in :default-initargs. This is documented mixin behavior.
-    ;; Instead verify that exported-only is set and the rule works correctly.
     (let ((rule (make-instance 'rules:missing-docstring-rule :exported-only t)))
       (ok (rules:rule-exported-only-p rule))))
 
