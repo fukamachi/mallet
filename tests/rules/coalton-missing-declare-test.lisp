@@ -153,7 +153,7 @@
   (testing "package-qualified coalton:declare satisfies requirement"
     (ok (null (check-missing-declare
                "(coalton-toplevel
-                  (coalton:declare (add-one Integer -> Integer))
+                  (coalton:declare add-one (Integer -> Integer))
                   (coalton:define (add-one x) (+ x 1)))"))))
 
   (testing "mixed qualified and unqualified — declare matches define"
