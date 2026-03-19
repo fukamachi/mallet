@@ -415,35 +415,45 @@ Documents the package's purpose and public API."))
 
 ;;; --- missing-variable-docstring-rule ---
 
-(defclass missing-variable-docstring-rule (base:rule)
+(defclass missing-variable-docstring-rule (exported-only-mixin base:rule)
   ()
   (:default-initargs
    :name :missing-variable-docstring
-   :description "defvar and defparameter forms should have docstrings"
+   :description "Variable definitions should have docstrings"
    :severity :info
    :category :style
    :type :form)
   (:documentation "Rule to detect defvar and defparameter forms lacking docstrings.
 Checks that each special variable definition includes a documentation string.
-Skips defvar forms without an initial value, which cannot have a docstring."))
+Skips defvar forms without an initial value, which cannot have a docstring.
+When :exported-only t is set, only flags variables whose symbol is exported
+from the current package."))
 
 (defmethod base:check-form ((rule missing-variable-docstring-rule) form file)
   "Check FORM for missing docstring on a defvar or defparameter."
   (check-type form parser:form)
   (check-type file pathname)
-  (let ((expr (parser:form-expr form)))
-    (when (and (or (defvar-p expr) (defparameter-p expr))
-               (not (variable-has-docstring-p expr))
-               (base:should-create-violation-p rule))
-      (let ((form-type (form-type-string expr))
-            (name (definition-name expr)))
-        (when (and form-type name)
-          (list (make-instance 'violation:violation
-                               :rule (base:rule-name rule)
-                               :file file
-                               :line (parser:form-line form)
-                               :column (parser:form-column form)
-                               :severity (base:rule-severity rule)
-                               :message (format nil "~A ~A is missing a docstring"
-                                                form-type name)
-                               :fix nil)))))))
+  ;; Track package context; skip in-package forms themselves
+  (unless (update-package-tracking rule form file)
+    (let ((expr (parser:form-expr form)))
+      (when (and (or (defvar-p expr) (defparameter-p expr))
+                 ;; Skip defvar without init value: (defvar *name*) has length < 3
+                 (not (and (defvar-p expr) (< (length expr) 3)))
+                 (not (variable-has-docstring-p expr))
+                 (base:should-create-violation-p rule))
+        (let ((name (definition-name expr)))
+          (when (and name (should-check-definition-p rule name))
+            (let* ((form-type (form-type-string expr))
+                   (msg (if (rule-exported-only-p rule)
+                            (format nil "Exported ~A ~A is missing a docstring"
+                                    form-type name)
+                            (format nil "~A ~A is missing a docstring"
+                                    form-type name))))
+              (list (make-instance 'violation:violation
+                                   :rule (base:rule-name rule)
+                                   :file file
+                                   :line (parser:form-line form)
+                                   :column (parser:form-column form)
+                                   :severity (base:rule-severity rule)
+                                   :message msg
+                                   :fix nil)))))))))
