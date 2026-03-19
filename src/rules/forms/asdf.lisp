@@ -16,7 +16,7 @@
    :name :asdf-component-strings
    :description "ASDF components, systems, and dependencies should use strings not symbols"
    :severity :warning
-   :category :style
+   :category :practice
    :type :form
    :file-types '(:asd))
   (:documentation "Rule to check that ASDF defsystem uses strings for component names,
