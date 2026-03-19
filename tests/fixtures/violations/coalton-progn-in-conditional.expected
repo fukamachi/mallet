@@ -1,0 +1,5 @@
+# Expected violations for coalton-progn-in-conditional.lisp
+# Rule detects (if cond (progn ...) ...) inside coalton-toplevel
+
+11:4 progn-in-conditional info
+17:4 progn-in-conditional info

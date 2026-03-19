@@ -99,6 +99,8 @@ Suppressions are handled automatically by the :around method."
    :type :form)
   (:documentation "Rule to detect bare 'progn' in 'if', 'and', or 'or' clauses."))
 
+(defmethod base:coalton-aware-p ((rule progn-in-conditional-rule)) t)
+
 (defmethod base:check-form ((rule progn-in-conditional-rule) form file)
   "Check that IF/AND/OR forms don't have bare PROGN in key positions."
   (check-type form parser:form)
@@ -216,6 +218,8 @@ Suppressions are handled automatically by the :around method."
    :category :style
    :type :form)
   (:documentation "Rule to detect PROGN forms with exactly one body form."))
+
+(defmethod base:coalton-aware-p ((rule redundant-progn-rule)) t)
 
 (defmethod base:check-form ((rule redundant-progn-rule) form file)
   "Check that PROGN forms have more than one body form."

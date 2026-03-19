@@ -154,3 +154,116 @@
               :progn-in-conditional))
       (ok (string= (violation:violation-message (first violations))
                    "Use 'unless' instead of 'or' with bare 'progn'")))))
+
+;;; Coalton-aware tests
+
+(deftest progn-in-conditional-coalton
+  (testing "Valid: if without progn inside coalton-toplevel is not flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (foo x)
+                     (if x
+                         (bar x)
+                         (baz x))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Invalid: progn in if then-clause inside coalton-toplevel is flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (foo x)
+                     (if x
+                         (progn
+                           (bar x)
+                           (baz x))
+                         (qux x))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))
+      (ok (eq (violation:violation-severity (first violations)) :info))
+      (ok (string= (violation:violation-message (first violations))
+                   "Use 'cond' instead of 'if' with bare 'progn'"))))
+
+  (testing "Invalid: progn in if else-clause inside coalton-toplevel is flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (foo x)
+                     (if x
+                         (bar x)
+                         (progn
+                           (baz x)
+                           (qux x)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))))
+
+  (testing "Invalid: and with progn as last arg inside coalton-toplevel define"
+    (let* ((code "(coalton-toplevel
+                   (define (check x)
+                     (and (valid? x) (progn (log x) (process x)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))
+      (ok (string= (violation:violation-message (first violations))
+                   "Use 'when' instead of 'and' with bare 'progn'"))))
+
+  (testing "Invalid: or with progn as last arg inside coalton-toplevel define"
+    (let* ((code "(coalton-toplevel
+                   (define (fallback x)
+                     (or (try-first x) (progn (log-failure x) (default-val)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))
+      (ok (string= (violation:violation-message (first violations))
+                   "Use 'unless' instead of 'or' with bare 'progn'")))))
+
+(deftest progn-in-conditional-coalton-negative
+  (testing "Negative: coalton-toplevel with normal if produces zero violations"
+    (let* ((code "(coalton-toplevel
+                   (define (decide x)
+                     (if (> x 0)
+                         (positive x)
+                         (negative x))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Negative: coalton-toplevel with and/or but no progn produces zero violations"
+    (let* ((code "(coalton-toplevel
+                   (define (logic x y)
+                     (and (check x) (check y))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
+
+(deftest progn-in-conditional-coalton-regression
+  (testing "Regression: CL if+progn outside coalton-toplevel still triggers violation"
+    (let* ((code "(if condition
+                     (progn (a) (b))
+                     (c))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))))
+
+  (testing "Regression: CL and+progn outside coalton-toplevel still triggers violation"
+    (let* ((code "(and x (progn (a) (b)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:progn-in-conditional-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))))
+
+  (testing "coalton-aware-p returns T for progn-in-conditional-rule"
+    (let ((rule (make-instance 'rules:progn-in-conditional-rule)))
+      (ok (rules:coalton-aware-p rule)))))
