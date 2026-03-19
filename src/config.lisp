@@ -412,12 +412,13 @@ Style preferences are disabled to keep output clean."
             :missing-package-docstring
             :missing-variable-docstring
             :missing-struct-docstring
-            ;; ASDF practice - disabled by default
+            ;; Practice - disabled by default
             :asdf-redundant-package-prefix
             :asdf-reader-conditional
-            ;; LOOP variables - disabled
+            :bare-float-literal
+            ;; Cleanliness - disabled
             :unused-loop-variables
-            ;; Package style - disabled by default
+            ;; Style - disabled by default
             :one-package-per-file)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
@@ -431,15 +432,21 @@ Useful for exploration and discovering what rules exist."
             :wrong-otherwise
             :mixed-optional-and-key
             :asdf-if-feature-keyword
-            ;; Practice
-            :no-allow-other-keys
-            :asdf-operate-in-perform
-            :asdf-reader-conditional
+            :asdf-secondary-system-name
             ;; Suspicious
             :no-eval
             :runtime-intern
             :runtime-unintern
+            :asdf-operate-in-perform
+            ;; Practice
+            :no-allow-other-keys
             :no-ignore-errors
+            :no-package-use
+            :double-colon-access
+            :error-with-string-only
+            :asdf-component-strings
+            :asdf-reader-conditional
+            :bare-float-literal
             ;; Cleanliness
             :unused-variables
             :unused-local-functions
@@ -455,14 +462,8 @@ Useful for exploration and discovering what rules exist."
             :defpackage-interned-symbol
             :special-variable-naming
             :constant-naming
-            :asdf-component-strings
             :asdf-redundant-package-prefix
-            :asdf-secondary-system-name
             :needless-let*
-            :no-package-use
-            :bare-float-literal
-            :double-colon-access
-            :error-with-string-only
             :missing-docstring
             :missing-package-docstring
             :missing-variable-docstring

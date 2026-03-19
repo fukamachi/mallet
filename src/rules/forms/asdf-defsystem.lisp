@@ -114,7 +114,7 @@ Checks every symbol position (not just heads) for redundant package prefixes."
    :name :asdf-operate-in-perform
    :description "Do not call asdf:operate or related functions inside :perform bodies"
    :severity :warning
-   :category :practice
+   :category :suspicious
    :type :form
    :file-types '(:asd))
   (:documentation "Rule to detect asdf operate calls inside :perform method bodies.
@@ -220,7 +220,7 @@ Structure: (:perform (op-type (o c) body-forms...))"
    :name :asdf-secondary-system-name
    :description "Secondary system names must follow the primary/suffix convention"
    :severity :warning
-   :category :style
+   :category :correctness
    :type :form
    :file-types '(:asd))
   (:documentation "Rule to detect secondary system names that don't follow the

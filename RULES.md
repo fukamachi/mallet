@@ -15,6 +15,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:wrong-otherwise`](#wrong-otherwise) | `ecase`/`etypecase` with `otherwise`/`t` clause | error | on | |
 | [`:mixed-optional-and-key`](#mixed-optional-and-key) | Mixing `&optional` and `&key` parameters | error | on | |
 | [`:asdf-if-feature-keyword`](#asdf-if-feature-keyword) | Feature expressions must use keywords in defsystem | warning | on | |
+| [`:asdf-secondary-system-name`](#asdf-secondary-system-name) | Secondary systems must use `primary/suffix` name | warning | on | |
 
 ### [Suspicious](#suspicious) — Likely wrong or dangerous patterns
 
@@ -23,6 +24,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:no-eval`](#no-eval) | Runtime use of `cl:eval` | warning | on | |
 | [`:runtime-intern`](#runtime-intern) | Runtime use of symbol-interning functions | warning | off | |
 | [`:runtime-unintern`](#runtime-unintern) | Runtime use of `cl:unintern` | warning | off | |
+| [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
 
 ### [Practice](#practice) — Commonly accepted best practices
 
@@ -33,8 +35,9 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | off | |
 | [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | on | |
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
-| [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
+| [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
+| [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
 
 ### [Cleanliness](#cleanliness) — Dead code and unused definitions
 
@@ -59,10 +62,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:needless-let*`](#needless-let) | Use `let` when bindings are independent | warning | on | |
 | [`:special-variable-naming`](#special-variable-naming) | Special variables should be named `*foo*` | info | off | |
 | [`:constant-naming`](#constant-naming) | Constants should be named `+foo+` | info | off | |
-| [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
 | [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) | Redundant package prefixes in `.asd` files | info | off | |
-| [`:asdf-secondary-system-name`](#asdf-secondary-system-name) | Secondary systems must use `primary/suffix` name | warning | on | |
-| [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
 | [`:missing-docstring`](#missing-docstring) | Top-level definitions missing docstrings | info | off | |
 | [`:missing-package-docstring`](#missing-package-docstring) | Package definitions missing docstrings | info | off | |
 | [`:missing-variable-docstring`](#missing-variable-docstring) | Variable definitions missing docstrings | info | off | |
@@ -147,6 +147,31 @@ Feature expressions in `:if-feature` and `(:feature ...)` dependency forms must 
 
 **Severity**: warning | **Default**: enabled
 
+### `:asdf-secondary-system-name`
+
+Secondary system names in a `.asd` file must follow the `primary/suffix` convention. In a file named `foo.asd`, systems other than `"foo"` must be named `"foo/something"`. Arbitrary names like `"foo-tests"` or `"bar"` are not allowed by ASDF and may cause issues with system resolution.
+
+```lisp
+;; Bad: in my-system.asd
+(defsystem "my-system"
+  :depends-on ("alexandria"))
+
+(defsystem "my-system-tests"       ; should be "my-system/tests"
+  :depends-on ("my-system"))
+
+(defsystem "other-project"          ; unrelated name
+  :depends-on ("alexandria"))
+
+;; Good: follows primary/suffix convention
+(defsystem "my-system"
+  :depends-on ("alexandria"))
+
+(defsystem "my-system/tests"
+  :depends-on ("my-system"))
+```
+
+**Severity**: warning | **Default**: enabled
+
 ## Suspicious
 
 Rules that detect likely wrong or dangerous patterns — code that probably indicates a bug or a security risk.
@@ -216,6 +241,28 @@ Avoid calling `cl:unintern` at runtime. `unintern` mutates the live package stru
 - `defmacro` bodies are skipped (macro expansion code is not runtime)
 
 **Severity**: warning | **Default**: disabled
+
+### `:asdf-operate-in-perform`
+
+Do not call `asdf:operate` or related functions inside `:perform` method bodies. These calls can cause infinite loops or unexpected build behavior. Use `symbol-call` instead. Applies only to `.asd` files.
+
+Detected functions: `operate`, `oos`, `load-system`, `test-system`, `clear-system`, `require-system`, `make`, `compile-system` (when qualified with `asdf:` or an ASDF sub-package prefix).
+
+```lisp
+;; Bad: direct asdf calls in :perform
+(defsystem "my-system"
+  :perform (test-op (o c)
+    (asdf:load-system "my-system/tests")
+    (asdf:test-system "my-system/tests")))
+
+;; Good: use symbol-call
+(defsystem "my-system"
+  :perform (test-op (o c)
+    (symbol-call :asdf :load-system "my-system/tests")
+    (symbol-call :asdf :test-system "my-system/tests")))
+```
+
+**Severity**: warning | **Default**: enabled
 
 ## Practice
 
@@ -311,28 +358,6 @@ Avoid calling `error` with only a format string. Signaling a string creates a `s
 
 **Severity**: warning | **Default**: disabled
 
-### `:asdf-operate-in-perform`
-
-Do not call `asdf:operate` or related functions inside `:perform` method bodies. These calls can cause infinite loops or unexpected build behavior. Use `symbol-call` instead. Applies only to `.asd` files.
-
-Detected functions: `operate`, `oos`, `load-system`, `test-system`, `clear-system`, `require-system`, `make`, `compile-system` (when qualified with `asdf:` or an ASDF sub-package prefix).
-
-```lisp
-;; Bad: direct asdf calls in :perform
-(defsystem "my-system"
-  :perform (test-op (o c)
-    (asdf:load-system "my-system/tests")
-    (asdf:test-system "my-system/tests")))
-
-;; Good: use symbol-call
-(defsystem "my-system"
-  :perform (test-op (o c)
-    (symbol-call :asdf :load-system "my-system/tests")
-    (symbol-call :asdf :test-system "my-system/tests")))
-```
-
-**Severity**: warning | **Default**: enabled
-
 ### `:asdf-reader-conditional`
 
 Avoid `#+`/`#-` reader conditionals inside `defsystem` bodies in `.asd` files. Reader conditionals are processed at read time and cannot be controlled by ASDF, making them less portable. Use ASDF's built-in `:if-feature` (component option) and `(:feature ...)` (dependency modifier) instead.
@@ -355,6 +380,36 @@ Avoid `#+`/`#-` reader conditionals inside `defsystem` bodies in `.asd` files. R
 - Reader conditionals inside `:perform` bodies are not flagged (they are legitimate runtime CL code)
 - Reader conditionals outside `defsystem` forms are ignored
 - Comments, string literals, and character literals are not scanned
+
+**Severity**: info | **Default**: disabled
+
+### `:asdf-component-strings`
+
+ASDF systems, components, and dependencies should use strings not symbols. Applies only to `.asd` files.
+
+```lisp
+;; Bad
+(defsystem #:my-system
+  :depends-on (#:alexandria))
+
+;; Good
+(defsystem "my-system"
+  :depends-on ("alexandria"))
+```
+
+**Severity**: warning | **Default**: enabled
+
+### `:bare-float-literal`
+
+Float literals should have explicit type markers (`f`, `d`, `s`, `l`). Without a marker, the type depends on `*read-default-float-format*`, which can vary.
+
+```lisp
+;; Bad: depends on *read-default-float-format*
+(defvar *threshold* 0.5)
+
+;; Good: explicit double-float
+(defvar *threshold* 0.5d0)
+```
 
 **Severity**: info | **Default**: disabled
 
@@ -650,22 +705,6 @@ Constants should be named `+foo+`.
 
 **Severity**: info | **Default**: disabled
 
-### `:asdf-component-strings`
-
-ASDF systems, components, and dependencies should use strings not symbols. Applies only to `.asd` files.
-
-```lisp
-;; Bad
-(defsystem #:my-system
-  :depends-on (#:alexandria))
-
-;; Good
-(defsystem "my-system"
-  :depends-on ("alexandria"))
-```
-
-**Severity**: warning | **Default**: enabled
-
 ### `:asdf-redundant-package-prefix`
 
 Package prefixes `asdf:`, `cl:`, `common-lisp:`, and `uiop:` are redundant in `.asd` files. These files run in the `asdf-user` package which already uses `asdf`, `cl`, and `uiop`, so qualifying symbols with those package names is unnecessary. Sub-package prefixes like `uiop/filesystem:` are also flagged.
@@ -680,45 +719,6 @@ Package prefixes `asdf:`, `cl:`, `common-lisp:`, and `uiop:` are redundant in `.
 (defsystem "my-system"
   :depends-on ("alexandria")
   :description (format nil "tests"))
-```
-
-**Severity**: info | **Default**: disabled
-
-### `:asdf-secondary-system-name`
-
-Secondary system names in a `.asd` file must follow the `primary/suffix` convention. In a file named `foo.asd`, systems other than `"foo"` must be named `"foo/something"`. Arbitrary names like `"foo-tests"` or `"bar"` are not allowed by ASDF and may cause issues with system resolution.
-
-```lisp
-;; Bad: in my-system.asd
-(defsystem "my-system"
-  :depends-on ("alexandria"))
-
-(defsystem "my-system-tests"       ; should be "my-system/tests"
-  :depends-on ("my-system"))
-
-(defsystem "other-project"          ; unrelated name
-  :depends-on ("alexandria"))
-
-;; Good: follows primary/suffix convention
-(defsystem "my-system"
-  :depends-on ("alexandria"))
-
-(defsystem "my-system/tests"
-  :depends-on ("my-system"))
-```
-
-**Severity**: warning | **Default**: enabled
-
-### `:bare-float-literal`
-
-Float literals should have explicit type markers (`f`, `d`, `s`, `l`). Without a marker, the type depends on `*read-default-float-format*`, which can vary.
-
-```lisp
-;; Bad: depends on *read-default-float-format*
-(defvar *threshold* 0.5)
-
-;; Good: explicit double-float
-(defvar *threshold* 0.5d0)
 ```
 
 **Severity**: info | **Default**: disabled
