@@ -158,6 +158,7 @@
      (:file "coalton-base-test")
      (:file "coalton-rule-base-test")
      (:file "coalton-missing-declare-test")
-     (:file "coalton-missing-to-boolean-test"))))
+     (:file "coalton-missing-to-boolean-test")
+     (:file "coalton-cyclomatic-complexity-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
