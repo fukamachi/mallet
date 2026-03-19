@@ -37,6 +37,8 @@
            #:*known-test-frameworks*
            #:defpackage-uses-test-framework-p
            #:tokens-use-test-framework-p
+           ;; Coalton rule base class
+           #:coalton-rule
            ;; Auto-fix helpers
            #:find-clause-boundaries
            #:find-clause-line-range
@@ -87,6 +89,12 @@
     :type list
     :documentation "List of file extensions this rule applies to (e.g., :lisp, :asd, :coal)"))
   (:documentation "Base class for linting rules."))
+
+(defclass coalton-rule (rule)
+  ()
+  (:documentation "Base class for rules that only run inside coalton-toplevel forms.
+Unlike the default rule class (which skips coalton-toplevel), coalton-rule subclasses
+ONLY fire when check-form receives a coalton-toplevel form."))
 
 (defun enable-rule (rule)
   "Enable RULE."
@@ -179,12 +187,21 @@ Example:
 
 ;; Skip Coalton forms for all form-level rules
 ;; Coalton has different semantics (variable scoping, control flow, etc.)
-;; so Common Lisp linting rules don't apply
+;; so Common Lisp linting rules don't apply.
+;; coalton-rule subclasses are excluded: they have their own :around below.
 (defmethod check-form :around ((rule rule) form file)
   "Skip Coalton toplevel forms - they have different semantics from Common Lisp."
-  (if (coalton-form-p form)
+  (if (and (not (typep rule 'coalton-rule))
+           (coalton-form-p form))
       nil  ; Return empty violations list for Coalton forms
       (call-next-method)))  ; Call the actual rule implementation
+
+;; Coalton-specific rules only run inside coalton-toplevel forms.
+(defmethod check-form :around ((rule coalton-rule) form file)
+  "Only process Coalton toplevel forms; skip all other forms."
+  (if (coalton-form-p form)
+      (call-next-method)
+      nil))
 
 ;;; Recursive form checking with suppression support
 

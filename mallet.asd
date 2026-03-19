@@ -151,6 +151,7 @@
      (:file "one-package-per-file-test")
      (:file "rule-type-system-test")
      (:file "stale-suppression-test")
-     (:file "package-exports-test"))))
+     (:file "package-exports-test")
+     (:file "coalton-rule-base-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
