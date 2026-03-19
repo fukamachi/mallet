@@ -1,4 +1,4 @@
-;; Test fixture for package-per-file rule
+;; Test fixture for one-package-per-file rule
 ;; This file uses in-package without a defpackage defined in this file.
 
 (in-package #:cl-user)

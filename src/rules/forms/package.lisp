@@ -8,7 +8,7 @@
            #:unused-local-nicknames-rule
            #:unused-imported-symbols-rule
            #:no-package-use-rule
-           #:package-per-file-rule))
+           #:one-package-per-file-rule))
 (in-package #:mallet/rules/forms/package)
 
 (defun defpackage-form-p (expr)
@@ -947,14 +947,14 @@ Uses the generic base:find-clause-line-range helper."
 
 ;;; Package Per File Rule
 
-(defclass package-per-file-rule (base:rule)
+(defclass one-package-per-file-rule (base:rule)
   ((files-with-defpackage
     :initform (make-hash-table :test 'equal)
     :accessor rule-files-with-defpackage
     :documentation "Set of file namestrings that contain a defpackage or define-package form.
 Populated incrementally as forms are checked, so no file re-reading is needed."))
   (:default-initargs
-   :name :package-per-file
+   :name :one-package-per-file
    :description "Each file should define its own package with defpackage before in-package"
    :severity :warning
    :category :practice
@@ -963,7 +963,7 @@ Populated incrementally as forms are checked, so no file re-reading is needed.")
 Flags files where in-package is used but no preceding defpackage or uiop:define-package
 is present in the same file. Each file should define and switch to its own package."))
 
-(defmethod base:check-form ((rule package-per-file-rule) form file)
+(defmethod base:check-form ((rule one-package-per-file-rule) form file)
   "Detect in-package without a corresponding defpackage earlier in the same file.
 Relies on forms being processed in file order: a defpackage seen before an in-package
 marks the file as valid; an in-package with no prior defpackage is a violation."
