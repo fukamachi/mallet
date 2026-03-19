@@ -35,7 +35,6 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
 | [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
-| [`:one-package-per-file`](#one-package-per-file) | Files should define their own package | warning | off | |
 
 ### [Cleanliness](#cleanliness) — Dead code and unused definitions
 
@@ -52,6 +51,7 @@ Rules are organized by category. Each rule shows its severity and default preset
 
 | Rule | Description | Severity | Default | Options |
 |------|-------------|----------|---------|---------|
+| [`:one-package-per-file`](#one-package-per-file) | Files should define their own package | info | off | |
 | [`:missing-else`](#missing-else) | Use `when`/`unless` instead of `if` without else | warning | on | |
 | [`:progn-in-conditional`](#progn-in-conditional) | Use `cond`/`when`/`unless` instead of bare `progn` in `if`/`and`/`or` | info | off | |
 | [`:missing-otherwise`](#missing-otherwise) | `case`/`typecase` without `otherwise` clause | warning | off | |
@@ -358,27 +358,6 @@ Avoid `#+`/`#-` reader conditionals inside `defsystem` bodies in `.asd` files. R
 
 **Severity**: info | **Default**: disabled
 
-### `:one-package-per-file`
-
-Each `.lisp` file should start with `defpackage` or `uiop:define-package`, defining its own package. Files that begin with `in-package` without a preceding `defpackage` in the same file are flagged.
-
-```lisp
-;; Bad: in-package without a preceding defpackage
-(in-package #:my-app/utils)
-
-(defun helper () ...)
-
-;; Good: file defines its own package
-(defpackage #:my-app/utils
-  (:use #:cl)
-  (:export #:helper))
-(in-package #:my-app/utils)
-
-(defun helper () ...)
-```
-
-**Severity**: warning | **Default**: disabled (available via `--all` or `--enable one-package-per-file`)
-
 ## Cleanliness
 
 Rules that detect dead code and unused definitions.
@@ -502,6 +481,27 @@ Enable this rule to catch outdated suppression comments left behind after code c
 ## Style
 
 Rules for idiomatic patterns and naming conventions.
+
+### `:one-package-per-file`
+
+Each `.lisp` file should start with `defpackage` or `uiop:define-package`, defining its own package. Files that begin with `in-package` without a preceding `defpackage` in the same file are flagged.
+
+```lisp
+;; Bad: in-package without a preceding defpackage
+(in-package #:my-app/utils)
+
+(defun helper () ...)
+
+;; Good: file defines its own package
+(defpackage #:my-app/utils
+  (:use #:cl)
+  (:export #:helper))
+(in-package #:my-app/utils)
+
+(defun helper () ...)
+```
+
+**Severity**: info | **Default**: disabled (available via `--all` or `--enable one-package-per-file`)
 
 ### `:missing-else`
 

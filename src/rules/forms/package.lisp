@@ -956,8 +956,8 @@ Populated incrementally as forms are checked, so no file re-reading is needed.")
   (:default-initargs
    :name :one-package-per-file
    :description "Each file should define its own package with defpackage before in-package"
-   :severity :warning
-   :category :practice
+   :severity :info
+   :category :style
    :type :form)
   (:documentation "Rule to detect files that use in-package without a defpackage.
 Flags files where in-package is used but no preceding defpackage or uiop:define-package

@@ -49,7 +49,7 @@
                        "(in-package #:cl-user)")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations)) :one-package-per-file))
-      (ok (eq (violation:violation-severity (first violations)) :warning))))
+      (ok (eq (violation:violation-severity (first violations)) :info))))
 
   (testing "violation message mentions defpackage"
     (let ((violations (check-one-package-per-file

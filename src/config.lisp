@@ -417,7 +417,7 @@ Style preferences are disabled to keep output clean."
             :asdf-reader-conditional
             ;; LOOP variables - disabled
             :unused-loop-variables
-            ;; Package practice - disabled by default
+            ;; Package style - disabled by default
             :one-package-per-file)))
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
@@ -435,7 +435,6 @@ Useful for exploration and discovering what rules exist."
             :no-allow-other-keys
             :asdf-operate-in-perform
             :asdf-reader-conditional
-            :one-package-per-file
             ;; Suspicious
             :no-eval
             :runtime-intern
@@ -448,6 +447,7 @@ Useful for exploration and discovering what rules exist."
             :unused-imported-symbols
             :unused-loop-variables
             ;; Style
+            :one-package-per-file
             :missing-else
             :progn-in-conditional
             :redundant-progn
