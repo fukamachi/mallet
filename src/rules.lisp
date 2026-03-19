@@ -21,7 +21,8 @@
                  #:mallet/rules/forms/error-usage
                  #:mallet/rules/forms/docstring
                  #:mallet/rules/stale-suppression
-                 #:mallet/rules/asdf-reader-conditional)
+                 #:mallet/rules/asdf-reader-conditional
+                 #:mallet/rules/forms/coalton)
   (:export #:make-rule))
 (in-package #:mallet/rules)
 
@@ -122,6 +123,10 @@ Severity and category defaults are defined in each rule class's :default-initarg
        (apply #'make-instance 'missing-variable-docstring-rule options))
       (:missing-struct-docstring
        (apply #'make-instance 'missing-struct-docstring-rule options))
+
+      ;; Coalton rules
+      (:coalton-missing-declare
+       (apply #'make-instance 'coalton-missing-declare-rule options))
 
       ;; Suppression rules
       (:stale-suppression

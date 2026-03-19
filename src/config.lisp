@@ -413,6 +413,7 @@ Style preferences are disabled to keep output clean."
             :missing-variable-docstring
             :missing-struct-docstring
             ;; Practice - disabled by default
+            :coalton-missing-declare
             :asdf-redundant-package-prefix
             :asdf-reader-conditional
             :bare-float-literal
@@ -439,6 +440,7 @@ Useful for exploration and discovering what rules exist."
             :runtime-unintern
             :asdf-operate-in-perform
             ;; Practice
+            :coalton-missing-declare
             :no-allow-other-keys
             :no-ignore-errors
             :no-package-use

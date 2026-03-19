@@ -65,7 +65,8 @@
        (:file "runtime-unintern")
        (:file "no-ignore-errors")
        (:file "error-usage")
-       (:file "docstring")))
+       (:file "docstring")
+       (:file "coalton")))
      (:file "stale-suppression")
      (:file "asdf-reader-conditional")))
    (:file "rules")
@@ -152,6 +153,7 @@
      (:file "rule-type-system-test")
      (:file "stale-suppression-test")
      (:file "package-exports-test")
-     (:file "coalton-rule-base-test"))))
+     (:file "coalton-rule-base-test")
+     (:file "coalton-missing-declare-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))
