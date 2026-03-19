@@ -410,8 +410,6 @@ Style preferences are disabled to keep output clean."
             :special-variable-naming
             :missing-docstring
             :missing-package-docstring
-            ;; Documentation - exported-only check has false positive risk
-            :missing-exported-docstring
             ;; ASDF practice - disabled by default
             :asdf-redundant-package-prefix
             :asdf-reader-conditional

@@ -30,7 +30,6 @@
    #:should-check-definition-p
    ;; Rule classes
    #:missing-docstring-rule
-   #:missing-exported-docstring-rule
    #:missing-package-docstring-rule))
 (in-package #:mallet/rules/forms/docstring)
 
@@ -329,7 +328,7 @@ When exported-only is non-nil: checks export status via pkg-exports."))
 
 ;;; --- missing-docstring Rule ---
 
-(defclass missing-docstring-rule (base:rule)
+(defclass missing-docstring-rule (exported-only-mixin base:rule)
   ()
   (:default-initargs
    :name :missing-docstring
@@ -339,7 +338,9 @@ When exported-only is non-nil: checks export status via pkg-exports."))
    :type :form)
   (:documentation "Rule to detect top-level definitions lacking docstrings.
 Checks defun, defmacro, defgeneric, defclass, deftype, and define-condition forms.
-Skips defmethod, which inherits its documentation from the generic function."))
+Skips defmethod, which inherits its documentation from the generic function.
+When :exported-only t is set, only flags definitions whose symbol is exported
+from the current package."))
 
 (defun form-type-string (expr)
   "Return uppercase form type name for EXPR (e.g., \"DEFUN\", \"DEFCLASS\")."
@@ -350,96 +351,31 @@ Skips defmethod, which inherits its documentation from the generic function."))
   "Check FORM for missing docstring on a top-level definition."
   (check-type form parser:form)
   (check-type file pathname)
-  (let ((expr (parser:form-expr form)))
-    (when (and (checkable-definition-p expr)
-               (not (has-docstring-p expr))
-               (or (not (deftype-p expr)) (deftype-can-have-docstring-p expr))
-               (base:should-create-violation-p rule))
-      (let ((form-type (form-type-string expr))
-            (name (definition-name expr)))
-        (when (and form-type name)
-          (list (make-instance 'violation:violation
-                               :rule (base:rule-name rule)
-                               :file file
-                               :line (parser:form-line form)
-                               :column (parser:form-column form)
-                               :severity (base:rule-severity rule)
-                               :message (format nil "~A ~A is missing a docstring"
-                                                form-type name)
-                               :fix nil)))))))
-
-;;; --- missing-exported-docstring-rule ---
-
-(defclass missing-exported-docstring-rule (base:rule)
-  ((current-file
-    :initform nil
-    :accessor rule-current-file
-    :documentation "Last file seen, for detecting file transitions.")
-   (current-package
-    :initform nil
-    :accessor rule-current-package
-    :documentation "Package name from the most recent in-package form.")
-   (cached-project-root
-    :initform nil
-    :accessor rule-cached-project-root
-    :documentation "Project root pathname, cached on the first file transition to avoid
-repeated filesystem walks. find-project-root-for-file performs directory traversal
-on every call; caching it reduces cost from O(violations) to O(unique files)."))
-  (:default-initargs
-   :name :missing-exported-docstring
-   :description "Exported definitions should have docstrings"
-   :severity :warning
-   :category :practice
-   :type :form)
-  (:documentation "Rule to detect exported definitions lacking docstrings.
-Only checks definitions whose symbol is in the :export list of the current
-package. Uses a cross-file package export index for accurate lookup.
-Tracks the current package via in-package forms during traversal."))
-
-(defmethod base:check-form ((rule missing-exported-docstring-rule) form file)
-  "Emit a violation when an exported definition is missing a docstring."
-  (check-type form parser:form)
-  (check-type file pathname)
-
-  ;; Reset package tracking on file transitions; update cached project root
-  (unless (equal file (rule-current-file rule))
-    (setf (rule-current-file rule) file
-          (rule-current-package rule) nil
-          (rule-cached-project-root rule) (pkg-exports:find-project-root-for-file file)))
-
-  (let ((expr (parser:form-expr form)))
-    (cond
-      ;; Track current package from in-package forms
-      ((in-package-form-p expr)
-       (let ((pkg-arg (second expr)))
-         (when pkg-arg
-           (setf (rule-current-package rule)
-                 (utils:symbol-name-from-string pkg-arg))))
-       nil)
-
-      ;; Check definition forms when inside a known package
-      ((and (checkable-definition-p expr)
-            (rule-current-package rule)
-            (base:should-create-violation-p rule))
-       (let ((name (definition-name expr)))
-         (when (and name (not (has-docstring-p expr)))
-           (let ((project-root (rule-cached-project-root rule))
-                 (lookup-name (export-lookup-name name)))
-             (when (and lookup-name
-                        (pkg-exports:exported-symbol-p
-                         project-root (rule-current-package rule) lookup-name))
-               (let ((form-head (string-upcase
-                                 (utils:symbol-name-from-string (first expr)))))
-                 (list (make-instance 'violation:violation
-                                      :rule (base:rule-name rule)
-                                      :file file
-                                      :line (parser:form-line form)
-                                      :column (parser:form-column form)
-                                      :severity (base:rule-severity rule)
-                                      :message (format nil "Exported ~A ~A is missing a docstring"
-                                                       form-head name)
-                                      :fix nil))))))))
-      (t nil))))
+  ;; Track package context; skip in-package forms themselves
+  (unless (update-package-tracking rule form file)
+    (let ((expr (parser:form-expr form)))
+      (when (and (checkable-definition-p expr)
+                 ;; deftype with single body form is a type expansion, not checkable
+                 (or (not (deftype-p expr))
+                     (deftype-can-have-docstring-p expr))
+                 (not (has-docstring-p expr))
+                 (base:should-create-violation-p rule))
+        (let ((name (definition-name expr)))
+          (when (and name (should-check-definition-p rule name))
+            (let* ((form-type (form-type-string expr))
+                   (msg (if (rule-exported-only-p rule)
+                            (format nil "Exported ~A ~A is missing a docstring"
+                                    form-type name)
+                            (format nil "~A ~A is missing a docstring"
+                                    form-type name))))
+              (list (make-instance 'violation:violation
+                                   :rule (base:rule-name rule)
+                                   :file file
+                                   :line (parser:form-line form)
+                                   :column (parser:form-column form)
+                                   :severity (base:rule-severity rule)
+                                   :message msg
+                                   :fix nil)))))))))
 
 ;;; --- missing-package-docstring-rule ---
 
