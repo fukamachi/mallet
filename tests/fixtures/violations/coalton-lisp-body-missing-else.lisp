@@ -1,20 +1,21 @@
 ;;; CL missing-else fires inside (lisp ...) bodies within coalton-toplevel.
-;;; Coalton (if ...) forms must NOT trigger CL missing-else.
+;;; Uses cl: prefix on CL symbols as in real Coalton code — Coalton packages
+;;; do not :use CL, so CL symbols must be package-qualified.
 
-(defpackage #:test-pkg
-  (:use #:cl))
-(in-package #:test-pkg)
+(defpackage #:test-coalton-pkg
+  (:use))
+(in-package #:test-coalton-pkg)
 
 (coalton-toplevel
   (declare foo (Integer -> Integer))
   (define (foo x)
     (lisp Integer (x)
-      (if (evenp x) 1)))
+      (cl:if (cl:evenp x) 1)))
 
   (declare bar (Integer -> Integer))
   (define (bar y)
     (lisp Integer (y)
-      (if (> y 0) 1)))
+      (cl:if (cl:> y 0) 1)))
 
   ;; Coalton if — must NOT trigger missing-else
   (declare baz (Boolean -> Integer))

@@ -49,10 +49,10 @@
                       #'< :key #'violation:violation-line)))
       (ok (= 2 (length iwe)))
       (when (= 2 (length iwe))
-        (ok (= 12 (violation:violation-line (first iwe)))
-            "First violation is on line 12 ((if (evenp x) 1))")
-        (ok (= 17 (violation:violation-line (second iwe)))
-            "Second violation is on line 17 ((if (> y 0) 1))"))))
+        (ok (= 13 (violation:violation-line (first iwe)))
+            "First violation is on line 13 ((cl:if (cl:evenp x) 1))")
+        (ok (= 18 (violation:violation-line (second iwe)))
+            "Second violation is on line 18 ((cl:if (cl:> y 0) 1))"))))
 
   (testing "fixture: missing-else violations have correct file path"
     (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
@@ -92,10 +92,10 @@
                       #'< :key #'violation:violation-line)))
       (ok (= 2 (length nev)))
       (when (= 2 (length nev))
-        (ok (= 13 (violation:violation-line (first nev)))
-            "First violation is on line 13 ((eval (list '+ x 1)))")
-        (ok (= 18 (violation:violation-line (second nev)))
-            "Second violation is on line 18 ((eval (list '* y 2)))")))))
+        (ok (= 14 (violation:violation-line (first nev)))
+            "First violation is on line 14 ((cl:eval (cl:list 'cl:+ x 1)))")
+        (ok (= 19 (violation:violation-line (second nev)))
+            "Second violation is on line 19 ((cl:eval (cl:list 'cl:* y 2)))")))))
 
 ;;; Clean file: no CL rule violations
 
