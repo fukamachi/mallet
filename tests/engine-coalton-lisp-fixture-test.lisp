@@ -72,36 +72,30 @@
       (ok (= 2 (length iwe))
           "Exactly 2 violations — Coalton (if ...) with else does not fire"))))
 
-;;; redundant-progn inside (lisp ...) bodies
+;;; no-eval inside (lisp ...) bodies
+;;; no-eval is CL-only (not coalton-aware), so it only fires via synthetic dispatch.
+;;; This verifies the new feature actually works, unlike coalton-aware rules which
+;;; already traverse into (lisp ...) bodies naturally.
 
-(deftest redundant-progn-in-lisp-body-fixture
-  (testing "fixture: redundant-progn fires inside (lisp ...) body"
-    (let* ((violations (lint (violations-file "coalton-lisp-body-redundant-progn.lisp")
-                             '(:redundant-progn)))
-           (rpv (by-rule violations :redundant-progn)))
-      (ok (= 2 (length rpv))
-          "Exactly 2 redundant-progn violations (one per lisp body)")))
+(deftest no-eval-in-lisp-body-fixture
+  (testing "fixture: no-eval fires on (eval ...) inside (lisp ...) body"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-no-eval.lisp")
+                             '(:no-eval)))
+           (nev (by-rule violations :no-eval)))
+      (ok (= 2 (length nev))
+          "Exactly 2 no-eval violations (one per lisp body)")))
 
-  (testing "fixture: redundant-progn violation line numbers are correct"
-    (let* ((violations (lint (violations-file "coalton-lisp-body-redundant-progn.lisp")
-                             '(:redundant-progn)))
-           (rpv (sort (by-rule violations :redundant-progn)
+  (testing "fixture: no-eval violation line numbers are correct"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-no-eval.lisp")
+                             '(:no-eval)))
+           (nev (sort (by-rule violations :no-eval)
                       #'< :key #'violation:violation-line)))
-      (ok (= 2 (length rpv)))
-      (when (= 2 (length rpv))
-        (ok (= 11 (violation:violation-line (first rpv)))
-            "First violation is on line 11 ((progn (1+ x)))")
-        (ok (= 16 (violation:violation-line (second rpv)))
-            "Second violation is on line 16 ((progn (1- y)))"))))
-
-  (testing "fixture: no double-firing — coalton-aware rules run only once per lisp body"
-    ;; redundant-progn is coalton-aware; it already walks the full tree.
-    ;; The engine must NOT dispatch a second time for coalton-aware rules.
-    (let* ((violations (lint (violations-file "coalton-lisp-body-redundant-progn.lisp")
-                             '(:redundant-progn)))
-           (rpv (by-rule violations :redundant-progn)))
-      (ok (= 2 (length rpv))
-          "Exactly 2, not 4 — no double-firing"))))
+      (ok (= 2 (length nev)))
+      (when (= 2 (length nev))
+        (ok (= 13 (violation:violation-line (first nev)))
+            "First violation is on line 13 ((eval (list '+ x 1)))")
+        (ok (= 18 (violation:violation-line (second nev)))
+            "Second violation is on line 18 ((eval (list '* y 2)))")))))
 
 ;;; Clean file: no CL rule violations
 
@@ -113,12 +107,12 @@
       (ok (null iwe)
           "No missing-else violations in clean coalton-lisp-body.lisp")))
 
-  (testing "fixture: clean file produces no redundant-progn violations"
+  (testing "fixture: clean file produces no no-eval violations"
     (let* ((violations (lint (clean-file "coalton-lisp-body.lisp")
-                             '(:redundant-progn)))
-           (rpv (by-rule violations :redundant-progn)))
-      (ok (null rpv)
-          "No redundant-progn violations in clean coalton-lisp-body.lisp")))
+                             '(:no-eval)))
+           (nev (by-rule violations :no-eval)))
+      (ok (null nev)
+          "No no-eval violations in clean coalton-lisp-body.lisp")))
 
   (testing "fixture: Coalton (if ...) with else branch in clean file is not flagged"
     (let* ((violations (lint (clean-file "coalton-lisp-body.lisp")
@@ -131,9 +125,8 @@
 
 (deftest coalton-rules-unaffected-by-lisp-dispatch
   (testing "coalton-missing-declare still fires on coalton-toplevel with lisp bodies"
-    ;; The fixture has two declares (foo and bar) and baz with a declare.
-    ;; No missing declare — use the redundant-progn fixture which has full declares.
-    (let* ((violations (lint (violations-file "coalton-lisp-body-redundant-progn.lisp")
+    ;; The no-eval fixture has declares for all defines.
+    (let* ((violations (lint (violations-file "coalton-lisp-body-no-eval.lisp")
                              '(:coalton-missing-declare)))
            (cmd (by-rule violations :coalton-missing-declare)))
       (ok (null cmd)
@@ -174,7 +167,7 @@
 
   (testing "clean fixture must not accidentally produce violations"
     (let* ((violations (lint (clean-file "coalton-lisp-body.lisp")
-                             '(:missing-else :redundant-progn)))
+                             '(:missing-else :no-eval)))
            (relevant (by-rule violations :missing-else)))
       (ok (null relevant)
           "Clean file must not trigger missing-else"))))

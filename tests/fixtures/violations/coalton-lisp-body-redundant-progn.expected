@@ -1,5 +1,0 @@
-# Expected violations for coalton-lisp-body-redundant-progn.lisp
-# CL redundant-progn fires inside (lisp ...) bodies within coalton-toplevel.
-
-11:6 redundant-progn info
-16:6 redundant-progn info

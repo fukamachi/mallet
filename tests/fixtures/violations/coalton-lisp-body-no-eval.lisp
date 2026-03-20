@@ -1,4 +1,6 @@
-;;; CL redundant-progn fires inside (lisp ...) bodies within coalton-toplevel.
+;;; CL no-eval fires inside (lisp ...) bodies within coalton-toplevel.
+;;; no-eval is a CL-only rule (not coalton-aware), so it only fires
+;;; via synthetic form dispatch.
 
 (defpackage #:test-pkg
   (:use #:cl))
@@ -8,9 +10,9 @@
   (declare foo (Integer -> Integer))
   (define (foo x)
     (lisp Integer (x)
-      (progn (1+ x))))
+      (eval (list '+ x 1))))
 
   (declare bar (Integer -> Integer))
   (define (bar y)
     (lisp Integer (y)
-      (progn (1- y)))))
+      (eval (list '* y 2)))))
