@@ -126,8 +126,8 @@
         (ok (= col 5)))))
 
   (testing "position-map entry overrides fallback when body-expr is in the map"
-    (let* ((body-expr '(foo bar))
-           (posmap (make-hash-table :test 'eq)))
+    (let ((body-expr '(foo bar))
+          (posmap (make-hash-table :test 'eq)))
       (setf (gethash body-expr posmap) (cons 42 7))
       (let ((result (engine:extract-lisp-bodies-from-coalton
                      `("CURRENT:LISP" "CURRENT:T" () ,body-expr)
@@ -151,8 +151,8 @@
       (ok (equal (first (first result)) body-expr))))
 
   (testing "lisp form nested in a match clause is found"
-    (let* ((body1 '(1+ y))
-           (body2 '(progn 0)))
+    (let ((body1 '(1+ y))
+          (body2 '(progn 0)))
       (let ((result (extract
                      `("CURRENT:MATCH" "CURRENT:OPT"
                        (("CURRENT:Some" "CURRENT:Y")
@@ -178,8 +178,8 @@
       (ok (member b2 (mapcar #'first result) :test #'equal))))
 
   (testing "multiple lisp forms in different defines are all collected"
-    (let* ((b1 '(+ 1 1))
-           (b2 '(string "bar")))
+    (let ((b1 '(+ 1 1))
+          (b2 '(string "bar")))
       (let ((result (extract
                      `("CURRENT:COALTON-TOPLEVEL"
                        ("CURRENT:DEFINE" ("CURRENT:F") ("CURRENT:LISP" "CURRENT:Integer" () ,b1))
@@ -192,8 +192,8 @@
 
 (deftest extract-lisp-bodies-deep-nesting
   (testing "lisp forms found at arbitrary nesting depth"
-    (let* ((b1 '(when (> y 0) y))
-           (b2 '(progn -1)))
+    (let ((b1 '(when (> y 0) y))
+          (b2 '(progn -1)))
       (let ((result (extract
                      `("CURRENT:COALTON-TOPLEVEL"
                        ("CURRENT:DEFINE" ("CURRENT:FOO" "CURRENT:X")
@@ -240,9 +240,9 @@
 
 (deftest extract-lisp-bodies-deeply-nested-let-match-if
   (testing "lisp forms inside let > match > if at depth 4+ are all found"
-    (let* ((b1 '(format nil "~A" z))
-           (b2 '(concatenate 'string "neg"))
-           (b3 '(values)))
+    (let ((b1 '(format nil "~A" z))
+          (b2 '(concatenate 'string "neg"))
+          (b3 '(values)))
       (let ((result (extract
                      `("CURRENT:COALTON-TOPLEVEL"
                        ("CURRENT:DEFINE" ("CURRENT:FOO" "CURRENT:X")
@@ -321,8 +321,8 @@
 
 (deftest extract-lisp-bodies-stub-guard-uses-posmap
   (testing "must use position-map for position lookup (not always use fallback)"
-    (let* ((body-expr '(foo))
-           (posmap (make-hash-table :test 'eq)))
+    (let ((body-expr '(foo))
+          (posmap (make-hash-table :test 'eq)))
       (setf (gethash body-expr posmap) (cons 99 88))
       (let ((result (engine:extract-lisp-bodies-from-coalton
                      `("CURRENT:LISP" "CURRENT:T" () ,body-expr)
