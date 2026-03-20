@@ -170,3 +170,108 @@
     (let ((rule (rules:make-rule :redundant-progn)))
       (ok (typep rule 'rules:redundant-progn-rule))
       (ok (eq (rules:rule-name rule) :redundant-progn)))))
+
+;;; Coalton-aware tests
+
+(deftest redundant-progn-coalton
+  (testing "Valid: progn with two body forms inside coalton-toplevel is not flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (foo x)
+                     (progn (bar x) (baz x))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: progn with multiple body forms inside coalton define is not flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (process x)
+                     (progn
+                       (validate x)
+                       (transform x)
+                       (store x))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Invalid: single-body progn inside coalton-toplevel define is flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (foo x)
+                     (progn (bar x))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))
+      (ok (eq (violation:violation-severity (first violations)) :info))
+      (ok (string= (violation:violation-message (first violations))
+                   "PROGN with a single body form is redundant"))))
+
+  (testing "Invalid: single-body progn nested in coalton-toplevel let is flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (foo x)
+                     (let ((y (progn (bar x))))
+                       y)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
+
+  (testing "Invalid: single-body progn inside Coalton match branch is flagged"
+    (let* ((code "(coalton-toplevel
+                   (define (handle x)
+                     (match x
+                       ((Some v) (progn (process v)))
+                       ((None) (default-value)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn)))))
+
+(deftest redundant-progn-coalton-negative
+  (testing "Negative: coalton-toplevel with normal define produces zero violations"
+    (let* ((code "(coalton-toplevel
+                   (define (add x y)
+                     (+ x y)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Negative: coalton-toplevel with if, let, match but no progn issues"
+    (let* ((code "(coalton-toplevel
+                   (define (complex-fn x)
+                     (if (> x 0)
+                         (let ((y (* x 2)))
+                           y)
+                         (match x
+                           ((Some v) v)
+                           ((None) 0)))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
+
+(deftest redundant-progn-coalton-regression
+  (testing "Regression: CL progn outside coalton-toplevel still triggers violation"
+    (let* ((code "(defun bar () (progn (baz)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
+
+  (testing "Regression: top-level progn outside coalton-toplevel still triggers"
+    (let* ((code "(progn (only-one))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
+
+  (testing "coalton-aware-p returns T for redundant-progn-rule"
+    (let ((rule (make-instance 'rules:redundant-progn-rule)))
+      (ok (rules:coalton-aware-p rule)))))

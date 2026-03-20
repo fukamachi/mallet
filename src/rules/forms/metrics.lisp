@@ -3,6 +3,7 @@
   (:local-nicknames
    (#:a #:alexandria)
    (#:base #:mallet/rules/base)
+   (#:cbase #:mallet/rules/coalton-base)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation))
   (:export #:function-length-rule
@@ -37,6 +38,8 @@
 Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
 (default 50). Helps keep functions focused and testable."))
 
+(defmethod base:coalton-aware-p ((rule function-length-rule)) t)
+
 (defmethod base:check-form ((rule function-length-rule) form file)
   "Check function length."
   (check-type form parser:form)
@@ -60,7 +63,11 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq))
-        (source-lines (rule-source-lines rule)))
+        (source-lines (rule-source-lines rule))
+        ;; The top-level form's starting line is the base for source-lines indexing.
+        ;; For CL, this equals the defun's line (source-lines built from defun source).
+        ;; For Coalton, this is the coalton-toplevel's line (source-lines built from it).
+        (source-base-line line))
 
     (labels ((check-expr (current-expr fallback-line fallback-column)
                (base:with-safe-code-expr (current-expr visited)
@@ -69,16 +76,30 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
                                                 fallback-line fallback-column)
                    (let ((head (first current-expr)))
 
-                     ;; Check if this is a function definition
+                     ;; Check if this is a CL function definition
                      (when (is-function-definition-p head)
                        (let ((length (calculate-function-length-from-source
                                       current-expr position-map source-lines
-                                      actual-line actual-column)))
+                                      actual-line actual-column
+                                      :source-base-line source-base-line)))
                          (when (and (> length (max-lines rule))
                                     (base:should-create-violation-p rule))
                            (push (make-function-length-violation
                                   rule file actual-line actual-column
                                   length (get-function-name current-expr))
+                                 violations))))
+
+                     ;; Check if this is a Coalton function define
+                     (when (cbase:coalton-define-p current-expr)
+                       (let ((length (calculate-function-length-from-source
+                                      current-expr position-map source-lines
+                                      actual-line actual-column
+                                      :source-base-line source-base-line)))
+                         (when (and (> length (max-lines rule))
+                                    (base:should-create-violation-p rule))
+                           (push (make-function-length-violation
+                                  rule file actual-line actual-column
+                                  length (cbase:coalton-define-name current-expr))
                                  violations))))
 
                      ;; Recurse into nested forms
@@ -98,7 +119,8 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
                                                              actual-line actual-column)
                                 (let ((length (calculate-function-length-from-source
                                                func-def position-map source-lines
-                                               func-line func-column))
+                                               func-line func-column
+                                               :source-base-line source-base-line))
                                       (func-name (get-inner-function-name func-def)))
                                   (when (and (> length (max-lines rule))
                                              (base:should-create-violation-p rule))
@@ -124,11 +146,16 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
     violations))
 
 (defun is-function-definition-p (head)
-  "Check if HEAD is a function-defining form."
+  "Check if HEAD is a CL function-defining form."
   (and (stringp head)
        (member (base:symbol-name-from-string head)
                '("DEFUN" "DEFMETHOD" "DEFMACRO" "DEFGENERIC")
                :test #'string-equal)))
+
+(defun coalton-toplevel-p (head)
+  "Return T if HEAD is the coalton-toplevel form head (any package qualification)."
+  (let ((name (cbase:coalton-symbol-name head)))
+    (and name (string-equal name "COALTON-TOPLEVEL"))))
 
 (defun parse-source-to-lines (source)
   "Parse SOURCE string into a vector of lines (1-indexed, line 0 is nil)."
@@ -277,7 +304,8 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
               (find-disabled-conditional-lines source-lines)))))
 
 (defun calculate-function-length-from-source (expr position-map source-lines
-                                               start-line start-column)
+                                               start-line start-column
+                                               &key (source-base-line start-line))
   "Calculate the length of a function definition in code lines only.
    Excludes:
    - Line comments (;)
@@ -287,6 +315,10 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
    - Disabled reader conditionals (#+nil, #+(or), #-(and)) and their guarded forms
 
    Note: start-line is file-relative (from position-map).
+         source-base-line is the file line of the top-level form whose source was
+         used to build source-lines. Defaults to start-line (correct for CL forms
+         where the top-level form IS the function). Pass parser:form-line when
+         analyzing nested forms such as Coalton defines inside coalton-toplevel.
          source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
   (declare (ignore start-column))
 
@@ -295,9 +327,11 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
       (collect-form-line-context expr position-map source-lines start-line)
 
     ;; Count code lines only
-    ;; Convert file-relative line numbers to form-relative indices
+    ;; Convert file-relative line numbers to source-lines indices.
+    ;; source-base-line is line 1 in source-lines, so:
+    ;;   form-index = file-line - source-base-line + 1
     (let ((code-lines 0)
-          (form-start-line start-line))  ; First line of the form in file
+          (form-start-line source-base-line))  ; First line of source-lines in file
       (loop for file-line from start-line to max-line
             for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
             for line = (and (< form-index (length source-lines))
@@ -317,7 +351,8 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
 
 (defun calculate-comment-ratio-from-source (expr position-map source-lines
                                              start-line start-column
-                                             &key include-docstrings (min-lines 5))
+                                             &key include-docstrings (min-lines 5)
+                                                  (source-base-line start-line))
   "Calculate the comment ratio of a function definition.
    Classifies each non-blank line as comment or code.
    Comment lines include: line comments (;), block comments (#| ... |#),
@@ -332,6 +367,10 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
    Set MIN-LINES accordingly, or set INCLUDE-DOCSTRINGS t to count docstrings.
 
    Note: start-line is file-relative (from position-map).
+         source-base-line is the file line of the top-level form whose source was
+         used to build source-lines. Defaults to start-line (correct for CL forms
+         where the top-level form IS the function). Pass parser:form-line when
+         analyzing nested forms such as Coalton defines inside coalton-toplevel.
          source-lines is form-relative (indexed from 1, where line 1 is form's first line)."
   (declare (ignore start-column))
 
@@ -340,10 +379,12 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
       (collect-form-line-context expr position-map source-lines start-line)
 
     ;; Count comment and code lines
-    ;; Convert file-relative line numbers to form-relative indices
+    ;; Convert file-relative line numbers to source-lines indices.
+    ;; source-base-line is line 1 in source-lines, so:
+    ;;   form-index = file-line - source-base-line + 1
     (let ((comment-lines 0)
           (code-lines 0)
-          (form-start-line start-line))
+          (form-start-line source-base-line))
       (loop for file-line from start-line to max-line
             for form-index = (- file-line form-start-line -1)  ; Convert to 1-indexed form offset
             for line = (and (< form-index (length source-lines))
@@ -455,6 +496,48 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
         ((stringp name) (base:symbol-name-from-string name))
         (t "CL:LAMBDA")))))
 
+(defun calculate-coalton-complexity (define-expr &optional (variant :standard))
+  "Calculate cyclomatic complexity of a Coalton function define.
+DEFINE-EXPR must be a form satisfying cbase:coalton-define-p.
+Uses cbase:coalton-match-clauses to count match clauses, excluding _ wildcards.
+VARIANT can be :standard (count per match clause) or :modified (match as +1 total)."
+  (let ((complexity 1)
+        (visited (make-hash-table :test 'eq))
+        (body (cbase:coalton-define-body define-expr)))
+    (when body
+      (labels ((walk (expr)
+                 (when (and (consp expr)
+                            (a:proper-list-p expr)
+                            (not (gethash expr visited)))
+                   (setf (gethash expr visited) t)
+                   (cond
+                     ;; Nested Coalton define: do not recurse (separate function scope)
+                     ((cbase:coalton-define-p expr) nil)
+
+                     ;; Coalton match: count non-wildcard clauses
+                     ((cbase:coalton-match-p expr)
+                      (if (eq variant :modified)
+                          (incf complexity 1)
+                          (incf complexity (cbase:coalton-match-clauses expr)))
+                      ;; Recurse into sub-forms (matched expr and clause bodies)
+                      (dolist (sub (rest expr))
+                        (walk sub)))
+
+                     ;; cond: count non-else clauses
+                     ((cond-p (first expr))
+                      (incf complexity (count-cond-clauses expr))
+                      (dolist (sub (rest expr))
+                        (walk sub)))
+
+                     ;; Simple forms: if/when/unless/and/or/etc.
+                     (t
+                      (incf complexity (or (simple-form-complexity (first expr)) 0))
+                      (dolist (sub (rest expr))
+                        (walk sub)))))))
+        (dolist (form body)
+          (walk form))))
+    complexity))
+
 (defun make-function-length-violation (rule file line column length func-name)
   "Create a violation for function length."
   (make-instance 'violation:violation
@@ -496,6 +579,8 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
 Flags functions where comment lines exceed :max ratio (default 0.5) of total lines,
 suggesting code may be over-commented or poorly expressed."))
 
+(defmethod base:coalton-aware-p ((rule comment-ratio-rule)) t)
+
 (defmethod base:check-form ((rule comment-ratio-rule) form file)
   "Check comment ratio."
   (check-type form parser:form)
@@ -521,7 +606,10 @@ suggesting code may be over-commented or poorly expressed."))
 
   (let ((violations '())
         (visited (make-hash-table :test 'eq))
-        (source-lines (rule-source-lines-for-ratio rule)))
+        (source-lines (rule-source-lines-for-ratio rule))
+        ;; The top-level form's starting line is the base for source-lines indexing.
+        ;; For CL, this equals the defun's line. For Coalton, it's coalton-toplevel's line.
+        (source-base-line line))
 
     (labels ((check-expr (current-expr fallback-line fallback-column)
                (base:with-safe-code-expr (current-expr visited)
@@ -530,7 +618,7 @@ suggesting code may be over-commented or poorly expressed."))
                                                 fallback-line fallback-column)
                    (let ((head (first current-expr)))
 
-                     ;; Check if this is a function definition.
+                     ;; Check if this is a CL function definition.
                      ;; Note: for outer defun/defmethod forms that contain flet/labels,
                      ;; the ratio is computed over the entire form (including inner function
                      ;; lines). Inner functions are also checked independently below.
@@ -540,13 +628,30 @@ suggesting code may be over-commented or poorly expressed."))
                                       current-expr position-map source-lines
                                       actual-line actual-column
                                       :include-docstrings (rule-include-docstrings rule)
-                                      :min-lines (rule-min-lines rule))))
+                                      :min-lines (rule-min-lines rule)
+                                      :source-base-line source-base-line)))
                          (when (and result
                                     (> (getf result :ratio) (max-ratio rule))
                                     (base:should-create-violation-p rule))
                            (push (make-comment-ratio-violation
                                   rule file actual-line actual-column
                                   result (get-function-name current-expr))
+                                 violations))))
+
+                     ;; Check if this is a Coalton function define
+                     (when (cbase:coalton-define-p current-expr)
+                       (let ((result (calculate-comment-ratio-from-source
+                                      current-expr position-map source-lines
+                                      actual-line actual-column
+                                      :include-docstrings (rule-include-docstrings rule)
+                                      :min-lines (rule-min-lines rule)
+                                      :source-base-line source-base-line)))
+                         (when (and result
+                                    (> (getf result :ratio) (max-ratio rule))
+                                    (base:should-create-violation-p rule))
+                           (push (make-comment-ratio-violation
+                                  rule file actual-line actual-column
+                                  result (cbase:coalton-define-name current-expr))
                                  violations))))
 
                      ;; Recurse into nested forms
@@ -566,7 +671,8 @@ suggesting code may be over-commented or poorly expressed."))
                                                func-def position-map source-lines
                                                func-line func-column
                                                :include-docstrings (rule-include-docstrings rule)
-                                               :min-lines (rule-min-lines rule)))
+                                               :min-lines (rule-min-lines rule)
+                                               :source-base-line source-base-line))
                                       (func-name (get-inner-function-name func-def)))
                                   (when (and result
                                              (> (getf result :ratio) (max-ratio rule))
@@ -719,7 +825,10 @@ suggesting code may be over-commented or poorly expressed."))
    :type :form)
   (:documentation "Rule to detect functions with high cyclomatic complexity.
 Flags defun/defmethod bodies whose complexity score exceeds :max (default 15).
+Also checks Coalton define bodies inside coalton-toplevel forms.
 Supports :standard and :modified variants for case/cond counting."))
+
+(defmethod base:coalton-aware-p ((rule cyclomatic-complexity-rule)) t)
 
 (defmethod base:check-form ((rule cyclomatic-complexity-rule) form file)
   "Check cyclomatic complexity."
@@ -794,63 +903,89 @@ Supports :standard and :modified variants for case/cond counting."))
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
 
-    (labels ((check-expr (current-expr fallback-line fallback-column)
-               (base:with-safe-code-expr (current-expr visited)
-                 (multiple-value-bind (actual-line actual-column)
-                     (base:find-actual-position current-expr position-map
-                                                fallback-line fallback-column)
-                   (let ((head (first current-expr)))
+    (labels
+        ((check-expr (current-expr fallback-line fallback-column)
+           (base:with-safe-code-expr (current-expr visited)
+             (multiple-value-bind (actual-line actual-column)
+                 (base:find-actual-position current-expr position-map
+                                            fallback-line fallback-column)
+               (let ((head (first current-expr)))
 
-                     ;; Check if this is a function definition
-                     (when (is-function-definition-p head)
-                       (let ((complexity (calculate-complexity
-                                          current-expr visited (complexity-variant rule))))
-                         (when (and (> complexity (max-complexity rule))
-                                    (base:should-create-violation-p rule))
-                           (push (make-complexity-violation
-                                  rule file actual-line actual-column
-                                  complexity (get-function-name current-expr))
-                                 violations))))
+                 ;; Check if this is a CL function definition
+                 (when (is-function-definition-p head)
+                   (let ((complexity (calculate-complexity
+                                      current-expr visited (complexity-variant rule))))
+                     (when (and (> complexity (max-complexity rule))
+                                (base:should-create-violation-p rule))
+                       (push (make-complexity-violation
+                              rule file actual-line actual-column
+                              complexity (get-function-name current-expr))
+                             violations))))
 
-                     ;; Recurse into nested forms
-                     ;; Special handling for flet/labels to check inner functions
-                     (cond
-                       ;; flet/labels: check inner functions separately
-                       ((or (base:symbol-matches-p head "FLET")
-                            (base:symbol-matches-p head "LABELS"))
-                        (when (and (consp (rest current-expr))
-                                   (a:proper-list-p (second current-expr)))
-                          ;; Check each inner function definition
-                          (dolist (func-def (second current-expr))
-                            (when (consp func-def)
-                              (multiple-value-bind (func-line func-column)
-                                  (base:find-actual-position func-def position-map
-                                                             actual-line actual-column)
-                                (let ((complexity (calculate-complexity
-                                                   func-def visited (complexity-variant rule)))
-                                      (func-name (get-inner-function-name func-def)))
-                                  (when (and (> complexity (max-complexity rule))
-                                             (base:should-create-violation-p rule))
-                                    (push (make-complexity-violation
-                                           rule file func-line func-column
-                                           complexity func-name)
-                                          violations))))))
-                          ;; Check body forms
-                          (dolist (body-form (cddr current-expr))
-                            (when (consp body-form)
-                              (check-expr body-form actual-line actual-column)))))
+                 ;; Recurse into nested forms
+                 (cond
+                   ;; flet/labels: check inner functions separately
+                   ((or (base:symbol-matches-p head "FLET")
+                        (base:symbol-matches-p head "LABELS"))
+                    (when (and (consp (rest current-expr))
+                               (a:proper-list-p (second current-expr)))
+                      ;; Check each inner function definition
+                      (dolist (func-def (second current-expr))
+                        (when (consp func-def)
+                          (multiple-value-bind (func-line func-column)
+                              (base:find-actual-position func-def position-map
+                                                         actual-line actual-column)
+                            (let ((complexity (calculate-complexity
+                                               func-def visited (complexity-variant rule)))
+                                  (func-name (get-inner-function-name func-def)))
+                              (when (and (> complexity (max-complexity rule))
+                                         (base:should-create-violation-p rule))
+                                (push (make-complexity-violation
+                                       rule file func-line func-column
+                                       complexity func-name)
+                                      violations))))))
+                      ;; Check body forms
+                      (dolist (body-form (cddr current-expr))
+                        (when (consp body-form)
+                          (check-expr body-form actual-line actual-column)))))
 
-                       ;; defun/defmethod/etc: don't recurse (already handled)
-                       ((is-function-definition-p head)
-                        nil)
+                   ;; coalton-toplevel: walk body for Coalton function defines
+                   ((coalton-toplevel-p head)
+                    (check-coalton-defines (rest current-expr)
+                                           actual-line actual-column))
 
-                       ;; Other forms: recurse normally
-                       (t
-                        ;; Only iterate if rest is a proper list (not a dotted pair)
-                        (when (a:proper-list-p (rest current-expr))
-                          (dolist (subexpr (rest current-expr))
-                            (when (consp subexpr)
-                              (check-expr subexpr actual-line actual-column)))))))))))
+                   ;; CL function definitions: don't recurse (already handled above)
+                   ((is-function-definition-p head)
+                    nil)
+
+                   ;; Other forms: recurse normally
+                   (t
+                    (when (a:proper-list-p (rest current-expr))
+                      (dolist (subexpr (rest current-expr))
+                        (when (consp subexpr)
+                          (check-expr subexpr actual-line actual-column))))))))))
+
+         (check-coalton-defines (forms fallback-line fallback-column)
+           ;; Walk FORMS looking for Coalton function defines (cbase:coalton-define-p).
+           ;; Calculates complexity for each define found and recurses into its body
+           ;; to also find nested defines. Non-define forms (define-type, etc.) are skipped.
+           (dolist (sub-form forms)
+             (when (and (consp sub-form)
+                        (cbase:coalton-define-p sub-form))
+               (multiple-value-bind (def-line def-column)
+                   (base:find-actual-position sub-form position-map
+                                              fallback-line fallback-column)
+                 (let ((complexity (calculate-coalton-complexity
+                                    sub-form (complexity-variant rule)))
+                       (define-name (cbase:coalton-define-name sub-form)))
+                   (when (and (> complexity (max-complexity rule))
+                              (base:should-create-violation-p rule))
+                     (push (make-complexity-violation
+                            rule file def-line def-column complexity define-name)
+                           violations))))
+               ;; Recurse into this define's body for nested defines
+               (check-coalton-defines (cbase:coalton-define-body sub-form)
+                                      fallback-line fallback-column)))))
 
       (check-expr expr line column))
 

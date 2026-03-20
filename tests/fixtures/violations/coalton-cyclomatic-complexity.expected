@@ -1,0 +1,5 @@
+# Expected violations for coalton-cyclomatic-complexity.lisp
+# Default variant is :modified (each if/match/etc = +1 total).
+# Default max is 15. Complexity 16 violates.
+
+35:2 cyclomatic-complexity info

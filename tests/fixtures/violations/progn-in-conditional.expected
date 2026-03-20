@@ -1,0 +1,8 @@
+# Expected violations for progn-in-conditional.lisp
+# Rule detects bare progn in if/and/or clauses, including inside coalton-toplevel
+
+4:0 progn-in-conditional info
+10:0 progn-in-conditional info
+17:0 progn-in-conditional info
+19:0 progn-in-conditional info
+25:4 progn-in-conditional info

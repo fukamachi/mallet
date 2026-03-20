@@ -41,6 +41,7 @@
     :serial t
     :components
     ((:file "base")
+     (:file "coalton-base")
      (:file "text")
      (:file "forms/package-exports")
      (:module "tokens"
@@ -154,8 +155,10 @@
      (:file "rule-type-system-test")
      (:file "stale-suppression-test")
      (:file "package-exports-test")
+     (:file "coalton-base-test")
      (:file "coalton-rule-base-test")
      (:file "coalton-missing-declare-test")
-     (:file "coalton-missing-to-boolean-test"))))
+     (:file "coalton-missing-to-boolean-test")
+     (:file "coalton-cyclomatic-complexity-test"))))
 
   :perform (test-op (o c) (symbol-call :rove '#:run c)))

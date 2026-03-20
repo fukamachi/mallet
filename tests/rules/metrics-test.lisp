@@ -995,3 +995,365 @@
       (ok (not (null (getf result :complexity))))
       (ok (not (null (getf result :comment-ratio))))
       (ok (floatp (getf result :comment-ratio))))))
+
+;;; Coalton function-length tests
+
+(deftest function-length-rule-coalton-aware-p
+  (testing "function-length-rule opts into Coalton form processing"
+    (let ((rule (make-instance 'rules:function-length-rule)))
+      (ok (base:coalton-aware-p rule)))))
+
+(deftest function-length-rule-skips-coalton-value-define
+  (testing "function-length rule ignores value defines (define x 42) in coalton-toplevel"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
+           (code "(coalton-toplevel (define x 42))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest function-length-rule-short-coalton-define-passes
+  (testing "function-length rule does not flag short coalton function defines"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 50))
+           (code "(coalton-toplevel
+  (define (foo x)
+    (+ x 1)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest function-length-rule-detects-long-coalton-define
+  (testing "function-length rule detects long coalton function defines"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 1))
+           (code (format nil "(coalton-toplevel~%  (define (foo x)~%~{    (bar ~D)~%~}    x))"
+                         (loop for i from 1 to 5 collect i)))
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (ok (search "FOO" (violation:violation-message (first violations)))))))
+
+(deftest function-length-rule-coalton-reports-function-name
+  (testing "function-length violation for coalton define includes function name"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
+           (code "(coalton-toplevel
+  (define (my-function x)
+    (+ x 1)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (ok (search "MY-FUNCTION" (violation:violation-message (first violations)))))))
+
+(deftest function-length-rule-cl-forms-unaffected-by-coalton-aware
+  (testing "function-length rule still processes CL defun forms after opting into Coalton"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
+           (code "(defun foo (x) (+ x 1))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations))))))
+
+;;; Coalton comment-ratio tests
+
+(deftest comment-ratio-rule-coalton-aware-p
+  (testing "comment-ratio-rule opts into Coalton form processing"
+    (let ((rule (make-instance 'rules:comment-ratio-rule)))
+      (ok (base:coalton-aware-p rule)))))
+
+(deftest comment-ratio-rule-skips-coalton-value-define
+  (testing "comment-ratio rule ignores value defines (define x 42) in coalton-toplevel"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.0d0 :min-lines 1))
+           (code "(coalton-toplevel (define x 42))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-rule-no-violation-coalton-define-clean
+  (testing "comment-ratio rule does not flag coalton function defines with low comment ratio"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.5d0 :min-lines 1))
+           (code "(coalton-toplevel
+  (define (foo x)
+    (+ x 1)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-rule-detects-coalton-define-with-high-ratio
+  (testing "comment-ratio rule detects high comment ratio in coalton function defines"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.3d0 :min-lines 1))
+           (code "(coalton-toplevel
+  (define (foo x)
+    ;; lots of comments
+    ;; more comments
+    ;; even more
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (ok (search "FOO" (violation:violation-message (first violations)))))))
+
+(deftest comment-ratio-rule-coalton-reports-function-name
+  (testing "comment-ratio violation for coalton define includes function name"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.0d0 :min-lines 1))
+           (code "(coalton-toplevel
+  (define (my-function x)
+    ;; a comment
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (ok (search "MY-FUNCTION" (violation:violation-message (first violations)))))))
+
+(deftest comment-ratio-rule-cl-forms-unaffected-by-coalton-aware
+  (testing "comment-ratio rule still processes CL defun forms after opting into Coalton"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.0d0 :min-lines 1))
+           (code "(defun foo (x)
+  ;; comment
+  (+ x 1))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations))))))
+
+;;; Coalton function-length edge cases
+
+(deftest function-length-coalton-at-exact-threshold
+  (testing "Coalton define at exactly the max threshold produces no violation"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 3))
+           ;; 3 code lines: (define (foo x), (+ x 1), closing paren line
+           (code "(coalton-toplevel
+  (define (foo x)
+    (+ x 1)
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest function-length-coalton-one-over-threshold
+  (testing "Coalton define one line over the max threshold produces a violation"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 2))
+           ;; 3 code lines > max 2
+           (code "(coalton-toplevel
+  (define (foo x)
+    (+ x 1)
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (ok (search "FOO" (violation:violation-message (first violations))))
+      (ok (search "3 lines" (violation:violation-message (first violations)))))))
+
+(deftest function-length-coalton-nested-let
+  (testing "Coalton define with nested let counts correctly"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 2))
+           (code "(coalton-toplevel
+  (define (foo x)
+    (let ((y (+ x 1)))
+      (let ((z (* y 2)))
+        (+ y z)))))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      ;; The function has more than 2 code lines
+      (ok (= 1 (length violations)))
+      (ok (search "FOO" (violation:violation-message (first violations)))))))
+
+(deftest function-length-coalton-multiple-defines-only-long-triggers
+  (testing "Multiple defines in one coalton-toplevel: only the long one triggers"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 3))
+           (code (format nil "(coalton-toplevel
+  (define (short-fn x)
+    (+ x 1))
+  (define (long-fn x)
+~{    (bar ~D)~%~}    x))"
+                         (loop for i from 1 to 5 collect i)))
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      ;; Only long-fn should trigger
+      (ok (= 1 (length violations)))
+      (ok (search "LONG-FN" (violation:violation-message (first violations))))
+      ;; short-fn should NOT appear
+      (ok (not (some (lambda (v)
+                       (search "SHORT-FN" (violation:violation-message v)))
+                     violations))))))
+
+(deftest function-length-coalton-value-define-variants-no-violation
+  (testing "Value defines like (define pi 3.14) and (define x 42) produce no violations"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
+           (code "(coalton-toplevel
+  (define x 42)
+  (define pi 3.14)
+  (define greeting \"hello\"))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest function-length-coalton-define-type-ignored
+  (testing "define-type is NOT treated as a function definition"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
+           (code "(coalton-toplevel
+  (define-type (Optional :a)
+    (Some :a)
+    None))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest function-length-coalton-define-instance-ignored
+  (testing "define-instance is NOT treated as a function definition"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 0))
+           (code "(coalton-toplevel
+  (define-instance (Eq MyType)
+    (define (== a b)
+      (match a
+        ((MyType x) (match b
+                      ((MyType y) (== x y))))))))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      ;; define-instance itself should not be treated as a function definition.
+      ;; The inner (define (== a b) ...) IS a function define and may trigger,
+      ;; but the define-instance wrapper must not contribute a separate violation.
+      ;; With max 0, the inner define should trigger exactly once.
+      (ok (<= (length violations) 1))
+      ;; If there is a violation, it should be for the inner define, not define-instance
+      (when violations
+        (ok (search "==" (violation:violation-message (first violations))))))))
+
+(deftest function-length-coalton-violation-metadata
+  (testing "Coalton function-length violation has correct severity and line info"
+    (let* ((rule (make-instance 'rules:function-length-rule :max 1))
+           (code "(coalton-toplevel
+  (define (foo x)
+    (+ x 1)
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (let ((v (first violations)))
+        ;; Severity should be :info (metrics rules are informational)
+        (ok (eq :info (violation:violation-severity v)))
+        ;; Line should be > 0 (the define starts on line 2)
+        (ok (> (violation:violation-line v) 0))
+        ;; Column should be >= 0
+        (ok (>= (violation:violation-column v) 0))
+        ;; Message should include function name and line count
+        (ok (search "FOO" (violation:violation-message v)))
+        (ok (search "lines" (violation:violation-message v)))
+        (ok (search "max:" (violation:violation-message v)))))))
+
+(deftest function-length-coalton-all-short-defines-clean
+  (testing "coalton-toplevel with only short clean defines produces zero violations"
+    (let* ((rule (make-instance 'rules:function-length-rule))  ; default max 50
+           (code "(coalton-toplevel
+  (define (add x y)
+    (+ x y))
+  (define (sub x y)
+    (- x y))
+  (define (mul x y)
+    (* x y)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+;;; Coalton comment-ratio edge cases
+
+(deftest comment-ratio-coalton-at-exact-threshold
+  (testing "Coalton define at exactly the max ratio produces no violation"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.5d0 :min-lines 1))
+           ;; 2 comment lines, 2 code lines = ratio 0.5 which is NOT > 0.5
+           (code "(coalton-toplevel
+  (define (foo x)
+    ;; comment one
+    ;; comment two
+    (+ x 1)
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-coalton-one-over-threshold
+  (testing "Coalton define slightly over max ratio produces a violation"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.3d0 :min-lines 1))
+           ;; 3 comment lines, 2 code lines = ratio 0.6 > 0.3
+           (code "(coalton-toplevel
+  (define (foo x)
+    ;; comment one
+    ;; comment two
+    ;; comment three
+    (+ x 1)
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (ok (search "FOO" (violation:violation-message (first violations))))
+      (ok (search "comment ratio" (violation:violation-message (first violations)))))))
+
+(deftest comment-ratio-coalton-value-define-variants-no-violation
+  (testing "Value defines like (define pi 3.14) produce no comment-ratio violations"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.0d0 :min-lines 1))
+           (code "(coalton-toplevel
+  (define x 42)
+  (define pi 3.14))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-coalton-define-type-ignored
+  (testing "define-type does not produce comment-ratio violations"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.0d0 :min-lines 1))
+           (code "(coalton-toplevel
+  (define-type (Optional :a)
+    ;; comment inside define-type
+    (Some :a)
+    None))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
+
+(deftest comment-ratio-coalton-define-instance-ignored
+  (testing "define-instance does not produce comment-ratio violations"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.0d0 :min-lines 1))
+           (code "(coalton-toplevel
+  (define-instance (Eq MyType)
+    ;; instance methods
+    (define (== a b)
+      (== a b))))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      ;; define-instance itself should not trigger a violation.
+      ;; The inner define may trigger if it has comments, but define-instance must not.
+      ;; In this case the inner define has no comments relative to its code,
+      ;; so no violations expected from the inner define either.
+      (ok (null violations)))))
+
+(deftest comment-ratio-coalton-violation-metadata
+  (testing "Coalton comment-ratio violation has correct severity and metadata"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :max 0.0d0 :min-lines 1))
+           (code "(coalton-toplevel
+  (define (bar x)
+    ;; a comment
+    x))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (= 1 (length violations)))
+      (let ((v (first violations)))
+        ;; Severity should be :info
+        (ok (eq :info (violation:violation-severity v)))
+        ;; Line should be > 0
+        (ok (> (violation:violation-line v) 0))
+        ;; Column should be >= 0
+        (ok (>= (violation:violation-column v) 0))
+        ;; Message should include function name
+        (ok (search "BAR" (violation:violation-message v)))
+        ;; Message should mention comment ratio and max
+        (ok (search "comment ratio" (violation:violation-message v)))
+        (ok (search "max:" (violation:violation-message v)))))))
+
+(deftest comment-ratio-coalton-all-short-defines-clean
+  (testing "coalton-toplevel with only clean defines produces zero comment-ratio violations"
+    (let* ((rule (make-instance 'rules:comment-ratio-rule :min-lines 1))  ; default max 0.5
+           (code "(coalton-toplevel
+  (define (add x y)
+    (+ x y))
+  (define (sub x y)
+    (- x y))
+  (define (mul x y)
+    (* x y)))")
+           (forms (parser:parse-forms code #P"test.lisp"))
+           (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
+      (ok (null violations)))))
