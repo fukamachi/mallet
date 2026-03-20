@@ -8,7 +8,8 @@
    (#:suppression #:mallet/suppression))
   (:export #:lint-file
            #:lint-files
-           #:*suppression-state*))
+           #:*suppression-state*
+           #:extract-lisp-bodies-from-coalton))
 (in-package #:mallet/engine)
 
 ;;; Special variable for dynamic suppression state
@@ -275,6 +276,42 @@ Returns updated violations list."
                   violations))))))
   violations)
 
+
+(defun extract-lisp-bodies-from-coalton (expr position-map fallback-line fallback-column)
+  "Walk EXPR (a coalton-toplevel form tree) and collect CL body expressions
+from all (lisp Type (vars) body...) forms at any nesting depth.
+
+Returns a flat list of (body-expr line column) entries.
+Non-cons body expressions (atoms) are skipped — CL form rules only check list
+expressions."
+  (let ((results '()))
+    (labels ((extract-symbol-name (head)
+               ;; Require a colon to distinguish symbol strings ("PKG:NAME")
+               ;; from string literals ("lisp") — mirrors symbol-matches-p in base.lisp.
+               (typecase head
+                 (string (when (find #\: head)
+                           (rules:symbol-name-from-string head)))
+                 (symbol (symbol-name head))
+                 (otherwise nil)))
+             (walk (e)
+               (when (consp e)
+                 (let ((head-name (extract-symbol-name (first e))))
+                   (when (and head-name (string-equal head-name "LISP"))
+                     ;; (lisp Type (vars) body...)
+                     ;; body starts after Type and (vars) — i.e., cdddr
+                     (dolist (body-expr (cdddr e))
+                       (when (consp body-expr)
+                         (multiple-value-bind (line col)
+                             (parser:find-position body-expr position-map
+                                                   fallback-line fallback-column)
+                           (push (list body-expr line col) results)))))
+                   ;; Walk all elements (not just rest) so that cons heads such
+                   ;; as let-binding lists are fully traversed.
+                   (dolist (sub e)
+                     (when (consp sub)
+                       (walk sub)))))))
+      (walk expr))
+    (nreverse results)))
 
 ; mallet:suppress cyclomatic-complexity comment-ratio
 (defun lint-file (file &key config)
