@@ -429,11 +429,15 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                  ;; Run form, collecting violations
                  (let ((form-violations (process-single-form form rules file file-type nil)))
 
-                   ;; Dispatch (lisp Type (vars) body...) bodies to CL rules.
-                   ;; Coalton rules skip synthetic forms (coalton-form-p returns NIL);
-                   ;; CL rules process them normally via the existing :around methods.
+                   ;; Dispatch (lisp Type (vars) body...) bodies to CL-only rules.
+                   ;; Coalton-aware rules already walk the full coalton-toplevel tree
+                   ;; (including lisp bodies) when processing the parent form, so they
+                   ;; are excluded here to prevent double-firing.  Coalton-rule subclasses
+                   ;; skip synthetic forms anyway (coalton-form-p returns NIL on them).
                    (when (rules:coalton-form-p form)
-                     (let* ((position-map (parser:form-position-map form))
+                     (let* ((cl-only-rules
+                              (remove-if #'rules:coalton-aware-p rules))
+                            (position-map (parser:form-position-map form))
                             (lisp-bodies
                               (extract-lisp-bodies-from-coalton
                                 form-expr
@@ -455,7 +459,7 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                              (setf form-violations
                                    (nconc form-violations
                                           (process-single-form
-                                            synthetic rules file file-type nil))))))))
+                                            synthetic cl-only-rules file file-type nil))))))))
 
                    ;; Filter violations against pending :suppress records
                    ;; (includes both comment :suppress and declaim suppress-next)

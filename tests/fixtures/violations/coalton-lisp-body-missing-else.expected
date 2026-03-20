@@ -1,0 +1,6 @@
+# Expected violations for coalton-lisp-body-missing-else.lisp
+# CL missing-else fires inside (lisp ...) bodies within coalton-toplevel.
+# Coalton (if ...) forms with else must NOT appear here.
+
+12:6 missing-else warning
+17:6 missing-else warning
