@@ -45,17 +45,20 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
   (check-type form parser:form)
   (check-type file pathname)
 
-  ;; Get source from form object and parse into lines, store in rule
+  ;; Get source from form object and parse into lines, store in rule.
+  ;; Synthetic forms (e.g. lisp bodies dispatched from coalton-toplevel) have
+  ;; no source text; skip them since length cannot be measured without source.
   (let ((source (parser:form-source form)))
-    (setf (rule-source-lines rule) (parse-source-to-lines source))
-    ;; Call recursive checker
-    (base:check-form-recursive rule
-                               (parser:form-expr form)
-                               file
-                               (parser:form-line form)
-                               (parser:form-column form)
-                               nil
-                               (parser:form-position-map form))))
+    (when source
+      (setf (rule-source-lines rule) (parse-source-to-lines source))
+      ;; Call recursive checker
+      (base:check-form-recursive rule
+                                 (parser:form-expr form)
+                                 file
+                                 (parser:form-line form)
+                                 (parser:form-column form)
+                                 nil
+                                 (parser:form-position-map form)))))
 
 (defmethod base:check-form-recursive ((rule function-length-rule) expr file line column
                                       &optional function-name position-map)
@@ -586,15 +589,18 @@ suggesting code may be over-commented or poorly expressed."))
   (check-type form parser:form)
   (check-type file pathname)
 
+  ;; Synthetic forms (e.g. lisp bodies from coalton-toplevel) have no source
+  ;; text; skip them since comment ratio cannot be measured without source.
   (let ((source (parser:form-source form)))
-    (setf (rule-source-lines-for-ratio rule) (parse-source-to-lines source))
-    (base:check-form-recursive rule
-                               (parser:form-expr form)
-                               file
-                               (parser:form-line form)
-                               (parser:form-column form)
-                               nil
-                               (parser:form-position-map form))))
+    (when source
+      (setf (rule-source-lines-for-ratio rule) (parse-source-to-lines source))
+      (base:check-form-recursive rule
+                                 (parser:form-expr form)
+                                 file
+                                 (parser:form-line form)
+                                 (parser:form-column form)
+                                 nil
+                                 (parser:form-position-map form)))))
 
 (defmethod base:check-form-recursive ((rule comment-ratio-rule) expr file line column
                                       &optional function-name position-map)

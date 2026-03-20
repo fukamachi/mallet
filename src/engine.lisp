@@ -429,6 +429,34 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                  ;; Run form, collecting violations
                  (let ((form-violations (process-single-form form rules file file-type nil)))
 
+                   ;; Dispatch (lisp Type (vars) body...) bodies to CL rules.
+                   ;; Coalton rules skip synthetic forms (coalton-form-p returns NIL);
+                   ;; CL rules process them normally via the existing :around methods.
+                   (when (rules:coalton-form-p form)
+                     (let* ((position-map (parser:form-position-map form))
+                            (lisp-bodies
+                              (extract-lisp-bodies-from-coalton
+                                form-expr
+                                position-map
+                                form-start-line
+                                (parser:form-column form))))
+                       (dolist (entry lisp-bodies)
+                         (destructuring-bind (body-expr line column) entry
+                           (let ((synthetic
+                                   (make-instance 'parser:form
+                                                  :expr body-expr
+                                                  :file (parser:form-file form)
+                                                  :line line
+                                                  :column column
+                                                  :end-line line
+                                                  :end-column 0
+                                                  :source nil
+                                                  :position-map position-map)))
+                             (setf form-violations
+                                   (nconc form-violations
+                                          (process-single-form
+                                            synthetic rules file file-type nil))))))))
+
                    ;; Filter violations against pending :suppress records
                    ;; (includes both comment :suppress and declaim suppress-next)
                    (when pending-suppress-records
