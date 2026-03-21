@@ -28,7 +28,16 @@
            #:path-override-rules
            #:path-override-disabled-rules
            ;; Multi-form config reader
-           #:read-mallet-forms))
+           #:read-mallet-forms
+           ;; Preset registry
+           #:preset-definition
+           #:preset-definition-name
+           #:preset-definition-extends
+           #:preset-definition-enable-specs
+           #:preset-definition-disable-specs
+           #:parse-preset-definition
+           #:build-preset-registry
+           #:resolve-preset))
 (in-package #:mallet/config)
 
 (defvar *default-preset* :default)
@@ -41,6 +50,18 @@ Stores patterns that match files and the rules/disabled-rules that apply."
   (patterns '() :type list)          ; List of glob patterns
   (rules '() :type list)             ; List of rule instances
   (disabled-rules '() :type list))   ; List of disabled rule names (keywords)
+
+;;; Preset definition structure
+
+(defstruct preset-definition
+  "Structure representing a user-defined preset parsed from a :mallet-preset form."
+  (name nil :type keyword)
+  (extends nil)
+  (enable-specs '() :type list)
+  (disable-specs '() :type list))
+
+;;; Built-in preset names — used to detect shadowing
+(defvar *built-in-preset-names* '(:default :all :none))
 
 ;;; Config data structure
 
@@ -87,6 +108,101 @@ PATH-RULES, IGNORE patterns, and SET-SEVERITY-OVERRIDES (alist of (category . se
                  :ignore (or ignore '())
                  :root-dir root-dir
                  :set-severity-overrides (or set-severity-overrides '())))
+
+;;; Preset parsing and registry
+
+(defun parse-preset-definition (sexp)
+  "Parse a :mallet-preset s-expression into a preset-definition struct.
+Format: (:mallet-preset :name (:extends :parent) (:enable ...) (:disable ...))"
+  (check-type sexp list)
+  (unless (eq (first sexp) :mallet-preset)
+    (error "Preset form must start with :mallet-preset, got: ~S" (first sexp)))
+  (let ((name (second sexp)))
+    (unless (keywordp name)
+      (error "Preset name must be a keyword, got: ~S" name))
+    (let ((extends nil)
+          (enable-specs '())
+          (disable-specs '()))
+      (dolist (form (cddr sexp))
+        (when (consp form)
+          (case (first form)
+            (:extends
+             (setf extends (second form)))
+            (:enable
+             (let ((rule-name (utils:resolve-rule-alias (second form)))
+                   (options (cddr form)))
+               (push (cons rule-name options) enable-specs)))
+            (:disable
+             (let ((rule-name (utils:resolve-rule-alias (second form))))
+               (push rule-name disable-specs))))))
+      (make-preset-definition
+       :name name
+       :extends extends
+       :enable-specs (nreverse enable-specs)
+       :disable-specs (nreverse disable-specs)))))
+
+(defun build-preset-registry (preset-definitions)
+  "Build a hash table from a list of preset-definition structs, keyed by name."
+  (let ((registry (make-hash-table :test 'eq)))
+    (dolist (defn preset-definitions)
+      (setf (gethash (preset-definition-name defn) registry) defn))
+    registry))
+
+(defun resolve-preset (name registry &optional resolving-stack)
+  "Resolve preset NAME to a config object using REGISTRY and built-in presets.
+RESOLVING-STACK tracks the chain being followed to detect circular references.
+Signals circular-preset-reference on cycles, unknown-preset when not found."
+  (check-type name keyword)
+  (check-type registry hash-table)
+  ;; Circular reference detection: name appearing in the stack means a cycle
+  (when (member name resolving-stack)
+    (error 'errors:circular-preset-reference
+           :chain (append resolving-stack (list name))))
+  (let ((defn (gethash name registry)))
+    (cond
+      ;; Found in registry — user-defined preset
+      (defn
+       ;; Emit shadowing note when overriding a built-in name
+       (when (member name *built-in-preset-names*)
+         (format *error-output*
+                 "; Using project-defined ~A preset (shadowing built-in)~%"
+                 (string-downcase (symbol-name name))))
+       (let* ((new-stack (append resolving-stack (list name)))
+              ;; Resolve parent: follow :extends if present, else use :none as base
+              (parent-config
+                (if (preset-definition-extends defn)
+                    (resolve-preset (preset-definition-extends defn)
+                                    registry
+                                    new-stack)
+                    (make-none-config)))
+              (parent-rules (config-rules parent-config))
+              (parent-disabled (config-disabled-rules parent-config))
+              ;; Build override forms for parse-override-rules
+              (override-forms
+                (append
+                 (mapcar (lambda (spec)
+                           ;; parse-override-rules expects (:enable rule-name . options)
+                           (cons :enable (cons (car spec) (cdr spec))))
+                         (preset-definition-enable-specs defn))
+                 (mapcar (lambda (rule-name)
+                           (list :disable rule-name))
+                         (preset-definition-disable-specs defn)))))
+         (multiple-value-bind (result-rules result-disabled)
+             (parse-override-rules override-forms parent-rules parent-disabled)
+           (make-config :rules result-rules
+                        :disabled-rules result-disabled))))
+      ;; Not in registry — try built-in presets
+      (t
+       (handler-case
+           (get-built-in-config name)
+         (error ()
+           ;; Not a built-in either — collect available names and signal
+           (let ((user-names (loop for k being the hash-keys of registry
+                                   collect k)))
+             (error 'errors:unknown-preset
+                    :name name
+                    :available-names (append user-names
+                                             *built-in-preset-names*)))))))))
 
 ;;; Config parsing
 

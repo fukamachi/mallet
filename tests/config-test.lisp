@@ -1005,3 +1005,504 @@
     (with-temporary-config ("(:mallet-config #.(error \"read-eval executed\"))" path)
       (ok (signals (config:read-mallet-forms path) 'reader-error)
           "reader-error from #. with *read-eval* nil — no code executed"))))
+
+;;; Preset definition parsing tests
+
+(deftest parse-preset-definition
+  (testing "Parse minimal preset (name only, no sub-forms)"
+    (let* ((sexp '(:mallet-preset :minimal))
+           (defn (config:parse-preset-definition sexp)))
+      (ok (eq :minimal (config:preset-definition-name defn)))
+      (ok (null (config:preset-definition-extends defn)))
+      (ok (null (config:preset-definition-enable-specs defn)))
+      (ok (null (config:preset-definition-disable-specs defn)))))
+
+  (testing "Parse preset with :extends"
+    (let* ((sexp '(:mallet-preset :strict
+                   (:extends :default)))
+           (defn (config:parse-preset-definition sexp)))
+      (ok (eq :strict (config:preset-definition-name defn)))
+      (ok (eq :default (config:preset-definition-extends defn)))))
+
+  (testing "Parse preset with :enable specs"
+    (let* ((sexp '(:mallet-preset :custom
+                   (:enable :line-length :max 100)
+                   (:enable :unused-variables)))
+           (defn (config:parse-preset-definition sexp)))
+      (ok (= 2 (length (config:preset-definition-enable-specs defn))))
+      (let* ((specs (config:preset-definition-enable-specs defn))
+             (first-spec (first specs))
+             (second-spec (second specs)))
+        (ok (eq :line-length (car first-spec)))
+        (ok (= 100 (getf (cdr first-spec) :max)))
+        (ok (eq :unused-variables (car second-spec))))))
+
+  (testing "Parse preset with :disable specs"
+    (let* ((sexp '(:mallet-preset :relaxed
+                   (:extends :default)
+                   (:disable :missing-else)
+                   (:disable :unused-variables)))
+           (defn (config:parse-preset-definition sexp)))
+      (ok (= 2 (length (config:preset-definition-disable-specs defn))))
+      (ok (member :missing-else (config:preset-definition-disable-specs defn)))
+      (ok (member :unused-variables (config:preset-definition-disable-specs defn)))))
+
+  (testing "Parse preset with all options"
+    (let* ((sexp '(:mallet-preset :ci
+                   (:extends :strict)
+                   (:enable :missing-docstring)
+                   (:enable :line-length :max 120)
+                   (:disable :progn-in-conditional)))
+           (defn (config:parse-preset-definition sexp)))
+      (ok (eq :ci (config:preset-definition-name defn)))
+      (ok (eq :strict (config:preset-definition-extends defn)))
+      (ok (= 2 (length (config:preset-definition-enable-specs defn))))
+      (ok (= 1 (length (config:preset-definition-disable-specs defn))))
+      (ok (member :progn-in-conditional (config:preset-definition-disable-specs defn)))))
+
+  (testing "parse-preset-definition resolves rule aliases"
+    ;; Ensure that rule aliases (if any) are resolved during parsing
+    ;; Use :no-tabs as a baseline (it has no alias, but tests the code path)
+    (let* ((sexp '(:mallet-preset :test
+                   (:enable :no-tabs)))
+           (defn (config:parse-preset-definition sexp)))
+      (ok (= 1 (length (config:preset-definition-enable-specs defn))))
+      (ok (eq :no-tabs (caar (config:preset-definition-enable-specs defn)))))))
+
+;;; Preset registry tests
+
+(deftest build-preset-registry
+  (testing "Build empty registry"
+    (let ((registry (config:build-preset-registry '())))
+      (ok (hash-table-p registry))
+      (ok (= 0 (hash-table-count registry)))))
+
+  (testing "Build registry from single preset"
+    (let* ((defn (config:parse-preset-definition '(:mallet-preset :strict
+                                                   (:extends :default))))
+           (registry (config:build-preset-registry (list defn))))
+      (ok (= 1 (hash-table-count registry)))
+      (ok (not (null (gethash :strict registry))))))
+
+  (testing "Build registry from multiple presets"
+    (let* ((defns (list
+                   (config:parse-preset-definition '(:mallet-preset :strict
+                                                     (:extends :default)))
+                   (config:parse-preset-definition '(:mallet-preset :ci
+                                                     (:extends :strict)))))
+           (registry (config:build-preset-registry defns)))
+      (ok (= 2 (hash-table-count registry)))
+      (ok (not (null (gethash :strict registry))))
+      (ok (not (null (gethash :ci registry))))))
+
+  (testing "Registry keyed by preset name keyword"
+    (let* ((defn (config:parse-preset-definition '(:mallet-preset :my-preset)))
+           (registry (config:build-preset-registry (list defn)))
+           (found (gethash :my-preset registry)))
+      (ok (not (null found)))
+      (ok (eq :my-preset (config:preset-definition-name found))))))
+
+;;; Preset resolution tests
+
+(deftest resolve-preset
+  (testing "Resolve built-in preset :default from empty registry"
+    (let* ((registry (config:build-preset-registry '()))
+           (cfg (config:resolve-preset :default registry)))
+      (ok (typep cfg 'config:config))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :unused-variables rule-names)))))
+
+  (testing "Resolve built-in preset :none from empty registry"
+    (let* ((registry (config:build-preset-registry '()))
+           (cfg (config:resolve-preset :none registry)))
+      (ok (typep cfg 'config:config))
+      (ok (null (config:config-rules cfg)))))
+
+  (testing "Resolve built-in preset :all from empty registry"
+    (let* ((registry (config:build-preset-registry '()))
+           (cfg (config:resolve-preset :all registry)))
+      (ok (typep cfg 'config:config))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :line-length rule-names))
+        (ok (member :cyclomatic-complexity rule-names)))))
+
+  (testing "Resolve user-defined preset with enable specs"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :custom
+                      (:enable :line-length :max 100)
+                      (:enable :unused-variables)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :custom registry)))
+      (ok (typep cfg 'config:config))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :line-length rule-names))
+        (ok (member :unused-variables rule-names)))
+      (let ((rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (= 100 (rules:line-length-rule-max-length rule))))))
+
+  (testing "Resolve user-defined preset extending built-in"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :strict
+                      (:extends :default)
+                      (:enable :line-length :max 80)
+                      (:disable :progn-in-conditional)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :strict registry)))
+      (ok (typep cfg 'config:config))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; Should inherit from :default
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :unused-variables rule-names))
+        ;; Should have line-length from the preset
+        (ok (member :line-length rule-names)))
+      ;; Verify disable-specs applied
+      (ok (member :progn-in-conditional (config:config-disabled-rules cfg)))
+      ;; Verify line-length max
+      (let ((rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (= 80 (rules:line-length-rule-max-length rule))))))
+
+  (testing "Resolve preset chain (:ci -> :strict -> :default)"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :strict
+                      (:extends :default)
+                      (:enable :line-length :max 80)))
+                   (config:parse-preset-definition
+                    '(:mallet-preset :ci
+                      (:extends :strict)
+                      (:enable :missing-docstring)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :ci registry)))
+      (ok (typep cfg 'config:config))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; Should inherit from :default (via :strict)
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :unused-variables rule-names))
+        ;; Should have :line-length from :strict
+        (ok (member :line-length rule-names))
+        ;; Should have :missing-docstring from :ci
+        (ok (member :missing-docstring rule-names)))
+      ;; line-length max should be 80 (from :strict)
+      (let ((rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (= 80 (rules:line-length-rule-max-length rule))))))
+
+  (testing "Circular preset reference signals circular-preset-reference error"
+    (let* ((defns (list
+                   (config:parse-preset-definition '(:mallet-preset :a (:extends :b)))
+                   (config:parse-preset-definition '(:mallet-preset :b (:extends :a)))))
+           (registry (config:build-preset-registry defns)))
+      (ok (handler-case
+              (progn (config:resolve-preset :a registry) nil)
+            (errors:circular-preset-reference () t)))))
+
+  (testing "Circular reference error includes the cycle chain"
+    (let* ((defns (list
+                   (config:parse-preset-definition '(:mallet-preset :a (:extends :b)))
+                   (config:parse-preset-definition '(:mallet-preset :b (:extends :a)))))
+           (registry (config:build-preset-registry defns)))
+      (handler-case
+          (config:resolve-preset :a registry)
+        (errors:circular-preset-reference (c)
+          (let ((chain (errors:circular-preset-reference-chain c)))
+            (ok (member :a chain))
+            (ok (member :b chain)))))))
+
+  (testing "Unknown preset signals unknown-preset error"
+    (let* ((registry (config:build-preset-registry '())))
+      (ok (handler-case
+              (progn (config:resolve-preset :nonexistent registry) nil)
+            (errors:unknown-preset () t)))))
+
+  (testing "Unknown preset error includes the requested name"
+    (let* ((registry (config:build-preset-registry '())))
+      (handler-case
+          (config:resolve-preset :ghost registry)
+        (errors:unknown-preset (c)
+          (ok (eq :ghost (errors:unknown-preset-name c)))))))
+
+  (testing "Unknown preset error includes available names"
+    (let* ((defns (list
+                   (config:parse-preset-definition '(:mallet-preset :strict (:extends :default)))))
+           (registry (config:build-preset-registry defns)))
+      (handler-case
+          (config:resolve-preset :nonexistent registry)
+        (errors:unknown-preset (c)
+          (let ((available (errors:unknown-preset-available-names c)))
+            (ok (member :strict available))
+            ;; Built-in names should also be included
+            (ok (member :default available)))))))
+
+  (testing "Shadowing built-in :default emits note to *error-output*"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :default
+                      (:enable :line-length :max 100)))))
+           (registry (config:build-preset-registry defns))
+           (output (with-output-to-string (s)
+                     (let ((*error-output* s))
+                       (config:resolve-preset :default registry)))))
+      (ok (search "shadowing built-in" (string-downcase output)))))
+
+  (testing "Shadowing note mentions the preset name"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :all
+                      (:enable :line-length :max 100)))))
+           (registry (config:build-preset-registry defns))
+           (output (with-output-to-string (s)
+                     (let ((*error-output* s))
+                       (config:resolve-preset :all registry)))))
+      (ok (search "all" (string-downcase output)))))
+
+  (testing "Resolving non-built-in user preset does NOT emit shadowing note"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :my-preset
+                      (:enable :line-length :max 100)))))
+           (registry (config:build-preset-registry defns))
+           (output (with-output-to-string (s)
+                     (let ((*error-output* s))
+                       (config:resolve-preset :my-preset registry)))))
+      (ok (zerop (length output)))))
+
+  (testing "Resolve user-defined preset with disable-specs"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :relaxed
+                      (:extends :default)
+                      (:disable :missing-else)
+                      (:disable :unused-variables)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :relaxed registry)))
+      (ok (member :missing-else (config:config-disabled-rules cfg)))
+      (ok (member :unused-variables (config:config-disabled-rules cfg)))))
+
+  (testing "resolve-preset and build-preset-registry are exported from mallet/config"
+    (ok (find-symbol "RESOLVE-PRESET" :mallet/config))
+    (ok (find-symbol "BUILD-PRESET-REGISTRY" :mallet/config))
+    (ok (eq :external (nth-value 1 (find-symbol "RESOLVE-PRESET" :mallet/config))))
+    (ok (eq :external (nth-value 1 (find-symbol "BUILD-PRESET-REGISTRY" :mallet/config))))))
+
+;;; Edge case tests for preset registry and resolution
+
+(deftest preset-only-disable-specs
+  (testing "Preset with only :disable specs and no :extends defaults to :none base"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :minimal
+                      (:disable :line-length)
+                      (:disable :missing-else)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :minimal registry)))
+      ;; With :none base and no :enable, rules list should be empty
+      (ok (null (config:config-rules cfg))
+          "No rules should be enabled when no :extends and no :enable")
+      ;; But disable-specs should still be recorded
+      (ok (member :line-length (config:config-disabled-rules cfg))
+          ":line-length should be in disabled list")
+      (ok (member :missing-else (config:config-disabled-rules cfg))
+          ":missing-else should be in disabled list")))
+
+  (testing "Preset with only :disable specs extending :default removes rules"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :relaxed
+                      (:extends :default)
+                      (:disable :missing-else)
+                      (:disable :unused-variables)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :relaxed registry)))
+      ;; Should still have inherited rules from :default
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "Should inherit :trailing-whitespace from :default"))
+      ;; But disabled rules should be present
+      (ok (member :missing-else (config:config-disabled-rules cfg)))
+      (ok (member :unused-variables (config:config-disabled-rules cfg))))))
+
+(deftest preset-extending-all-or-none
+  (testing "Preset extending :all inherits all rules"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :everything-strict
+                      (:extends :all)
+                      (:enable :line-length :max 80)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :everything-strict registry)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; Should have rules from :all
+        (ok (member :cyclomatic-complexity rule-names)
+            "Should inherit :cyclomatic-complexity from :all")
+        (ok (member :function-length rule-names)
+            "Should inherit :function-length from :all")
+        (ok (member :line-length rule-names)
+            "Should have :line-length from preset enable"))
+      ;; :all has no disabled rules, so disabled list should be empty
+      (ok (null (config:config-disabled-rules cfg))
+          "No rules should be disabled when extending :all")
+      ;; line-length should have overridden max
+      (let ((rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (= 80 (rules:line-length-rule-max-length rule))
+            "line-length :max should be 80 from preset override"))))
+
+  (testing "Preset extending :none starts clean"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :barebones
+                      (:extends :none)
+                      (:enable :trailing-whitespace)
+                      (:enable :no-tabs)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :barebones registry)))
+      ;; Should only have the two explicitly enabled rules
+      (ok (= 2 (length (config:config-rules cfg)))
+          "Should have exactly 2 rules")
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :no-tabs rule-names))
+        (ok (not (member :unused-variables rule-names))
+            "Should NOT have rules from :default")))))
+
+(deftest preset-with-rule-options
+  (testing "Preset preserves rule options through resolution"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :custom-metrics
+                      (:extends :none)
+                      (:enable :line-length :max 120)
+                      (:enable :unused-variables :severity :error)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :custom-metrics registry)))
+      ;; Verify exact rule count (no extras from :none base)
+      (ok (= 2 (length (config:config-rules cfg)))
+          "Should have exactly 2 rules")
+      ;; Verify line-length :max is preserved
+      (let ((ll-rule (find :line-length (config:config-rules cfg)
+                           :key #'rules:rule-name)))
+        (ok (not (null ll-rule)) "line-length rule should exist")
+        (ok (= 120 (rules:line-length-rule-max-length ll-rule))
+            "line-length :max should be 120"))
+      ;; Verify :severity option is preserved
+      (let ((uv-rule (find :unused-variables (config:config-rules cfg)
+                           :key #'rules:rule-name)))
+        (ok (not (null uv-rule)) "unused-variables rule should exist")
+        (ok (eq :error (rules:rule-severity uv-rule))
+            "unused-variables :severity should be :error"))))
+
+  (testing "Child preset overrides parent rule options"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :base
+                      (:extends :none)
+                      (:enable :line-length :max 80)))
+                   (config:parse-preset-definition
+                    '(:mallet-preset :wide
+                      (:extends :base)
+                      (:enable :line-length :max 120)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :wide registry)))
+      (let ((rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (not (null rule)))
+        (ok (= 120 (rules:line-length-rule-max-length rule))
+            "Child preset :max 120 should override parent :max 80")))))
+
+(deftest disable-specs-merge-through-chain
+  (testing "Disable-specs accumulate through preset chain"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :base
+                      (:extends :default)
+                      (:disable :missing-else)))
+                   (config:parse-preset-definition
+                    '(:mallet-preset :stricter
+                      (:extends :base)
+                      (:disable :unused-variables)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :stricter registry)))
+      ;; Both disables should be present
+      (ok (member :missing-else (config:config-disabled-rules cfg))
+          ":missing-else disabled by :base should propagate to :stricter")
+      (ok (member :unused-variables (config:config-disabled-rules cfg))
+          ":unused-variables disabled by :stricter should be present")
+      ;; Rules that are NOT disabled should still be present
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            ":trailing-whitespace should survive through the chain"))))
+
+  (testing "Child preset can re-enable a rule disabled by parent"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :parent
+                      (:extends :default)
+                      (:disable :unused-variables)))
+                   (config:parse-preset-definition
+                    '(:mallet-preset :child
+                      (:extends :parent)
+                      (:enable :unused-variables)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :child registry)))
+      ;; :unused-variables should be re-enabled by child
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :unused-variables rule-names)
+            ":unused-variables should be re-enabled by child preset"))
+      (ok (not (member :unused-variables (config:config-disabled-rules cfg)))
+          ":unused-variables should NOT be in disabled list"))))
+
+(deftest shadowing-note-for-none-preset
+  (testing "Shadowing built-in :none emits note to *error-output*"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :none
+                      (:enable :trailing-whitespace)))))
+           (registry (config:build-preset-registry defns))
+           (output (with-output-to-string (s)
+                     (let ((*error-output* s))
+                       (config:resolve-preset :none registry)))))
+      (ok (search "shadowing built-in" (string-downcase output))
+          "Shadowing :none should emit a note")
+      (ok (search "none" (string-downcase output))
+          "Shadowing note should mention 'none'"))))
+
+(deftest circular-reference-self-and-three-node
+  (testing "Self-referencing preset signals circular-preset-reference"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :self-ref (:extends :self-ref)))))
+           (registry (config:build-preset-registry defns)))
+      (ok (handler-case
+              (progn (config:resolve-preset :self-ref registry) nil)
+            (errors:circular-preset-reference () t))
+          "Self-referencing preset should signal circular-preset-reference")))
+
+  (testing "Three-node circular chain: a -> b -> c -> a"
+    (let* ((defns (list
+                   (config:parse-preset-definition '(:mallet-preset :a (:extends :b)))
+                   (config:parse-preset-definition '(:mallet-preset :b (:extends :c)))
+                   (config:parse-preset-definition '(:mallet-preset :c (:extends :a)))))
+           (registry (config:build-preset-registry defns)))
+      (ok (handler-case
+              (progn (config:resolve-preset :a registry) nil)
+            (errors:circular-preset-reference (c)
+              (let ((chain (errors:circular-preset-reference-chain c)))
+                ;; Chain should include all three nodes
+                (and (member :a chain)
+                     (member :b chain)
+                     (member :c chain)))))
+          "Three-node cycle should include all three names in chain")))
+
+  (testing "Non-circular chain resolves correctly"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :a (:extends :b)))
+                   (config:parse-preset-definition
+                    '(:mallet-preset :b (:extends :default)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (config:resolve-preset :a registry)))
+      (ok (typep cfg 'config:config)
+          "Non-circular chain should resolve successfully")
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "Should inherit from :default through chain")))))
