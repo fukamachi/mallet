@@ -1506,3 +1506,92 @@
       (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
         (ok (member :trailing-whitespace rule-names)
             "Should inherit from :default through chain")))))
+
+;;; Preset registry wiring tests (Task 4)
+
+(deftest parse-config-with-registry
+  (testing "parse-config with registry resolves user-defined preset via :extends"
+    (let* ((preset-sexp '(:mallet-preset :strict (:enable :line-length :max 80)))
+           (registry (config:build-preset-registry
+                      (list (config:parse-preset-definition preset-sexp))))
+           (sexp '(:mallet-config (:extends :strict)))
+           (cfg (config:parse-config sexp :preset-registry registry)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :line-length rule-names)
+            "Should inherit :line-length from user-defined :strict preset"))))
+
+  (testing "parse-config without registry falls back to built-in for :extends"
+    (let* ((sexp '(:mallet-config (:extends :none) (:enable :trailing-whitespace)))
+           (cfg (config:parse-config sexp)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names))
+        (ok (not (member :no-tabs rule-names))
+            "Only explicitly enabled rule with :none base"))))
+
+  (testing "parse-config with registry: preset-override takes precedence over :extends"
+    (let* ((preset-sexp '(:mallet-preset :strict (:enable :line-length :max 80)))
+           (registry (config:build-preset-registry
+                      (list (config:parse-preset-definition preset-sexp))))
+           (sexp '(:mallet-config (:extends :strict)))
+           (cfg (config:parse-config sexp
+                                     :preset-registry registry
+                                     :preset-override :none)))
+      ;; :none has no rules, so line-length should NOT be inherited from :strict
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (not (member :line-length rule-names))
+            "preset-override :none beats :extends :strict"))))
+
+  (testing "parse-config with registry: user-defined preset-override is resolved via registry"
+    (let* ((preset-sexp '(:mallet-preset :ci (:enable :trailing-whitespace)))
+           (registry (config:build-preset-registry
+                      (list (config:parse-preset-definition preset-sexp))))
+           (sexp '(:mallet-config))
+           (cfg (config:parse-config sexp
+                                     :preset-registry registry
+                                     :preset-override :ci)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "User-defined :ci resolved through registry as preset-override")))))
+
+(deftest load-config-with-presets
+  (testing "load-config with multi-sexp file: preset + config"
+    (with-temporary-config
+        ("(:mallet-preset :strict (:enable :line-length :max 80))
+          (:mallet-config (:extends :strict))" path)
+      (let* ((cfg (config:load-config path))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :line-length rule-names)
+            "Config inherits :line-length from user-defined :strict preset"))))
+
+  (testing "load-config with preset-only file and :default preset is auto-resolved"
+    (with-temporary-config
+        ("(:mallet-preset :default (:enable :trailing-whitespace))" path)
+      (let* ((cfg (config:load-config path))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "User-defined :default preset used when no :mallet-config present"))))
+
+  (testing "load-config: preset-override overrides :extends in config"
+    (with-temporary-config
+        ("(:mallet-preset :strict (:enable :line-length :max 80))
+          (:mallet-config (:extends :strict))" path)
+      (let* ((cfg (config:load-config path :preset-override :none))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (not (member :line-length rule-names))
+            "preset-override :none beats :extends :strict in config"))))
+
+  (testing "load-config: user-defined preset-override resolved from registry"
+    (with-temporary-config
+        ("(:mallet-preset :ci (:enable :trailing-whitespace))
+          (:mallet-config)" path)
+      (let* ((cfg (config:load-config path :preset-override :ci))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "User-defined :ci used as preset-override"))))
+
+  (testing "load-config: root-dir is set to config file directory"
+    (with-temporary-config
+        ("(:mallet-config (:enable :trailing-whitespace))" path)
+      (let ((cfg (config:load-config path)))
+        (ok (not (null (config:config-root-dir cfg)))
+            "root-dir should be set after loading from file")))))
