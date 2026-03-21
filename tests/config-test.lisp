@@ -1211,13 +1211,13 @@
             (ok (member :b chain)))))))
 
   (testing "Unknown preset signals unknown-preset error"
-    (let* ((registry (config:build-preset-registry '())))
+    (let ((registry (config:build-preset-registry '())))
       (ok (handler-case
               (progn (config:resolve-preset :nonexistent registry) nil)
             (errors:unknown-preset () t)))))
 
   (testing "Unknown preset error includes the requested name"
-    (let* ((registry (config:build-preset-registry '())))
+    (let ((registry (config:build-preset-registry '())))
       (handler-case
           (config:resolve-preset :ghost registry)
         (errors:unknown-preset (c)

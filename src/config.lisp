@@ -267,7 +267,7 @@ Returns (values rules disabled-rules explicit-severity-names) where:
 
         (values (nreverse result-rules) result-disabled explicit-severity-names)))))
 
-(defun parse-config (sexp &key preset-override preset-registry) ; mallet:suppress cyclomatic-complexity
+(defun parse-config (sexp &key preset-override preset-registry)
   "Parse S-expression SEXP into a config object.
 Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...), and (:for-paths ...).
 If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file.

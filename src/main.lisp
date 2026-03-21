@@ -385,8 +385,9 @@ Returns the final config with CLI preset override applied."
         (if (or (null preset)
                 (member preset config:*built-in-preset-names*))
             (config:get-built-in-config (or preset :default))
-            (error "Preset ~(~A~) is not a built-in preset and no .mallet.lisp was found"
-                   preset)))))
+            (error 'errors:unknown-preset
+                   :name preset
+                   :available-names config:*built-in-preset-names*)))))
 
 (defun has-cli-rules-p (cli-rules)
   "Check if cli-rules has any actual overrides."

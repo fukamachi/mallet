@@ -97,8 +97,8 @@
           ":unused-variables should NOT be present — user-defined :default extends :none")))
 
   (testing "shadow-default.mallet.lisp: shadowing emits note to *error-output*"
-    (let* ((path (fixture-config-path "shadow-default.mallet.lisp"))
-           (note-output (make-string-output-stream)))
+    (let ((path (fixture-config-path "shadow-default.mallet.lisp"))
+          (note-output (make-string-output-stream)))
       (let ((*error-output* note-output))
         (config:load-config path))
       (let ((note (get-output-stream-string note-output)))
