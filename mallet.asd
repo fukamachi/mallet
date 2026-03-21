@@ -103,6 +103,9 @@
    (:file "engine-integration-test")
    (:file "engine-comment-suppression")
    (:file "engine-cross-file-integration-test")
+   (:file "engine-coalton-lisp-test")
+   (:file "engine-coalton-lisp-dispatch-test")
+   (:file "engine-coalton-lisp-fixture-test")
 
    (:module "parser"
     :pathname "parser"

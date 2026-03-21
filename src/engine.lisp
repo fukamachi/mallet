@@ -8,7 +8,8 @@
    (#:suppression #:mallet/suppression))
   (:export #:lint-file
            #:lint-files
-           #:*suppression-state*))
+           #:*suppression-state*
+           #:extract-lisp-bodies-from-coalton))
 (in-package #:mallet/engine)
 
 ;;; Special variable for dynamic suppression state
@@ -276,6 +277,42 @@ Returns updated violations list."
   violations)
 
 
+(defun extract-lisp-bodies-from-coalton (expr position-map fallback-line fallback-column)
+  "Walk EXPR (a coalton-toplevel form tree) and collect CL body expressions
+from all (lisp Type (vars) body...) forms at any nesting depth.
+
+Returns a flat list of (body-expr line column) entries.
+Non-cons body expressions (atoms) are skipped — CL form rules only check list
+expressions."
+  (let ((results '()))
+    (labels ((extract-symbol-name (head)
+               ;; Require a colon to distinguish symbol strings ("PKG:NAME")
+               ;; from string literals ("lisp") — mirrors symbol-matches-p in base.lisp.
+               (typecase head
+                 (string (when (find #\: head)
+                           (rules:symbol-name-from-string head)))
+                 (symbol (symbol-name head))
+                 (otherwise nil)))
+             (walk (e)
+               (when (consp e)
+                 (let ((head-name (extract-symbol-name (first e))))
+                   (when (and head-name (string-equal head-name "LISP"))
+                     ;; (lisp Type (vars) body...)
+                     ;; body starts after Type and (vars) — i.e., cdddr
+                     (dolist (body-expr (cdddr e))
+                       (when (consp body-expr)
+                         (multiple-value-bind (line col)
+                             (parser:find-position body-expr position-map
+                                                   fallback-line fallback-column)
+                           (push (list body-expr line col) results)))))
+                   ;; Walk all elements (not just rest) so that cons heads such
+                   ;; as let-binding lists are fully traversed.
+                   (dolist (sub e)
+                     (when (consp sub)
+                       (walk sub)))))))
+      (walk expr))
+    (nreverse results)))
+
 ; mallet:suppress cyclomatic-complexity comment-ratio
 (defun lint-file (file &key config)
   "Lint a single FILE using CONFIG.
@@ -391,6 +428,38 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                 (t
                  ;; Run form, collecting violations
                  (let ((form-violations (process-single-form form rules file file-type nil)))
+
+                   ;; Dispatch (lisp Type (vars) body...) bodies to CL-only rules.
+                   ;; Coalton-aware rules already walk the full coalton-toplevel tree
+                   ;; (including lisp bodies) when processing the parent form, so they
+                   ;; are excluded here to prevent double-firing.  Coalton-rule subclasses
+                   ;; skip synthetic forms anyway (coalton-form-p returns NIL on them).
+                   (when (rules:coalton-form-p form)
+                     (let* ((cl-only-rules
+                              (remove-if #'rules:coalton-aware-p rules))
+                            (position-map (parser:form-position-map form))
+                            (lisp-bodies
+                              (extract-lisp-bodies-from-coalton
+                                form-expr
+                                position-map
+                                form-start-line
+                                (parser:form-column form))))
+                       (dolist (entry lisp-bodies)
+                         (destructuring-bind (body-expr line column) entry
+                           (let ((synthetic
+                                   (make-instance 'parser:form
+                                                  :expr body-expr
+                                                  :file (parser:form-file form)
+                                                  :line line
+                                                  :column column
+                                                  :end-line line
+                                                  :end-column 0
+                                                  :source nil
+                                                  :position-map position-map)))
+                             (setf form-violations
+                                   (nconc form-violations
+                                          (process-single-form
+                                            synthetic cl-only-rules file file-type nil))))))))
 
                    ;; Filter violations against pending :suppress records
                    ;; (includes both comment :suppress and declaim suppress-next)

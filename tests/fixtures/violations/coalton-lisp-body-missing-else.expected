@@ -1,0 +1,6 @@
+# Expected violations for coalton-lisp-body-missing-else.lisp
+# CL missing-else fires inside (lisp ...) bodies within coalton-toplevel.
+# Uses cl:if as in real Coalton code where CL symbols are package-qualified.
+
+13:6 missing-else warning
+18:6 missing-else warning

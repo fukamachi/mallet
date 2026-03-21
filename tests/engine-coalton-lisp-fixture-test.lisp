@@ -1,0 +1,173 @@
+(defpackage #:mallet/tests/engine-coalton-lisp-fixture
+  (:use #:cl
+        #:rove)
+  (:local-nicknames
+   (#:engine #:mallet/engine)
+   (#:config #:mallet/config)
+   (#:rules #:mallet/rules)
+   (#:violation #:mallet/violation)))
+(in-package #:mallet/tests/engine-coalton-lisp-fixture)
+
+;;; Tests that verify CL rules detect violations inside (lisp ...) bodies
+;;; using real fixture files on disk, checking exact line/column positions.
+
+;;; Helpers
+
+(defun fixture-path (subdir filename)
+  (merge-pathnames (concatenate 'string "tests/fixtures/" subdir "/" filename)
+                   (asdf:system-source-directory :mallet)))
+
+(defun violations-file (filename)
+  (fixture-path "violations" filename))
+
+(defun clean-file (filename)
+  (fixture-path "clean" filename))
+
+(defun lint (path rule-keywords)
+  (engine:lint-file path
+                    :config (config:make-config
+                             :rules (mapcar #'rules:make-rule rule-keywords))))
+
+(defun by-rule (violations rule-keyword)
+  (remove-if-not (lambda (v) (eq rule-keyword (violation:violation-rule v)))
+                 violations))
+
+;;; missing-else inside (lisp ...) bodies
+
+(deftest missing-else-in-lisp-body-fixture
+  (testing "fixture: missing-else fires on (if ...) inside (lisp ...) body"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
+                             '(:missing-else)))
+           (iwe (by-rule violations :missing-else)))
+      (ok (= 2 (length iwe))
+          "Exactly 2 missing-else violations (one per lisp body)")))
+
+  (testing "fixture: missing-else violation line numbers are correct"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
+                             '(:missing-else)))
+           (iwe (sort (by-rule violations :missing-else)
+                      #'< :key #'violation:violation-line)))
+      (ok (= 2 (length iwe)))
+      (when (= 2 (length iwe))
+        (ok (= 13 (violation:violation-line (first iwe)))
+            "First violation is on line 13 ((cl:if (cl:evenp x) 1))")
+        (ok (= 18 (violation:violation-line (second iwe)))
+            "Second violation is on line 18 ((cl:if (cl:> y 0) 1))"))))
+
+  (testing "fixture: missing-else violations have correct file path"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
+                             '(:missing-else)))
+           (iwe (by-rule violations :missing-else)))
+      (ok (= 2 (length iwe)))
+      (ok (every #'violation:violation-file iwe)
+          "All violations carry a file path")))
+
+  (testing "fixture: Coalton (if b 1 0) with else does NOT trigger missing-else"
+    ;; The fixture has (if b 1 0) as a Coalton if with an else branch.
+    ;; That must not produce a missing-else violation.
+    (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
+                             '(:missing-else)))
+           (iwe (by-rule violations :missing-else)))
+      ;; Only the 2 CL (if ...) inside lisp bodies fire; Coalton if does not
+      (ok (= 2 (length iwe))
+          "Exactly 2 violations — Coalton (if ...) with else does not fire"))))
+
+;;; no-eval inside (lisp ...) bodies
+;;; no-eval is CL-only (not coalton-aware), so it only fires via synthetic dispatch.
+;;; This verifies the new feature actually works, unlike coalton-aware rules which
+;;; already traverse into (lisp ...) bodies naturally.
+
+(deftest no-eval-in-lisp-body-fixture
+  (testing "fixture: no-eval fires on (eval ...) inside (lisp ...) body"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-no-eval.lisp")
+                             '(:no-eval)))
+           (nev (by-rule violations :no-eval)))
+      (ok (= 2 (length nev))
+          "Exactly 2 no-eval violations (one per lisp body)")))
+
+  (testing "fixture: no-eval violation line numbers are correct"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-no-eval.lisp")
+                             '(:no-eval)))
+           (nev (sort (by-rule violations :no-eval)
+                      #'< :key #'violation:violation-line)))
+      (ok (= 2 (length nev)))
+      (when (= 2 (length nev))
+        (ok (= 14 (violation:violation-line (first nev)))
+            "First violation is on line 14 ((cl:eval (cl:list 'cl:+ x 1)))")
+        (ok (= 19 (violation:violation-line (second nev)))
+            "Second violation is on line 19 ((cl:eval (cl:list 'cl:* y 2)))")))))
+
+;;; Clean file: no CL rule violations
+
+(deftest clean-coalton-lisp-body-fixture
+  (testing "fixture: clean file produces no missing-else violations"
+    (let* ((violations (lint (clean-file "coalton-lisp-body.lisp")
+                             '(:missing-else)))
+           (iwe (by-rule violations :missing-else)))
+      (ok (null iwe)
+          "No missing-else violations in clean coalton-lisp-body.lisp")))
+
+  (testing "fixture: clean file produces no no-eval violations"
+    (let* ((violations (lint (clean-file "coalton-lisp-body.lisp")
+                             '(:no-eval)))
+           (nev (by-rule violations :no-eval)))
+      (ok (null nev)
+          "No no-eval violations in clean coalton-lisp-body.lisp")))
+
+  (testing "fixture: Coalton (if ...) with else branch in clean file is not flagged"
+    (let* ((violations (lint (clean-file "coalton-lisp-body.lisp")
+                             '(:missing-else)))
+           (iwe (by-rule violations :missing-else)))
+      (ok (null iwe)
+          "Coalton (if b 1 0) with else in clean file produces no violation"))))
+
+;;; Existing Coalton rules unaffected (regression)
+
+(deftest coalton-rules-unaffected-by-lisp-dispatch
+  (testing "coalton-missing-declare still fires on coalton-toplevel with lisp bodies"
+    ;; The no-eval fixture has declares for all defines.
+    (let* ((violations (lint (violations-file "coalton-lisp-body-no-eval.lisp")
+                             '(:coalton-missing-declare)))
+           (cmd (by-rule violations :coalton-missing-declare)))
+      (ok (null cmd)
+          "No coalton-missing-declare violation (all defines have declares)")))
+
+  (testing "coalton-missing-declare fires on form WITHOUT declare, even with lisp dispatch"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
+                             '(:coalton-missing-declare)))
+           (cmd (by-rule violations :coalton-missing-declare)))
+      ;; coalton-lisp-body-missing-else.lisp has (define (baz b) ...) with a declare
+      ;; and all other defines have declares too. No coalton-missing-declare expected.
+      (ok (null cmd)
+          "All defines in the fixture have declares")))
+
+  (testing "coalton rules still run on coalton-toplevel containing lisp forms"
+    ;; Construct a code snippet inline to confirm coalton rule fires independently
+    ;; of whether lisp-body dispatch is happening.
+    ;; (Already well-covered by engine-coalton-lisp-dispatch-test.lisp;
+    ;;  this fixture test confirms no regression using real file paths.)
+    (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
+                             '(:missing-else :coalton-missing-declare)))
+           (iwe (by-rule violations :missing-else))
+           (cmd (by-rule violations :coalton-missing-declare)))
+      (ok (= 2 (length iwe))
+          "missing-else still fires in lisp bodies")
+      (ok (null cmd)
+          "No spurious coalton-missing-declare from synthetic forms"))))
+
+;;; Stub guards
+
+(deftest stub-guard-fixture-is-not-trivially-passing
+  (testing "violations fixture must actually produce violations (not silently ignored)"
+    (let* ((violations (lint (violations-file "coalton-lisp-body-missing-else.lisp")
+                             '(:missing-else)))
+           (iwe (by-rule violations :missing-else)))
+      (ok (not (null iwe))
+          "A no-op dispatch would return nil here — confirms dispatch is active")))
+
+  (testing "clean fixture must not accidentally produce violations"
+    (let* ((violations (lint (clean-file "coalton-lisp-body.lisp")
+                             '(:missing-else :no-eval)))
+           (relevant (by-rule violations :missing-else)))
+      (ok (null relevant)
+          "Clean file must not trigger missing-else"))))

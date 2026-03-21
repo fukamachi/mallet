@@ -1,0 +1,6 @@
+# Expected violations for coalton-lisp-body-no-eval.lisp
+# CL no-eval fires inside (lisp ...) bodies within coalton-toplevel.
+# no-eval is CL-only (not coalton-aware) — verifies synthetic form dispatch.
+
+14:6 no-eval warning
+19:6 no-eval warning
