@@ -3,7 +3,8 @@
         #:rove)
   (:local-nicknames
    (#:config #:mallet/config)
-   (#:rules #:mallet/rules)))
+   (#:rules #:mallet/rules)
+   (#:errors #:mallet/errors)))
 (in-package #:mallet/tests/config)
 
 ;;; Config data structure tests
@@ -936,3 +937,71 @@
         (ok (not (null rule)))
         (ok (eq :info (rules:rule-severity rule))
             "Explicit CLI :severity :info wins over :set-severity :error")))))
+
+;;; read-mallet-forms tests
+
+(deftest read-mallet-forms
+  (testing "single :mallet-config form — backward compatible"
+    (with-temporary-config ("(:mallet-config (:enable :line-length))" path)
+      (multiple-value-bind (presets config)
+          (config:read-mallet-forms path)
+        (ok (null presets))
+        (ok (not (null config)))
+        (ok (eq :mallet-config (first config))))))
+
+  (testing "empty file returns nil config and empty preset list"
+    (with-temporary-config ("" path)
+      (multiple-value-bind (presets config)
+          (config:read-mallet-forms path)
+        (ok (null presets))
+        (ok (null config)))))
+
+  (testing "file with preset and config returns both"
+    (with-temporary-config ("(:mallet-preset :strict (:enable :line-length))
+                             (:mallet-config (:extends :strict))" path)
+      (multiple-value-bind (presets config)
+          (config:read-mallet-forms path)
+        (ok (= 1 (length presets)))
+        (ok (eq :mallet-preset (first (first presets))))
+        (ok (eq :strict (second (first presets))))
+        (ok (not (null config)))
+        (ok (eq :mallet-config (first config))))))
+
+  (testing "multiple presets and config"
+    (with-temporary-config ("(:mallet-preset :strict (:enable :line-length))
+                             (:mallet-preset :ci (:extends :strict))
+                             (:mallet-config (:extends :ci))" path)
+      (multiple-value-bind (presets config)
+          (config:read-mallet-forms path)
+        (ok (= 2 (length presets)))
+        (ok (eq :mallet-config (first config))))))
+
+  (testing "presets only, no config"
+    (with-temporary-config ("(:mallet-preset :strict (:enable :line-length))
+                             (:mallet-preset :ci (:extends :strict))" path)
+      (multiple-value-bind (presets config)
+          (config:read-mallet-forms path)
+        (ok (= 2 (length presets)))
+        (ok (null config)))))
+
+  (testing "unknown top-level form signals unknown-config-form"
+    (with-temporary-config ("(:bad-keyword :foo)" path)
+      (ok (signals (config:read-mallet-forms path)
+                   'errors:unknown-config-form))))
+
+  (testing "multiple :mallet-config forms signals multiple-config-forms"
+    (with-temporary-config ("(:mallet-config (:enable :line-length))
+                             (:mallet-config (:disable :no-tabs))" path)
+      (ok (signals (config:read-mallet-forms path)
+                   'errors:multiple-config-forms))))
+
+  (testing "duplicate preset name signals duplicate-preset-name"
+    (with-temporary-config ("(:mallet-preset :strict (:enable :line-length))
+                             (:mallet-preset :strict (:disable :no-tabs))" path)
+      (ok (signals (config:read-mallet-forms path)
+                   'errors:duplicate-preset-name))))
+
+  (testing "*read-eval* nil prevents code execution"
+    (with-temporary-config ("(:mallet-config #.(error \"read-eval executed\"))" path)
+      (ok (signals (config:read-mallet-forms path) 'reader-error)
+          "reader-error from #. with *read-eval* nil — no code executed"))))

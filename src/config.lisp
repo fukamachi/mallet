@@ -3,7 +3,8 @@
   (:local-nicknames
    (#:glob #:trivial-glob)
    (#:rules #:mallet/rules)
-   (#:utils #:mallet/utils))
+   (#:utils #:mallet/utils)
+   (#:errors #:mallet/errors))
   (:export #:config
            #:make-config
            #:parse-config
@@ -25,7 +26,9 @@
            #:path-override
            #:path-override-patterns
            #:path-override-rules
-           #:path-override-disabled-rules))
+           #:path-override-disabled-rules
+           ;; Multi-form config reader
+           #:read-mallet-forms))
 (in-package #:mallet/config)
 
 (defvar *default-preset* :default)
@@ -295,6 +298,45 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                      :path-rules (nreverse path-rules)
                      :ignore ignore-patterns
                      :set-severity-overrides set-severity-overrides))))))
+
+;;; Multi-form config reader
+
+(defun read-mallet-forms (path)
+  "Read all top-level s-expressions from PATH.
+Returns (values preset-forms config-form) where preset-forms is a list of
+:mallet-preset s-expressions and config-form is the :mallet-config s-expression
+or nil if none is present.
+
+Binds *read-eval* to nil for safety. Signals:
+- errors:unknown-config-form if an unrecognized top-level form is found
+- errors:multiple-config-forms if more than one :mallet-config form appears
+- errors:duplicate-preset-name if two :mallet-preset forms share a name"
+  (let ((pathname (etypecase path
+                    (string (uiop:parse-native-namestring path))
+                    (pathname path))))
+    (with-open-file (in pathname :direction :input)
+      (let ((*read-eval* nil)
+            (preset-forms '())
+            (config-form nil))
+        (loop
+          (let ((form (read in nil :eof)))
+            (when (eq form :eof)
+              (return))
+            (unless (consp form)
+              (error 'errors:unknown-config-form :form form))
+            (case (first form)
+              (:mallet-config
+               (when config-form
+                 (error 'errors:multiple-config-forms))
+               (setf config-form form))
+              (:mallet-preset
+               (let ((name (second form)))
+                 (when (find name preset-forms :key #'second)
+                   (error 'errors:duplicate-preset-name :name name))
+                 (push form preset-forms)))
+              (otherwise
+               (error 'errors:unknown-config-form :form form)))))
+        (values (nreverse preset-forms) config-form)))))
 
 ;;; Config file loading
 
