@@ -12,20 +12,29 @@
   (merge-pathnames (concatenate 'string "tests/fixtures/configs/" filename)
                    (asdf:system-source-directory :mallet)))
 
+(defun rule-names (cfg)
+  (mapcar #'rules:rule-name (config:config-rules cfg)))
+
+(defmacro with-temp-code-file ((content pathname) &body body)
+  `(uiop:with-temporary-file (:stream out :pathname ,pathname
+                              :direction :output :type "lisp")
+     (write-string ,content out)
+     (terpri out)
+     (force-output out)
+     ,@body))
+
 ;;; Tests using fixture config files from tests/fixtures/configs/
 
 (deftest load-config-from-fixture-file
   (testing "user-preset.mallet.lisp: config extends :strict which extends built-in :default"
     (let* ((path (fixture-config-path "user-preset.mallet.lisp"))
            (cfg (config:load-config path))
-           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
-      ;; :strict extends :default, so all :default rules should be present
-      (ok (member :trailing-whitespace rule-names)
+           (names (rule-names cfg)))
+      (ok (member :trailing-whitespace names)
           "Should inherit :trailing-whitespace from :default via :strict")
-      (ok (member :unused-variables rule-names)
+      (ok (member :unused-variables names)
           "Should inherit :unused-variables from :default via :strict")
-      ;; :strict also adds :line-length
-      (ok (member :line-length rule-names)
+      (ok (member :line-length names)
           "Should have :line-length from :strict")
       (let ((ll-rule (find :line-length (config:config-rules cfg)
                            :key #'rules:rule-name)))
@@ -41,23 +50,21 @@
   (testing "user-preset.mallet.lisp: preset-override :relaxed applies relaxed rules only"
     (let* ((path (fixture-config-path "user-preset.mallet.lisp"))
            (cfg (config:load-config path :preset-override :relaxed))
-           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
-      ;; :relaxed extends :none and only enables :trailing-whitespace
-      (ok (member :trailing-whitespace rule-names)
+           (names (rule-names cfg)))
+      (ok (member :trailing-whitespace names)
           ":trailing-whitespace should be enabled by :relaxed")
-      (ok (not (member :line-length rule-names))
+      (ok (not (member :line-length names))
           ":line-length should NOT be present — :relaxed doesn't include it")
-      (ok (not (member :unused-variables rule-names))
+      (ok (not (member :unused-variables names))
           ":unused-variables should NOT be present — :relaxed extends :none")))
 
   (testing "user-preset.mallet.lisp: preset-override :strict applies strict rules"
     (let* ((path (fixture-config-path "user-preset.mallet.lisp"))
            (cfg (config:load-config path :preset-override :strict))
-           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
-      ;; :strict extends :default, so should have all default rules plus :line-length
-      (ok (member :trailing-whitespace rule-names)
+           (names (rule-names cfg)))
+      (ok (member :trailing-whitespace names)
           ":trailing-whitespace should be present from :default via :strict")
-      (ok (member :line-length rule-names)
+      (ok (member :line-length names)
           ":line-length should be present from :strict")))
 
   (testing "user-preset.mallet.lisp: preset-override with unknown preset signals unknown-preset"
@@ -80,15 +87,13 @@
   (testing "shadow-default.mallet.lisp: user-defined :default is used (not built-in)"
     (let* ((path (fixture-config-path "shadow-default.mallet.lisp"))
            (cfg (config:load-config path))
-           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
-      ;; User-defined :default only enables :trailing-whitespace and :line-length
-      (ok (member :trailing-whitespace rule-names)
+           (names (rule-names cfg)))
+      (ok (member :trailing-whitespace names)
           ":trailing-whitespace should be enabled by user-defined :default")
-      (ok (member :line-length rule-names)
+      (ok (member :line-length names)
           ":line-length should be enabled by user-defined :default")
-      ;; Built-in :default has :unused-variables, but user-defined :default
-      ;; extends :none so it should NOT be present
-      (ok (not (member :unused-variables rule-names))
+      ;; User-defined :default extends :none, so built-in :default rules are excluded
+      (ok (not (member :unused-variables names))
           ":unused-variables should NOT be present — user-defined :default extends :none")))
 
   (testing "shadow-default.mallet.lisp: shadowing emits note to *error-output*"
@@ -106,7 +111,6 @@
 
 (deftest unknown-preset-error-details
   (testing "unknown-preset error includes available preset names"
-    ;; Build a small registry and trigger the error via resolve-preset
     (let* ((defns (list
                    (config:parse-preset-definition
                     '(:mallet-preset :strict (:extends :default)))
@@ -138,52 +142,34 @@
 ;;; Full pipeline: config load → preset resolution → engine linting
 
 (deftest preset-engine-integration
-  (testing ":strict preset (via user-preset.mallet.lisp) detects long lines"
-    (uiop:with-temporary-file (:stream out :pathname code-file
-                               :direction :output :type "lisp")
-      ;; Write a line longer than 80 chars (the :strict preset sets :line-length :max 80)
-      (write-string (make-string 85 :initial-element #\;) out)
-      (terpri out)
-      (force-output out)
-      (let* ((cfg (config:load-config (fixture-config-path "user-preset.mallet.lisp")))
-             (violations (engine:lint-file code-file :config cfg)))
-        (ok (some (lambda (v) (eq :line-length (violation:violation-rule v)))
-                  violations)
-            "85-char line should trigger :line-length under :strict preset"))))
+  (flet ((has-violation-p (rule violations)
+           (some (lambda (v) (eq rule (violation:violation-rule v))) violations)))
 
-  (testing ":relaxed preset-override (via user-preset.mallet.lisp) ignores long lines"
-    (uiop:with-temporary-file (:stream out :pathname code-file
-                               :direction :output :type "lisp")
-      (write-string (make-string 85 :initial-element #\;) out)
-      (terpri out)
-      (force-output out)
-      (let* ((cfg (config:load-config (fixture-config-path "user-preset.mallet.lisp")
-                                      :preset-override :relaxed))
-             (violations (engine:lint-file code-file :config cfg)))
-        (ok (not (some (lambda (v) (eq :line-length (violation:violation-rule v)))
-                       violations))
-            "Long line should NOT be flagged — :relaxed preset has no :line-length rule"))))
+    (testing ":strict preset (via user-preset.mallet.lisp) detects long lines"
+      (with-temp-code-file ((make-string 85 :initial-element #\;) code-file)
+        (let* ((cfg (config:load-config (fixture-config-path "user-preset.mallet.lisp")))
+               (violations (engine:lint-file code-file :config cfg)))
+          (ok (has-violation-p :line-length violations)
+              "85-char line should trigger :line-length under :strict preset"))))
 
-  (testing "user-defined :default (shadow-default.mallet.lisp) detects trailing whitespace"
-    (uiop:with-temporary-file (:stream out :pathname code-file
-                               :direction :output :type "lisp")
-      (write-string "(defun foo () nil)   " out) ; trailing spaces
-      (terpri out)
-      (force-output out)
-      (let* ((cfg (config:load-config (fixture-config-path "shadow-default.mallet.lisp")))
-             (violations (engine:lint-file code-file :config cfg)))
-        (ok (some (lambda (v) (eq :trailing-whitespace (violation:violation-rule v)))
-                  violations)
-            "Trailing whitespace should be detected under user-defined :default"))))
+    (testing ":relaxed preset-override (via user-preset.mallet.lisp) ignores long lines"
+      (with-temp-code-file ((make-string 85 :initial-element #\;) code-file)
+        (let* ((cfg (config:load-config (fixture-config-path "user-preset.mallet.lisp")
+                                        :preset-override :relaxed))
+               (violations (engine:lint-file code-file :config cfg)))
+          (ok (not (has-violation-p :line-length violations))
+              "Long line should NOT be flagged — :relaxed preset has no :line-length rule"))))
 
-  (testing "user-defined :default (shadow-default.mallet.lisp) detects long lines"
-    (uiop:with-temporary-file (:stream out :pathname code-file
-                               :direction :output :type "lisp")
-      (write-string (make-string 85 :initial-element #\;) out)
-      (terpri out)
-      (force-output out)
-      (let* ((cfg (config:load-config (fixture-config-path "shadow-default.mallet.lisp")))
-             (violations (engine:lint-file code-file :config cfg)))
-        (ok (some (lambda (v) (eq :line-length (violation:violation-rule v)))
-                  violations)
-            "Long line should be detected — user-defined :default enables :line-length :max 80")))))
+    (testing "user-defined :default (shadow-default.mallet.lisp) detects trailing whitespace"
+      (with-temp-code-file ("(defun foo () nil)   " code-file)
+        (let* ((cfg (config:load-config (fixture-config-path "shadow-default.mallet.lisp")))
+               (violations (engine:lint-file code-file :config cfg)))
+          (ok (has-violation-p :trailing-whitespace violations)
+              "Trailing whitespace should be detected under user-defined :default"))))
+
+    (testing "user-defined :default (shadow-default.mallet.lisp) detects long lines"
+      (with-temp-code-file ((make-string 85 :initial-element #\;) code-file)
+        (let* ((cfg (config:load-config (fixture-config-path "shadow-default.mallet.lisp")))
+               (violations (engine:lint-file code-file :config cfg)))
+          (ok (has-violation-p :line-length violations)
+              "Long line should be detected — user-defined :default enables :line-length :max 80"))))))
