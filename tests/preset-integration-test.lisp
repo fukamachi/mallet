@@ -3,7 +3,9 @@
   (:local-nicknames
    (#:config #:mallet/config)
    (#:rules #:mallet/rules)
-   (#:errors #:mallet/errors)))
+   (#:errors #:mallet/errors)
+   (#:engine #:mallet/engine)
+   (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/preset-integration)
 
 (defun fixture-config-path (filename)
@@ -132,3 +134,56 @@
           (let ((msg (format nil "~A" c)))
             (ok (search "no-such-preset" (string-downcase msg))
                 "Error message should contain the missing preset name")))))))
+
+;;; Full pipeline: config load → preset resolution → engine linting
+
+(deftest preset-engine-integration
+  (testing ":strict preset (via user-preset.mallet.lisp) detects long lines"
+    (uiop:with-temporary-file (:stream out :pathname code-file
+                               :direction :output :type "lisp")
+      ;; Write a line longer than 80 chars (the :strict preset sets :line-length :max 80)
+      (write-string (make-string 85 :initial-element #\;) out)
+      (terpri out)
+      (force-output out)
+      (let* ((cfg (config:load-config (fixture-config-path "user-preset.mallet.lisp")))
+             (violations (engine:lint-file code-file :config cfg)))
+        (ok (some (lambda (v) (eq :line-length (violation:violation-rule v)))
+                  violations)
+            "85-char line should trigger :line-length under :strict preset"))))
+
+  (testing ":relaxed preset-override (via user-preset.mallet.lisp) ignores long lines"
+    (uiop:with-temporary-file (:stream out :pathname code-file
+                               :direction :output :type "lisp")
+      (write-string (make-string 85 :initial-element #\;) out)
+      (terpri out)
+      (force-output out)
+      (let* ((cfg (config:load-config (fixture-config-path "user-preset.mallet.lisp")
+                                      :preset-override :relaxed))
+             (violations (engine:lint-file code-file :config cfg)))
+        (ok (not (some (lambda (v) (eq :line-length (violation:violation-rule v)))
+                       violations))
+            "Long line should NOT be flagged — :relaxed preset has no :line-length rule"))))
+
+  (testing "user-defined :default (shadow-default.mallet.lisp) detects trailing whitespace"
+    (uiop:with-temporary-file (:stream out :pathname code-file
+                               :direction :output :type "lisp")
+      (write-string "(defun foo () nil)   " out) ; trailing spaces
+      (terpri out)
+      (force-output out)
+      (let* ((cfg (config:load-config (fixture-config-path "shadow-default.mallet.lisp")))
+             (violations (engine:lint-file code-file :config cfg)))
+        (ok (some (lambda (v) (eq :trailing-whitespace (violation:violation-rule v)))
+                  violations)
+            "Trailing whitespace should be detected under user-defined :default"))))
+
+  (testing "user-defined :default (shadow-default.mallet.lisp) detects long lines"
+    (uiop:with-temporary-file (:stream out :pathname code-file
+                               :direction :output :type "lisp")
+      (write-string (make-string 85 :initial-element #\;) out)
+      (terpri out)
+      (force-output out)
+      (let* ((cfg (config:load-config (fixture-config-path "shadow-default.mallet.lisp")))
+             (violations (engine:lint-file code-file :config cfg)))
+        (ok (some (lambda (v) (eq :line-length (violation:violation-rule v)))
+                  violations)
+            "Long line should be detected — user-defined :default enables :line-length :max 80")))))
