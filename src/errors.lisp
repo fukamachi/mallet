@@ -200,8 +200,8 @@
   ()
   (:report (lambda (condition stream)
              (declare (ignore condition))
-             (format stream "Config file must contain exactly one top-level form.")))
-  (:documentation "Signaled when a config file contains more than one top-level form."))
+             (format stream "Multiple :mallet-config forms found; at most one is allowed.")))
+  (:documentation "Signaled when a config file contains more than one :mallet-config form."))
 
 (define-condition unknown-config-form (cli-error)
   ((form :initarg :form

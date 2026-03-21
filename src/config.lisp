@@ -200,17 +200,14 @@ Signals circular-preset-reference on cycles, unknown-preset when not found."
            (make-config :rules result-rules
                         :disabled-rules result-disabled))))
       ;; Not in registry — try built-in presets
+      ((member name *built-in-preset-names*)
+       (get-built-in-config name))
+      ;; Not found anywhere — signal with available names
       (t
-       (handler-case
-           (get-built-in-config name)
-         (error ()
-           ;; Not a built-in either — collect available names and signal
-           (let ((user-names (loop for k being the hash-keys of registry
-                                   collect k)))
-             (error 'errors:unknown-preset
-                    :name name
-                    :available-names (append user-names
-                                             *built-in-preset-names*)))))))))
+       (let ((user-names (loop for k being the hash-keys of registry collect k)))
+         (error 'errors:unknown-preset
+                :name name
+                :available-names (append user-names *built-in-preset-names*)))))))
 
 ;;; Config parsing
 
@@ -286,6 +283,9 @@ falling back to built-in presets."
     (error "Config must start with :mallet-config"))
 
   (flet ((resolve-extends (name)
+           (unless (keywordp name)
+             (error "String paths for :extends are no longer supported. ~
+                     Use a preset name keyword instead of ~S." name))
            (if preset-registry
                (resolve-preset name preset-registry)
                (get-built-in-config name))))

@@ -495,13 +495,6 @@ fi
 
 rm -rf "$CROSSFILE_TMPDIR"
 
-# Summary
-echo ""
-echo "========================================="
-echo "Test Summary"
-echo "========================================="
-echo "Tests run:    $TESTS_RUN"
-echo -e "Tests passed: ${GREEN}$TESTS_PASSED${NC}"
 # ---- User-defined preset tests ----
 echo ""
 echo "Testing user-defined presets..."
@@ -553,7 +546,14 @@ fi
 rm -f "$TEMP_PRESET_FILE"
 
 # ---- End user-defined preset tests ----
+
+# Summary
 echo ""
+echo "========================================="
+echo "Test Summary"
+echo "========================================="
+echo "Tests run:    $TESTS_RUN"
+echo -e "Tests passed: ${GREEN}$TESTS_PASSED${NC}"
 
 if [ $TESTS_FAILED -gt 0 ]; then
     echo -e "Tests failed: ${RED}$TESTS_FAILED${NC}"
