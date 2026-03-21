@@ -114,9 +114,10 @@
 (define-condition invalid-preset (invalid-option-value)
   ()
   (:report (lambda (condition stream)
-             (format stream "Invalid preset: ~A~%~
-                            Expected: default or all"
-                     (invalid-option-value-value condition))))
+             (let ((expected (invalid-option-value-expected condition)))
+               (format stream "Invalid preset: ~A~%~A"
+                       (invalid-option-value-value condition)
+                       (or expected "Expected: default, all, or a user-defined preset in .mallet.lisp")))))
   (:documentation "Signaled when an invalid preset is specified."))
 
 (define-condition config-not-found (cli-error)
