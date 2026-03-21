@@ -502,6 +502,59 @@ echo "Test Summary"
 echo "========================================="
 echo "Tests run:    $TESTS_RUN"
 echo -e "Tests passed: ${GREEN}$TESTS_PASSED${NC}"
+# ---- User-defined preset tests ----
+echo ""
+echo "Testing user-defined presets..."
+echo ""
+
+PRESET_CONFIG="$FIXTURES/configs/user-preset.mallet.lisp"
+
+# Create a temp file with a long line (>80 chars) for testing
+TEMP_PRESET_FILE=$(mktemp /tmp/mallet-preset-test-XXXXXX.lisp)
+echo '(defun foo () "This is a line that is definitely longer than eighty characters to trigger line-length rule")' > "$TEMP_PRESET_FILE"
+
+# Test --preset with user-defined name (strict enables line-length with max 80)
+test_start "--preset with user-defined 'strict' preset detects line-length"
+OUTPUT=$("$CLI" --config "$PRESET_CONFIG" "$TEMP_PRESET_FILE" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "line-length"; then
+    test_pass
+else
+    test_fail "Expected line-length violation with :strict preset"
+fi
+
+# Test --preset with user-defined relaxed (only trailing-whitespace, no line-length)
+test_start "--preset with user-defined 'relaxed' preset ignores line-length"
+OUTPUT=$("$CLI" --config "$PRESET_CONFIG" --preset relaxed "$TEMP_PRESET_FILE" 2>&1 || true)
+if echo "$OUTPUT" | grep -q "line-length"; then
+    test_fail "Unexpected line-length violation with :relaxed preset"
+else
+    test_pass
+fi
+
+# Test --preset with unknown name (no config) produces error mentioning .mallet.lisp
+test_start "--preset unknown-name errors with .mallet.lisp mention"
+OUTPUT=$("$CLI" --preset nonexistent "$TEMP_PRESET_FILE" 2>&1 || true)
+if echo "$OUTPUT" | grep -qi ".mallet.lisp"; then
+    test_pass
+else
+    test_fail "Expected error message to mention .mallet.lisp"
+fi
+
+# Test shadowed :default emits note to stderr
+SHADOW_CONFIG="$FIXTURES/configs/shadow-default.mallet.lisp"
+test_start "Shadowed :default emits note to stderr"
+OUTPUT=$("$CLI" --config "$SHADOW_CONFIG" "$TEMP_PRESET_FILE" 2>&1 || true)
+if echo "$OUTPUT" | grep -qi "shadowing"; then
+    test_pass
+else
+    test_fail "Expected shadowing note in output"
+fi
+
+rm -f "$TEMP_PRESET_FILE"
+
+# ---- End user-defined preset tests ----
+echo ""
+
 if [ $TESTS_FAILED -gt 0 ]; then
     echo -e "Tests failed: ${RED}$TESTS_FAILED${NC}"
 else
