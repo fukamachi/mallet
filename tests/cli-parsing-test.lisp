@@ -6,7 +6,13 @@
                 #:parse-rule-name
                 #:parse-rule-spec
                 #:should-fail-p
-                #:expand-file-args))
+                #:expand-file-args
+                #:handle-preset-option
+                #:load-configuration
+                #:parse-args
+                #:print-help)
+  (:local-nicknames
+   (#:errors #:mallet/errors)))
 (in-package #:mallet/tests/cli-parsing)
 
 ;;; Tests for parse-option-value
@@ -225,4 +231,174 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
         (ok (= 1 (length result)) "exactly one file returned")
         (ok (string= (namestring (truename path)) (namestring (first result)))
             "returned file matches input")))))
+
+;;; Tests for handle-preset-option
+
+(deftest handle-preset-option-built-ins
+  (testing "Built-in 'default' returns :default"
+    (multiple-value-bind (preset remaining)
+        (handle-preset-option '("default" "file.lisp"))
+      (ok (eq :default preset))
+      (ok (equal '("file.lisp") remaining))))
+
+  (testing "Built-in 'all' returns :all"
+    (multiple-value-bind (preset remaining)
+        (handle-preset-option '("all"))
+      (ok (eq :all preset))
+      (ok (null remaining))))
+
+  (testing "Built-in 'none' returns :none"
+    (multiple-value-bind (preset remaining)
+        (handle-preset-option '("none"))
+      (ok (eq :none preset))
+      (ok (null remaining)))))
+
+(deftest handle-preset-option-user-defined
+  (testing "User-defined name 'strict' returns :strict keyword"
+    (multiple-value-bind (preset remaining)
+        (handle-preset-option '("strict"))
+      (ok (eq :strict preset))
+      (ok (null remaining))))
+
+  (testing "User-defined name 'my-ci' returns :my-ci keyword"
+    (multiple-value-bind (preset _)
+        (handle-preset-option '("my-ci"))
+      (declare (ignore _))
+      (ok (eq :my-ci preset))))
+
+  (testing "User-defined name is uppercased to keyword"
+    (multiple-value-bind (preset _)
+        (handle-preset-option '("MY-PRESET"))
+      (declare (ignore _))
+      (ok (eq :my-preset preset))))
+
+  (testing "Remaining args are returned unchanged"
+    (multiple-value-bind (preset remaining)
+        (handle-preset-option '("strict" "src/" "--format" "json"))
+      (ok (eq :strict preset))
+      (ok (equal '("src/" "--format" "json") remaining)))))
+
+(deftest handle-preset-option-errors
+  (testing "Missing preset name signals missing-option-value"
+    (ok (handler-case
+            (progn (handle-preset-option '()) nil)
+          (errors:missing-option-value () t))))
+
+  (testing "Missing-option-value for --preset has option name"
+    (handler-case
+        (handle-preset-option '())
+      (errors:missing-option-value (c)
+        (ok (search "--preset" (format nil "~A" c)))))))
+
+;;; Tests for load-configuration with user-defined presets
+
+(deftest load-configuration-builtin-no-config
+  (testing "Built-in :default with no config file works"
+    (let ((cfg (load-configuration nil :default nil)))
+      (ok (typep cfg 'mallet/config:config))))
+
+  (testing "Built-in :all with no config file works"
+    (let ((cfg (load-configuration nil :all nil)))
+      (ok (typep cfg 'mallet/config:config))))
+
+  (testing "Built-in :none with no config file works"
+    (let ((cfg (load-configuration nil :none nil)))
+      (ok (typep cfg 'mallet/config:config)))))
+
+(deftest load-configuration-user-defined-no-config
+  (testing "User-defined preset with no config file signals an error"
+    (ok (handler-case
+            (progn (load-configuration nil :strict nil) nil)
+          (error () t))))
+
+  (testing "Error message mentions the preset name"
+    (handler-case
+        (load-configuration nil :my-preset nil)
+      (error (c)
+        (ok (search "my-preset" (string-downcase (format nil "~A" c)))))))
+
+  (testing "Error message mentions .mallet.lisp"
+    (handler-case
+        (load-configuration nil :strict nil)
+      (error (c)
+        (let ((msg (string-downcase (format nil "~A" c))))
+          (ok (or (search ".mallet.lisp" msg)
+                  (search "no" msg))))))))
+
+;;; Tests for help text mentioning user-defined presets
+
+(deftest print-help-mentions-user-defined-presets
+  (testing "Help text mentions user-defined presets"
+    (let ((output (with-output-to-string (s)
+                    (let ((*standard-output* s))
+                      (print-help)))))
+      (ok (or (search "user-defined" (string-downcase output))
+              (search ".mallet.lisp" (string-downcase output))))))
+
+  (testing "--preset option description is present"
+    (let ((output (with-output-to-string (s)
+                    (let ((*standard-output* s))
+                      (print-help)))))
+      (ok (search "--preset" output)))))
+
+;;; Edge case tests for --preset
+
+(deftest handle-preset-option-hyphenated-name
+  (testing "Hyphenated preset name 'my-strict-preset' returns correct keyword"
+    (multiple-value-bind (preset remaining)
+        (handle-preset-option '("my-strict-preset" "src/"))
+      (ok (eq :my-strict-preset preset))
+      (ok (equal '("src/") remaining)))))
+
+(deftest handle-preset-option-numeric-name
+  (testing "Numeric preset name 'v2' returns :v2 keyword"
+    (multiple-value-bind (preset remaining)
+        (handle-preset-option '("v2"))
+      (ok (eq :v2 preset))
+      (ok (null remaining)))))
+
+(deftest parse-args-all-alias-sets-preset
+  (testing "--all sets preset to :all"
+    (multiple-value-bind (format config-path preset)
+        (parse-args '("--all" "src/"))
+      (declare (ignore format config-path))
+      (ok (eq :all preset))))
+
+  (testing "-a sets preset to :all"
+    (multiple-value-bind (format config-path preset)
+        (parse-args '("-a" "src/"))
+      (declare (ignore format config-path))
+      (ok (eq :all preset)))))
+
+(deftest parse-args-none-alias-sets-preset
+  (testing "--none sets preset to :none"
+    (multiple-value-bind (format config-path preset)
+        (parse-args '("--none" "src/"))
+      (declare (ignore format config-path))
+      (ok (eq :none preset)))))
+
+(deftest load-configuration-config-file-with-preset-override
+  (testing "Explicit config file with --preset override passes preset to load-config"
+    ;; Create a minimal .mallet.lisp config file
+    (uiop:with-temporary-file (:stream out :pathname config-path :type "lisp" :keep t)
+      (write-string "(:mallet-config (:extends :default))" out)
+      (finish-output out)
+      (let ((cfg (load-configuration (namestring config-path) :all nil)))
+        ;; Should succeed and return a config (preset-override applied by load-config)
+        (ok (typep cfg 'mallet/config:config))))))
+
+(deftest load-configuration-error-message-content
+  (testing "Error for non-built-in preset without config mentions .mallet.lisp"
+    (handler-case
+        (load-configuration nil :custom-rules nil)
+      (error (c)
+        (let ((msg (string-downcase (format nil "~A" c))))
+          (ok (search ".mallet.lisp" msg)
+              "error message mentions .mallet.lisp"))))))
+
+(deftest load-configuration-nil-preset-defaults-to-default
+  (testing "nil preset without config file uses :default built-in"
+    (let ((cfg (load-configuration nil nil nil)))
+      (ok (typep cfg 'mallet/config:config)
+          "returns a valid config even with nil preset"))))
 

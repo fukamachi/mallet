@@ -37,7 +37,8 @@
            #:preset-definition-disable-specs
            #:parse-preset-definition
            #:build-preset-registry
-           #:resolve-preset))
+           #:resolve-preset
+           #:*built-in-preset-names*))
 (in-package #:mallet/config)
 
 (defvar *default-preset* :default)
