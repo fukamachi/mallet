@@ -25,7 +25,18 @@
            #:unknown-rule
            #:unknown-rule-value
            #:invalid-rule-option
-           #:invalid-rule-option-value))
+           #:invalid-rule-option-value
+           ;; Preset-specific error conditions
+           #:circular-preset-reference
+           #:circular-preset-reference-chain
+           #:unknown-preset
+           #:unknown-preset-name
+           #:unknown-preset-available-names
+           #:duplicate-preset-name
+           #:duplicate-preset-name-name
+           #:multiple-config-forms
+           #:unknown-config-form
+           #:unknown-config-form-form))
 (in-package #:mallet/errors)
 
 ;;; Base error conditions
@@ -149,3 +160,52 @@
                             Expected format: key=value (e.g., max=15)"
                      (invalid-rule-option-value condition))))
   (:documentation "Signaled when a rule option has invalid syntax."))
+
+;;; Preset-specific error conditions
+
+(define-condition circular-preset-reference (cli-error)
+  ((chain :initarg :chain
+          :reader circular-preset-reference-chain))
+  (:report (lambda (condition stream)
+             (format stream "Circular preset reference detected: ~{~A~^ -> ~}"
+                     (mapcar (lambda (s) (string-downcase (symbol-name s)))
+                             (circular-preset-reference-chain condition)))))
+  (:documentation "Signaled when preset definitions form a circular reference chain."))
+
+(define-condition unknown-preset (cli-error)
+  ((name :initarg :name
+         :reader unknown-preset-name)
+   (available-names :initarg :available-names
+                    :reader unknown-preset-available-names))
+  (:report (lambda (condition stream)
+             (format stream "Unknown preset: ~A"
+                     (string-downcase (symbol-name (unknown-preset-name condition))))
+             (let ((available (unknown-preset-available-names condition)))
+               (when available
+                 (format stream "~%Available presets: ~{~A~^, ~}"
+                         (mapcar (lambda (n) (string-downcase (symbol-name n)))
+                                 available))))))
+  (:documentation "Signaled when a referenced preset name is not defined."))
+
+(define-condition duplicate-preset-name (cli-error)
+  ((name :initarg :name
+         :reader duplicate-preset-name-name))
+  (:report (lambda (condition stream)
+             (format stream "Duplicate preset name: ~A"
+                     (string-downcase (symbol-name (duplicate-preset-name-name condition))))))
+  (:documentation "Signaled when two preset definitions share the same name."))
+
+(define-condition multiple-config-forms (cli-error)
+  ()
+  (:report (lambda (condition stream)
+             (declare (ignore condition))
+             (format stream "Config file must contain exactly one top-level form.")))
+  (:documentation "Signaled when a config file contains more than one top-level form."))
+
+(define-condition unknown-config-form (cli-error)
+  ((form :initarg :form
+         :reader unknown-config-form-form))
+  (:report (lambda (condition stream)
+             (format stream "Unknown config form: ~A"
+                     (unknown-config-form-form condition))))
+  (:documentation "Signaled when an unrecognized keyword appears at the config top level."))
