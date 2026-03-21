@@ -1594,4 +1594,192 @@
         ("(:mallet-config (:enable :trailing-whitespace))" path)
       (let ((cfg (config:load-config path)))
         (ok (not (null (config:config-root-dir cfg)))
-            "root-dir should be set after loading from file")))))
+            "root-dir should be set after loading from file"))))
+
+  (testing "load-config: backward compat — single-sexp .mallet.lisp still works"
+    (with-temporary-config
+        ("(:mallet-config (:extends :default) (:enable :line-length :max 100))" path)
+      (let* ((cfg (config:load-config path))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "Should inherit :trailing-whitespace from :default")
+        (ok (member :line-length rule-names)
+            "Should have explicitly enabled :line-length")
+        (let ((ll-rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+          (ok (= 100 (rules:line-length-rule-max-length ll-rule))
+              ":line-length :max should be 100")))))
+
+  (testing "load-config: preset-only file without :default uses built-in default"
+    (with-temporary-config
+        ("(:mallet-preset :strict (:extends :default) (:enable :line-length :max 80))" path)
+      (let* ((cfg (config:load-config path))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; No :mallet-config and no user-defined :default => built-in :default
+        (ok (member :trailing-whitespace rule-names)
+            "Should use built-in :default when no user-defined :default")
+        (ok (not (member :line-length rule-names))
+            ":line-length should NOT be enabled (not in built-in :default)"))))
+
+  (testing "load-config: chained user-defined presets in file"
+    (with-temporary-config
+        ("(:mallet-preset :base (:extends :default) (:enable :line-length :max 80))
+          (:mallet-preset :ci (:extends :base) (:enable :missing-docstring))
+          (:mallet-config (:extends :ci))" path)
+      (let* ((cfg (config:load-config path))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "Should inherit :trailing-whitespace from :default via chain")
+        (ok (member :line-length rule-names)
+            "Should inherit :line-length from :base")
+        (ok (member :missing-docstring rule-names)
+            "Should have :missing-docstring from :ci")
+        (let ((ll-rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+          (ok (= 80 (rules:line-length-rule-max-length ll-rule))
+              ":line-length :max should be 80 from :base")))))
+
+  (testing "load-config: config with enables/disables on top of user-defined preset"
+    (with-temporary-config
+        ("(:mallet-preset :strict (:extends :default) (:enable :line-length :max 80))
+          (:mallet-config (:extends :strict)
+            (:disable :unused-variables)
+            (:enable :line-length :max 120))" path)
+      (let* ((cfg (config:load-config path))
+             (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        (ok (member :trailing-whitespace rule-names)
+            "Should inherit :trailing-whitespace from :default via :strict")
+        (ok (member :line-length rule-names)
+            "Should have :line-length")
+        (ok (member :unused-variables (config:config-disabled-rules cfg))
+            ":unused-variables should be disabled by config")
+        (let ((ll-rule (find :line-length (config:config-rules cfg) :key #'rules:rule-name)))
+          (ok (= 120 (rules:line-length-rule-max-length ll-rule))
+              "Config :line-length :max 120 should override preset :max 80"))))))
+
+;;; parse-config with registry: :extends chain through user-defined -> built-in
+
+(deftest parse-config-registry-chain-to-builtin
+  (testing ":extends chain: user-defined -> user-defined -> built-in via parse-config"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :base
+                      (:extends :default)
+                      (:enable :line-length :max 80)))
+                   (config:parse-preset-definition
+                    '(:mallet-preset :ci
+                      (:extends :base)
+                      (:enable :missing-docstring)))))
+           (registry (config:build-preset-registry defns))
+           (sexp '(:mallet-config (:extends :ci) (:enable :trailing-whitespace :severity :error)))
+           (cfg (config:parse-config sexp :preset-registry registry)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; Inherited from :default (via :base -> :ci)
+        (ok (member :unused-variables rule-names)
+            "Should inherit :unused-variables from :default")
+        ;; From :base
+        (ok (member :line-length rule-names)
+            "Should inherit :line-length from :base")
+        ;; From :ci
+        (ok (member :missing-docstring rule-names)
+            "Should inherit :missing-docstring from :ci")
+        ;; Explicit in config
+        (ok (member :trailing-whitespace rule-names)
+            "Should have :trailing-whitespace from config"))
+      ;; Verify config-level severity override applied
+      (let ((tw-rule (find :trailing-whitespace (config:config-rules cfg) :key #'rules:rule-name)))
+        (ok (eq :error (rules:rule-severity tw-rule))
+            "Config-level severity override should apply"))))
+
+  (testing ":extends user-defined preset with preset-override overriding from CLI"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :strict
+                      (:extends :default)
+                      (:enable :line-length :max 80)))))
+           (registry (config:build-preset-registry defns))
+           ;; Config says :extends :strict, but CLI overrides to :none
+           (sexp '(:mallet-config (:extends :strict) (:enable :trailing-whitespace)))
+           (cfg (config:parse-config sexp
+                                     :preset-registry registry
+                                     :preset-override :none)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; :none has no rules, so only explicitly enabled rules should be present
+        (ok (member :trailing-whitespace rule-names)
+            "Explicitly enabled rule should be present")
+        (ok (not (member :line-length rule-names))
+            ":line-length from :strict should NOT be present — overridden by :none")
+        (ok (not (member :unused-variables rule-names))
+            ":unused-variables from :default should NOT be present — overridden by :none")))))
+
+;;; :for-paths with preset registry
+
+(deftest for-paths-with-preset-registry
+  (testing ":for-paths inherits rules from user-defined preset via :extends"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :strict
+                      (:extends :default)
+                      (:enable :line-length :max 80)))))
+           (registry (config:build-preset-registry defns))
+           (sexp '(:mallet-config
+                   (:extends :strict)
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :line-length :max 120)
+                    (:disable :unused-variables))))
+           (cfg (config:parse-config sexp :preset-registry registry)))
+      ;; Base rules should include preset's rules
+      (let* ((base-rules (config:get-rules-for-file cfg #P"/src/main.lisp"))
+             (base-names (mapcar #'rules:rule-name base-rules)))
+        (ok (member :line-length base-names)
+            "Base should have :line-length from :strict")
+        (ok (member :unused-variables base-names)
+            "Base should have :unused-variables from :default via :strict")
+        (let ((ll-rule (find :line-length base-rules :key #'rules:rule-name)))
+          (ok (= 80 (rules:line-length-rule-max-length ll-rule))
+              "Base :line-length should be 80 from :strict")))
+      ;; Test path rules
+      (let* ((test-rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (test-names (mapcar #'rules:rule-name test-rules)))
+        (ok (member :line-length test-names)
+            "Tests should have :line-length")
+        (ok (not (member :unused-variables test-names))
+            ":unused-variables should be disabled for tests")
+        (let ((ll-rule (find :line-length test-rules :key #'rules:rule-name)))
+          (ok (= 120 (rules:line-length-rule-max-length ll-rule))
+              "Test :line-length should be 120 from :for-paths override")))))
+
+  (testing ":for-paths with preset registry: inherits project-wide overrides on top of preset"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :strict
+                      (:extends :default)
+                      (:enable :line-length :max 80)))))
+           (registry (config:build-preset-registry defns))
+           (sexp '(:mallet-config
+                   (:extends :strict)
+                   (:disable :missing-else)
+                   (:for-paths ("tests/**/*.lisp")
+                    (:enable :line-length :max 120))))
+           (cfg (config:parse-config sexp :preset-registry registry)))
+      ;; :for-paths should inherit project-wide :disable :missing-else
+      (let* ((test-rules (config:get-rules-for-file cfg #P"/tests/foo-test.lisp"))
+             (test-names (mapcar #'rules:rule-name test-rules)))
+        (ok (not (member :missing-else test-names))
+            ":missing-else should be disabled in :for-paths via project-wide :disable")
+        (ok (member :line-length test-names)
+            ":line-length should be present from :for-paths :enable")))))
+
+;;; String-path :extends rejection
+
+(deftest string-extends-rejected
+  (testing ":extends with string value signals an error"
+    ;; String paths for :extends are removed — only keywords (preset names) are valid
+    (ok (signals (config:parse-config '(:mallet-config (:extends "./other-config.lisp")))
+                 'error)
+        "String :extends should signal an error (no longer supported)"))
+
+  (testing ":extends with string value fails even with preset-registry"
+    (let ((registry (config:build-preset-registry '())))
+      (ok (signals (config:parse-config '(:mallet-config (:extends "strict"))
+                                         :preset-registry registry)
+                   'error)
+          "String :extends should fail even when preset-registry is provided"))))
