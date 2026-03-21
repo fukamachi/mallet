@@ -277,6 +277,11 @@ falling back to built-in presets."
   (unless (eq (first sexp) :mallet-config)
     (error "Config must start with :mallet-config"))
 
+  (flet ((resolve-extends (name)
+           (if preset-registry
+               (resolve-preset name preset-registry)
+               (get-built-in-config name))))
+
   ;; Pre-pass: collect all :set-severity overrides before the main loop so that
   ;; :for-paths blocks are always processed with the complete override set, regardless
   ;; of ordering within the config file.
@@ -313,9 +318,7 @@ falling back to built-in presets."
                    (:extends
                     ;; CLI preset-override takes precedence over config file :extends
                     (let ((extends-value (or preset-override (second item))))
-                      (setf extends (if preset-registry
-                                        (resolve-preset extends-value preset-registry)
-                                        (get-built-in-config extends-value)))))
+                      (setf extends (resolve-extends extends-value))))
                    (:enable
                     ;; New syntax: (:enable :rule-name :option value ...)
                     (let ((rule-name (utils:resolve-rule-alias (second item)))
@@ -378,9 +381,7 @@ falling back to built-in presets."
 
     ;; If preset-override is provided but no :extends clause was found, use preset-override
     (when (and preset-override (not extends))
-      (setf extends (if preset-registry
-                        (resolve-preset preset-override preset-registry)
-                        (get-built-in-config preset-override))))
+      (setf extends (resolve-extends preset-override)))
 
     ;; Create rule instances
     (let ((rules (mapcar #'create-rule-from-spec (nreverse rule-specs))))
@@ -414,7 +415,7 @@ falling back to built-in presets."
                      :disabled-rules disabled-rules
                      :path-rules (nreverse path-rules)
                      :ignore ignore-patterns
-                     :set-severity-overrides set-severity-overrides))))))
+                     :set-severity-overrides set-severity-overrides)))))))
 
 ;;; Multi-form config reader
 
@@ -478,21 +479,17 @@ preset is resolved and returned."
              (registry (build-preset-registry preset-defs))
              (config
                (cond
-                 ;; Config form present — parse it with the registry
                  (config-sexp
                   (parse-config config-sexp
                                 :preset-override preset-override
                                 :preset-registry registry))
-                 ;; No config form but :default preset defined — resolve it
                  ((and (not preset-override)
                        (gethash :default registry))
                   (resolve-preset :default registry))
-                 ;; preset-override given but no config form — resolve override from registry
                  (preset-override
                   (resolve-preset preset-override registry))
-                 ;; Nothing — empty config
                  (t
-                  (make-config)))))
+                  (get-built-in-config :default)))))
         (setf (config-root-dir config) root-dir)
         config))))
 
