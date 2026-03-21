@@ -169,13 +169,20 @@ Signals circular-preset-reference on cycles, unknown-preset when not found."
                  "; Using project-defined ~A preset (shadowing built-in)~%"
                  (string-downcase (symbol-name name))))
        (let* ((new-stack (append resolving-stack (list name)))
+              (extends-name (preset-definition-extends defn))
               ;; Resolve parent: follow :extends if present, else use :none as base
+              ;; When a preset extends its own name (e.g., user-defined :default
+              ;; extending built-in :default), resolve directly from built-ins
+              ;; to avoid false circular reference detection.
               (parent-config
-                (if (preset-definition-extends defn)
-                    (resolve-preset (preset-definition-extends defn)
-                                    registry
-                                    new-stack)
-                    (make-none-config)))
+                (cond
+                  ((null extends-name)
+                   (make-none-config))
+                  ((and (eq extends-name name)
+                        (member extends-name *built-in-preset-names*))
+                   (get-built-in-config extends-name))
+                  (t
+                   (resolve-preset extends-name registry new-stack))))
               (parent-rules (config-rules parent-config))
               (parent-disabled (config-disabled-rules parent-config))
               ;; Build override forms for parse-override-rules

@@ -1280,6 +1280,24 @@
       (ok (member :missing-else (config:config-disabled-rules cfg)))
       (ok (member :unused-variables (config:config-disabled-rules cfg)))))
 
+  (testing "User-defined :default extending built-in :default resolves without circular error"
+    (let* ((defns (list
+                   (config:parse-preset-definition
+                    '(:mallet-preset :default
+                      (:extends :default)
+                      (:enable :line-length :max 120)))))
+           (registry (config:build-preset-registry defns))
+           (cfg (let ((*error-output* (make-broadcast-stream)))
+                  (config:resolve-preset :default registry)))
+           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+      ;; Should have built-in :default rules PLUS :line-length
+      (ok (member :line-length rule-names)
+          ":line-length from user-defined :default")
+      (ok (member :trailing-whitespace rule-names)
+          ":trailing-whitespace inherited from built-in :default")
+      (ok (member :unused-variables rule-names)
+          ":unused-variables inherited from built-in :default")))
+
   (testing "resolve-preset and build-preset-registry are exported from mallet/config"
     (ok (find-symbol "RESOLVE-PRESET" :mallet/config))
     (ok (find-symbol "BUILD-PRESET-REGISTRY" :mallet/config))
