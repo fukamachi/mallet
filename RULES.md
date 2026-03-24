@@ -4,6 +4,13 @@ Rules are organized by category. Each rule shows its severity and default preset
 
 **Severity levels**: `error`, `warning`, `info`
 
+**Presets**: Rules belong to one or more built-in presets.
+- `:default` — low-noise rules suitable for existing codebases
+- `:strict` — extends `:default` with opinionated best-practice rules; good for new projects and AI-assisted coding
+- `:all` — every rule, including metrics and style preferences
+
+The **Default** column below reflects `:default` preset membership. Rules marked as "strict" are off in `:default` but enabled in `:strict`.
+
 **Suppressing violations**: Any rule can be suppressed using `#+mallet (declaim (mallet:suppress-next :rule-name))`. See the README for details.
 
 ## Rule List
@@ -31,10 +38,10 @@ Rules are organized by category. Each rule shows its severity and default preset
 
 | Rule | Description | Severity | Default | Options |
 |------|-------------|----------|---------|---------|
-| [`:no-package-use`](#no-package-use) | Use of `:use` in `defpackage` | warning | on | |
+| [`:no-package-use`](#no-package-use) | Use of `:use` in `defpackage` | warning | strict | |
 | [`:no-ignore-errors`](#no-ignore-errors) | Use of `cl:ignore-errors` | warning | on | |
 | [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | off | |
-| [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | on | |
+| [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | strict | |
 | [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
 | [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
@@ -69,16 +76,16 @@ Rules are organized by category. Each rule shows its severity and default preset
 | [`:missing-package-docstring`](#missing-package-docstring) | Package definitions missing docstrings | info | off | |
 | [`:missing-variable-docstring`](#missing-variable-docstring) | Variable definitions missing docstrings | info | off | |
 | [`:missing-struct-docstring`](#missing-struct-docstring) | Struct definitions missing docstrings | info | off | |
-| [`:redundant-progn`](#redundant-progn) | `progn` with a single body form is redundant | info | on | |
+| [`:redundant-progn`](#redundant-progn) | `progn` with a single body form is redundant | warning | strict | |
 
 ### [Format](#format) — Whitespace and file formatting
 
 | Rule | Description | Severity | Default | Fix | Options |
 |------|-------------|----------|---------|-----|---------|
-| [`:trailing-whitespace`](#trailing-whitespace) | Lines with trailing whitespace | info | on | yes | |
-| [`:no-tabs`](#no-tabs) | Tab characters in source | info | on | | |
-| [`:missing-final-newline`](#missing-final-newline) | Files must end with a newline | info | on | yes | |
-| [`:closing-paren-on-own-line`](#closing-paren-on-own-line) | Closing parens on their own line | info | on | | |
+| [`:trailing-whitespace`](#trailing-whitespace) | Lines with trailing whitespace | warning | on | yes | |
+| [`:no-tabs`](#no-tabs) | Tab characters in source | warning | on | | |
+| [`:missing-final-newline`](#missing-final-newline) | Files must end with a newline | warning | on | yes | |
+| [`:closing-paren-on-own-line`](#closing-paren-on-own-line) | Closing parens on their own line | warning | strict | | |
 | [`:line-length`](#line-length) | Lines exceeding maximum length | info | off | | `:max` (100) |
 | [`:consecutive-blank-lines`](#consecutive-blank-lines) | Excessive consecutive blank lines | info | off | yes | `:max` (2) |
 
@@ -312,7 +319,7 @@ The packages `#:cl`, `#:common-lisp`, `#:coalton`, and `#:coalton-prelude` are e
   (:export #:my-function))
 ```
 
-**Severity**: warning | **Default**: enabled
+**Severity**: warning | **Default**: disabled (`:strict` and above)
 
 ### `:no-ignore-errors`
 
@@ -365,7 +372,7 @@ Avoid accessing internal symbols via `::` package qualifier. Using `::` bypasses
 (my-lib:public-function arg)
 ```
 
-**Severity**: warning | **Default**: enabled
+**Severity**: warning | **Default**: disabled (`:strict` and above)
 
 ### `:error-with-string-only`
 
@@ -870,7 +877,7 @@ Struct definitions should have docstrings. Checks both the body string position 
 **Exclusions**:
 - `progn` wrapping a single `,@splice` (unquote-splicing) is allowed, since the splice may expand to multiple forms
 
-**Severity**: info | **Default**: enabled
+**Severity**: warning | **Default**: disabled (`:strict` and above)
 
 ## Format
 
@@ -882,13 +889,13 @@ Lines should not have trailing whitespace.
 
 **Auto-fixable**: `--fix` removes trailing whitespace.
 
-**Severity**: info | **Default**: enabled
+**Severity**: warning | **Default**: enabled
 
 ### `:no-tabs`
 
 Use spaces instead of tab characters.
 
-**Severity**: info | **Default**: enabled
+**Severity**: warning | **Default**: enabled
 
 ### `:missing-final-newline`
 
@@ -898,7 +905,7 @@ Files must end with a newline.
 
 **Auto-fixable**: `--fix` appends a newline.
 
-**Severity**: info | **Default**: enabled
+**Severity**: warning | **Default**: enabled
 
 ### `:closing-paren-on-own-line`
 
@@ -925,7 +932,7 @@ Closing parentheses should follow the last expression on the same line, not appe
     ))
 ```
 
-**Severity**: info | **Default**: enabled
+**Severity**: warning | **Default**: disabled (`:strict` and above)
 
 ### `:line-length`
 
