@@ -107,12 +107,17 @@ Returns updated violations list."
                        (<= line (cdr interval))))
                 all-intervals)))))
 
-(defun filter-text-token-violations (violations directives state last-line)
+(defun filter-text-token-violations (violations directives state last-line rules)
   "Filter text/token VIOLATIONS using comment :disable/:enable DIRECTIVES.
 
    Violations whose line falls within a disabled interval for their rule are removed.
    For each suppressed violation, MARK-SUPPRESSION-USED is called on the corresponding
    suppression ID in STATE.
+
+   RULES is the list of active rule objects; only :text and :token typed rules have their
+   :disable directives registered for stale tracking. Form-level rules suppress via
+   consume-comment-directives and must not be registered here (doing so would generate
+   false stale-suppression violations when no text/token violations exist in the region).
 
    :suppress directives are NOT applied to text/token violations.
 
@@ -122,14 +127,20 @@ Returns updated violations list."
   (let ((intervals (build-disable-intervals directives last-line))
         ;; Map each :disable directive to a suppression ID for stale tracking
         (directive-ids (make-hash-table :test 'equal)))  ; (rule . line) -> id
-    ;; Register each :disable directive in state for stale tracking
+    ;; Register each :disable directive in state for stale tracking.
+    ;; Only register rules whose type is :text or :token; form-level rules
+    ;; (:form, :pattern) are handled by consume-comment-directives and must
+    ;; not be tracked here to avoid false stale-suppression violations.
     (dolist (directive directives)
       (destructuring-bind (d-line d-type d-rules d-reason) directive
         (when (eq d-type :disable)
           (dolist (rule d-rules)
-            (let ((id (suppression:register-suppression
-                        state d-line (list rule) d-reason :text-token-disable)))
-              (setf (gethash (cons rule d-line) directive-ids) id))))))
+            (let ((rule-obj (find rule rules :key #'rules:rule-name :test #'eq)))
+              (when (and rule-obj
+                         (member (rules:rule-type rule-obj) '(:text :token)))
+                (let ((id (suppression:register-suppression
+                            state d-line (list rule) d-reason :text-token-disable)))
+                  (setf (gethash (cons rule d-line) directive-ids) id))))))))
     ;; Filter violations
     (let ((kept nil)
           (used-rule-lines (make-hash-table :test 'equal)))  ; (rule . line) -> t
@@ -373,7 +384,7 @@ If ignored-p is T, the file was ignored and violations will be NIL."
     ;; Filter text/token violations by comment :disable/:enable directives
     (setf violations
           (filter-text-token-violations violations all-directives
-                                         text-token-suppression-state last-line))
+                                         text-token-suppression-state last-line rules))
 
     ;; Run form-level rules
     (when (some (lambda (r) (eq (rules:rule-type r) :form)) rules)

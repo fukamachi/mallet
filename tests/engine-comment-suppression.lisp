@@ -328,6 +328,106 @@
         (ok (= 1 (length stale-violations))
             "Exactly 1 stale-suppression violation for suppress that matched no violation")))))
 
+;;; Test: disable form-level rule — no false stale-suppression warning
+
+(deftest disable-form-level-rule-no-false-stale
+  (testing "; mallet:disable :needless-let* suppresses the form-level violation"
+    (let* ((file (no-violations-fixture "disable-form-level-rule.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      ;; The disable region should suppress the needless-let* violation
+      (let ((let*-violations (remove-if-not
+                               (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                               violations)))
+        (ok (null let*-violations)
+            "No needless-let* violations (suppressed by disable region)"))
+
+      ;; The disable directive is NOT stale — it actively suppressed a violation
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violation for active form-level disable region"))))
+
+  (testing "Stale :disable for text/token rule (regression) still generates stale warning"
+    (let* ((file (violations-fixture "stale-text-disable.lisp"))
+           (config (make-line-length-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (= 1 (length stale-violations))
+            "Stale :disable for text/token rule still generates stale-suppression violation")))))
+
+;;; Test: disable form-level rule :missing-else — no false stale-suppression warning
+
+(deftest disable-missing-else-no-false-stale
+  (testing "; mallet:disable :missing-else generates no stale-suppression violation"
+    (let* ((file (no-violations-fixture "disable-missing-else.lisp"))
+           (config (make-if-without-else-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      ;; The disable region should suppress the missing-else violation
+      (let ((iwe-violations (remove-if-not
+                              (lambda (v) (eq :missing-else (violation:violation-rule v)))
+                              violations)))
+        (ok (null iwe-violations)
+            "No missing-else violations (suppressed by disable region)"))
+
+      ;; Form-level :disable must NOT be registered in text-token-suppression-state,
+      ;; so no stale-suppression false positive fires.
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violation for :missing-else form-level disable region")))))
+
+;;; Test: disable :ALL wrapping a form-level violation — no false stale-suppression warning
+
+(deftest disable-all-form-level-no-false-stale
+  (testing "; mallet:disable :ALL around a form-level violation generates no stale-suppression"
+    (let* ((file (no-violations-fixture "disable-all-form-level.lisp"))
+           (config (make-if-without-else-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      ;; The :ALL disable region should suppress the missing-else violation
+      (let ((iwe-violations (remove-if-not
+                              (lambda (v) (eq :missing-else (violation:violation-rule v)))
+                              violations)))
+        (ok (null iwe-violations)
+            "No missing-else violations (suppressed by :ALL disable region)"))
+
+      ;; :ALL is not a real rule object; it must not be registered in text-token-suppression-state.
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violation for :ALL disable region with form-level rule")))))
+
+;;; Test: active text/token :disable region — violation suppressed, no stale warning
+
+(deftest active-text-disable-no-stale
+  (testing "Active :disable for text/token rule produces no stale when a violation is suppressed"
+    (let* ((file (no-violations-fixture "active-text-disable.lisp"))
+           (config (make-line-length-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      ;; The disable region suppresses the long-line violation — nothing should escape
+      (let ((ll-violations (remove-if-not
+                             (lambda (v) (eq :line-length (violation:violation-rule v)))
+                             violations)))
+        (ok (null ll-violations)
+            "No line-length violations (long line is inside disabled region)"))
+
+      ;; The disable directive was used (it suppressed a real violation), so no stale warning
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violation when :line-length disable region was actually used")))))
+
 ;;; Test: U-3 — suppress-next declaim as last sub-form does not leak into next top-level form
 
 (deftest suppress-next-last-subform-no-leak
