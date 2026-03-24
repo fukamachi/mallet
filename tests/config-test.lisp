@@ -152,7 +152,7 @@
         (ok (member :closing-paren-on-own-line rule-names))
         (ok (member :redundant-progn rule-names))
         (ok (member :no-allow-other-keys rule-names))
-        (ok (member :error-with-string-only rule-names))
+        (ok (member :error-without-custom-condition rule-names))
         (ok (member :bare-float-literal rule-names))
         (ok (member :asdf-redundant-package-prefix rule-names))
         (ok (member :asdf-reader-conditional rule-names))
