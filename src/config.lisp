@@ -19,6 +19,7 @@
            #:config-root-dir
            #:file-ignored-p
            #:*default-preset*
+           #:make-strict-config
            ;; CLI overrides
            #:apply-cli-overrides
            #:config-set-severity-overrides
@@ -544,18 +545,20 @@ preset is resolved and returned."
 ;;; Built-in configs
 
 (defun get-built-in-config (&optional (name *default-preset*))
-  "Get a built-in configuration by NAME (:default, :all, or :none)."
+  "Get a built-in configuration by NAME (:default, :strict, :all, or :none)."
   (check-type name keyword)
 
   (case name
     (:default
      (make-default-config))
+    (:strict
+     (make-strict-config))
     (:all
      (make-all-config))
     (:none
      (make-none-config))
     (otherwise
-     (error "Unknown built-in config: ~A. Available: :default, :all, :none" name))))
+     (error "Unknown built-in config: ~A. Available: :default, :strict, :all, :none" name))))
 
 (defun make-default-config ()
   "Create the default configuration - only universally-accepted rules.
@@ -611,6 +614,38 @@ Style preferences are disabled to keep output clean."
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
+
+(defun make-strict-config ()
+  "Create the strict configuration - everything in :default plus opinionated best-practice rules.
+Suitable for new projects and AI-assisted coding where stricter checking is desirable."
+  (let* ((base (make-default-config))
+         (extra-rules
+           '(;; Opinionated practice rules (removed from :default)
+             :no-package-use
+             :double-colon-access
+             :closing-paren-on-own-line
+             :redundant-progn
+             ;; Additional practice rules
+             :no-allow-other-keys
+             :error-with-string-only
+             :bare-float-literal
+             :asdf-redundant-package-prefix
+             :asdf-reader-conditional
+             :coalton-missing-declare
+             :runtime-intern
+             :runtime-unintern
+             :coalton-missing-to-boolean
+             ;; Cleanliness
+             :unused-loop-variables
+             ;; Style
+             :progn-in-conditional
+             :defpackage-interned-symbol
+             :missing-otherwise)))
+    (make-config
+     :rules (append (config-rules base)
+                    (mapcar #'rules:make-rule extra-rules))
+     :disabled-rules (set-difference (config-disabled-rules base)
+                                     extra-rules))))
 
 (defun make-all-config ()
   "Create configuration with all rules enabled.

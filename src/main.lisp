@@ -270,7 +270,7 @@ Usage: mallet [options] <file>...
 Options:
   --format <format>   Output format (text, line, or json; default: text)
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
-  --preset <name>     Use preset: built-in (default, all, none) or user-defined from .mallet.lisp
+  --preset <name>     Use preset: built-in (default, strict, all, none) or user-defined from .mallet.lisp
   --all, -a           Alias for --preset all
   --none              Alias for --preset none
 

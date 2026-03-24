@@ -135,6 +135,38 @@
         (ok (member :asdf-if-feature-keyword rule-names))
         (ok (member :asdf-reader-conditional rule-names)))))
 
+  (testing "Load strict config"
+    (let ((cfg (config:get-built-in-config :strict)))
+      (ok (not (null cfg)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; All default rules are present
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :no-tabs rule-names))
+        (ok (member :unused-variables rule-names))
+        (ok (member :no-ignore-errors rule-names))
+        ;; Opinionated rules added beyond :default
+        (ok (member :no-package-use rule-names))
+        (ok (member :double-colon-access rule-names))
+        (ok (member :closing-paren-on-own-line rule-names))
+        (ok (member :redundant-progn rule-names))
+        (ok (member :no-allow-other-keys rule-names))
+        (ok (member :error-with-string-only rule-names))
+        (ok (member :bare-float-literal rule-names))
+        (ok (member :asdf-redundant-package-prefix rule-names))
+        (ok (member :asdf-reader-conditional rule-names))
+        (ok (member :coalton-missing-declare rule-names))
+        (ok (member :runtime-intern rule-names))
+        (ok (member :runtime-unintern rule-names))
+        (ok (member :coalton-missing-to-boolean rule-names))
+        (ok (member :unused-loop-variables rule-names))
+        (ok (member :progn-in-conditional rule-names))
+        (ok (member :defpackage-interned-symbol rule-names))
+        (ok (member :missing-otherwise rule-names))
+        ;; These opt-in rules must NOT be in :strict
+        (ok (not (member :missing-docstring rule-names)))
+        (ok (not (member :one-package-per-file rule-names)))
+        (ok (not (member :line-length rule-names))))))
+
   (testing "Load none config"
     (let ((cfg (config:get-built-in-config :none)))
       (ok (not (null cfg)))
