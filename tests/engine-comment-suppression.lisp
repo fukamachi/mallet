@@ -248,7 +248,18 @@
            (violations (engine:lint-file file :config config)))
 
       (ok (null violations)
-          "No violations when inner suppress-next declaim suppresses the nested let*"))))
+          "No violations when inner suppress-next declaim suppresses the nested let*")))
+
+  (testing "Inner suppress-next declaim is not reported as stale when it matched a violation"
+    (let* ((file (no-violations-fixture "declaim-suppress-inner.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violation when inner suppress-next declaim was consumed")))))
 
 ;;; Test: stale inner-form suppress generates a stale-suppression violation
 
@@ -302,7 +313,20 @@
                                (lambda (v) (eq :needless-let* (violation:violation-rule v)))
                                violations)))
         (ok (= 1 (length let*-violations))
-            "Exactly 1 needless-let* violation (not suppressed by later suppress comment)")))))
+            "Exactly 1 needless-let* violation (not suppressed by later suppress comment)"))))
+
+  (testing "Suppress placed after a violation with no matching form following it is reported as stale"
+    ;; The suppress sits between the let* (before it, not matched due to positional filter)
+    ;; and the let (after it, no violation).  It suppresses nothing, so it must be stale.
+    (let* ((file (violations-fixture "comment-suppress-after-violation.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (= 1 (length stale-violations))
+            "Exactly 1 stale-suppression violation for suppress that matched no violation")))))
 
 ;;; Test: U-3 — suppress-next declaim as last sub-form does not leak into next top-level form
 

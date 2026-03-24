@@ -49,6 +49,27 @@
         (ok (equal '(:rule1) (third directive)))
         (ok (null (fourth directive)))))))
 
+(deftest parse-comment-directives-semicolon-in-comment-prose
+  (testing "Directive-like ; mallet:suppress embedded in ;; comment prose is not matched"
+    ;; A semicolon that is already inside a comment (started by an earlier ;) must
+    ;; not be treated as a fresh directive starter.
+    (ok (null (suppression:parse-comment-directives
+                ";; prose text ; mallet:suppress rule1"))
+        "embedded ; mallet:suppress in ;; comment is ignored"))
+
+  (testing "Directive-like ; mallet:suppress embedded in ;;; comment prose is not matched"
+    (ok (null (suppression:parse-comment-directives
+                ";;; Test: inner-form ; mallet:suppress :needless-let*"))
+        "embedded ; mallet:suppress in ;;; comment is ignored"))
+
+  (testing "Real ; mallet:suppress after code on the same line IS matched"
+    ;; This is a trailing comment, not a prose-embedded one.  The first
+    ;; unquoted semicolon on the line starts the directive.
+    (let ((result (suppression:parse-comment-directives
+                    "(let* ((x 1)) x) ; mallet:suppress :needless-let*")))
+      (ok (= 1 (length result)) "trailing ; mallet:suppress is matched")
+      (ok (eq :suppress (second (first result)))))))
+
 (deftest parse-comment-directives-indented
   (testing "Indented comment directive"
     (let ((result (suppression:parse-comment-directives
