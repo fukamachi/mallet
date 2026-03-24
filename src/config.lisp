@@ -669,7 +669,7 @@ Useful for exploration and discovering what rules exist."
             :no-ignore-errors
             :no-package-use
             :double-colon-access
-            :error-with-string-only
+            :error-without-custom-condition
             :asdf-component-strings
             :asdf-reader-conditional
             :bare-float-literal

@@ -114,8 +114,8 @@ Severity and category defaults are defined in each rule class's :default-initarg
        (apply #'make-instance 'runtime-unintern-rule options))
       (:no-ignore-errors
        (apply #'make-instance 'no-ignore-errors-rule options))
-      (:error-with-string-only
-       (apply #'make-instance 'error-with-string-only-rule options))
+      (:error-without-custom-condition
+       (apply #'make-instance 'error-without-custom-condition-rule options))
       (:missing-docstring
        (apply #'make-instance 'missing-docstring-rule options))
       (:missing-package-docstring
