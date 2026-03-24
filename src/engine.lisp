@@ -445,9 +445,9 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                                (delete id (suppression:registered-suppressions *suppression-state*)
                                        :key #'car))
                          ;; push reverses document order, but filter-suppress-violations
-                       ;; uses find-if with positional check (<= record-line violation-line),
-                       ;; so the reversed list naturally yields closest-preceding-suppress
-                       ;; semantics: higher-line records are checked first and match first.
+                         ;; uses find-if with positional check (<= record-line violation-line),
+                         ;; so the reversed list naturally yields closest-preceding-suppress
+                         ;; semantics: higher-line records are checked first and match first.
                        (push (list id d-line d-rules d-reason) pending-suppress-records)))
                       (t
                        (push directive remaining-directives)))))
