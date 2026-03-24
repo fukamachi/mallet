@@ -94,12 +94,22 @@
         ;; asdf-reader-conditional is disabled in default
         (ok (not (member :asdf-reader-conditional rule-names)))
         ;; one-package-per-file is opt-in only; must not be in default
-        (ok (not (member :one-package-per-file rule-names))))
+        (ok (not (member :one-package-per-file rule-names)))
+        ;; These opinionated rules were removed from :default (too noisy for legacy codebases)
+        (ok (not (member :no-package-use rule-names)))
+        (ok (not (member :double-colon-access rule-names)))
+        (ok (not (member :closing-paren-on-own-line rule-names)))
+        (ok (not (member :redundant-progn rule-names))))
       ;; Check that some rules are disabled
       (let ((disabled (config:config-disabled-rules cfg)))
         (ok (member :line-length disabled))
         (ok (member :constant-naming disabled))
-        (ok (member :special-variable-naming disabled)))))
+        (ok (member :special-variable-naming disabled))
+        ;; Opinionated rules removed from :default should be in disabled list
+        (ok (member :no-package-use disabled))
+        (ok (member :double-colon-access disabled))
+        (ok (member :closing-paren-on-own-line disabled))
+        (ok (member :redundant-progn disabled)))))
 
   (testing "Load all config"
     (let ((cfg (config:get-built-in-config :all)))

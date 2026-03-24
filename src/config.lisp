@@ -566,7 +566,6 @@ Style preferences are disabled to keep output clean."
             :trailing-whitespace
             :no-tabs
             :missing-final-newline
-            :closing-paren-on-own-line
             :wrong-otherwise
             :unused-variables
             :unused-local-functions
@@ -580,13 +579,15 @@ Style preferences are disabled to keep output clean."
             :missing-else
             :no-eval
             :no-ignore-errors
-            :no-package-use
             :needless-let*
-            :double-colon-access
-            :stale-suppression
-            :redundant-progn))
+            :stale-suppression))
         (disabled-rules
-          '(;; Style preferences - disabled (too noisy, no consensus)
+          '(;; Opinionated practice rules - opt-in (too noisy for legacy codebases)
+            :no-package-use
+            :double-colon-access
+            :closing-paren-on-own-line
+            :redundant-progn
+            ;; Style preferences - disabled (too noisy, no consensus)
             :line-length
             :consecutive-blank-lines
             :progn-in-conditional
