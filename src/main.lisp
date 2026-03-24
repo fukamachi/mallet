@@ -8,6 +8,7 @@
    (#:config #:mallet/config)
    (#:formatter #:mallet/formatter)
    (#:fixer #:mallet/fixer)
+   (#:init #:mallet/init)
    (#:errors #:mallet/errors)
    (#:utils #:mallet/utils))
   (:export #:main
@@ -60,7 +61,8 @@
            #:analyze-text
            ;; CLI helpers (exported for testing)
            #:should-fail-p
-           #:expand-file-args))
+           #:expand-file-args
+           #:parse-args))
 (in-package #:mallet)
 
 ;;; Special variables
@@ -193,7 +195,7 @@ Returns (rule-name . options-plist)."
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on files).
+Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on init-mode force files).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
@@ -202,6 +204,8 @@ Signals specific error conditions for invalid input."
         (no-color nil)
         (fix-mode nil)
         (fail-on :warning)
+        (init-mode nil)
+        (force nil)
         (enable-rules '())
         (disable-rules '())
         (files '()))
@@ -233,8 +237,11 @@ Signals specific error conditions for invalid input."
            (multiple-value-setq (fail-on args)
              (handle-fail-on-option args)))
           ((string= arg "--strict")
-           ;; Backward compatibility: --strict is alias for --fail-on info
-           (setf fail-on :info))
+           (setf preset :strict))
+          ((string= arg "--init")
+           (setf init-mode t))
+          ((string= arg "--force")
+           (setf force t))
           ((string= arg "--enable")
            (let (rule-spec)
              (multiple-value-setq (rule-spec args)
@@ -257,7 +264,8 @@ Signals specific error conditions for invalid input."
            (push arg files)))))
     (let ((cli-rules (list :enable-rules (nreverse enable-rules)
                            :disable-rules (nreverse disable-rules))))
-      (values format config-path preset debug no-color fix-mode cli-rules fail-on (nreverse files)))))
+      (values format config-path preset debug no-color fix-mode cli-rules fail-on
+              init-mode force (nreverse files)))))
 
 
 (defun print-help ()
@@ -270,7 +278,7 @@ Usage: mallet [options] <file>...
 Options:
   --format <format>   Output format (text, line, or json; default: text)
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
-  --preset <name>     Use preset: built-in (default, all, none) or user-defined from .mallet.lisp
+  --preset <name>     Use preset: built-in (default, strict, all, none) or user-defined from .mallet.lisp
   --all, -a           Alias for --preset all
   --none              Alias for --preset none
 
@@ -279,7 +287,7 @@ Options:
   --disable <rule>    Disable specific rule (e.g., --disable trailing-whitespace)
 
   --fail-on <level>   Exit 1 if any violation meets or exceeds level (error, warning, info; default: warning)
-  --strict            Alias for --fail-on info (exit 1 for any violation)
+  --strict            Alias for --preset strict
 
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
@@ -288,6 +296,9 @@ Options:
   --help              Show this help message
   --version           Show version information
 
+  --init <dir>...     Generate a .mallet.lisp suppression config for gradual adoption
+  --force             Overwrite existing .mallet.lisp when used with --init
+
 Output Formats:
   text                Human-readable grouped by file (default)
   line                One violation per line (file:line:col: severity: message)
@@ -295,6 +306,7 @@ Output Formats:
 
 Presets:
   default             Only universally-accepted rules (quiet, recommended)
+  strict              Default rules plus additional best-practice rules
   all                 All rules enabled (useful for exploration)
   none                No rules enabled (explicitly enable specific rules)
   <name>              User-defined preset from .mallet.lisp (e.g., --preset strict)
@@ -317,8 +329,8 @@ Examples:
   # Fail on warnings and above (the default)
   mallet --fail-on warning src/
 
-  # Fail on any violation (equivalent to --strict)
-  mallet --fail-on info src/
+  # Use strict preset (more rules than default)
+  mallet --strict src/
 
   # Enable specific rule with custom options
   mallet --enable cyclomatic-complexity:max=15 src/
@@ -478,7 +490,8 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (uiop:print-condition-backtrace e))
                  (uiop:quit 3))))
 
-          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on file-args)
+          (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on
+                               init-mode force file-args)
               (parse-args args)
 
             ;; Enable debug mode if requested
@@ -487,6 +500,27 @@ Lints files specified in ARGS and exits with appropriate status code."
             ;; Disable colors if requested
             (when no-color
               (setf formatter:*no-color* t))
+
+            ;; Handle --init mode
+            (when init-mode
+              ;; Warn about flags that have no effect in --init mode
+              (let ((ignored-flags '()))
+                (when config-path (push "--config" ignored-flags))
+                (when (has-cli-rules-p cli-rules)
+                  (when (getf cli-rules :enable-rules) (push "--enable" ignored-flags))
+                  (when (getf cli-rules :disable-rules) (push "--disable" ignored-flags)))
+                (when fix-mode (push "--fix" ignored-flags))
+                (when ignored-flags
+                  (format *error-output*
+                          "Warning: ~{~A~^, ~} ~:[has~;have~] no effect in --init mode.~%"
+                          (nreverse ignored-flags)
+                          (< 1 (length ignored-flags)))))
+              (let ((files (expand-file-args file-args))
+                    (effective-preset (or preset :default)))
+                (init:run-init file-args files
+                               :preset effective-preset
+                               :force force))
+              (uiop:quit 0))
 
             ;; Validate we have files to lint
             (when (null file-args)

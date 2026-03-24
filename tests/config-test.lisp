@@ -91,15 +91,27 @@
         (ok (member :asdf-operate-in-perform rule-names))
         (ok (member :asdf-secondary-system-name rule-names))
         (ok (member :asdf-if-feature-keyword rule-names))
+        ;; no-ignore-errors is in the default preset
+        (ok (member :no-ignore-errors rule-names))
         ;; asdf-reader-conditional is disabled in default
         (ok (not (member :asdf-reader-conditional rule-names)))
         ;; one-package-per-file is opt-in only; must not be in default
-        (ok (not (member :one-package-per-file rule-names))))
+        (ok (not (member :one-package-per-file rule-names)))
+        ;; These opinionated rules were removed from :default (too noisy for legacy codebases)
+        (ok (not (member :no-package-use rule-names)))
+        (ok (not (member :double-colon-access rule-names)))
+        (ok (not (member :closing-paren-on-own-line rule-names)))
+        (ok (not (member :redundant-progn rule-names))))
       ;; Check that some rules are disabled
       (let ((disabled (config:config-disabled-rules cfg)))
         (ok (member :line-length disabled))
         (ok (member :constant-naming disabled))
-        (ok (member :special-variable-naming disabled)))))
+        (ok (member :special-variable-naming disabled))
+        ;; Opinionated rules removed from :default should be in disabled list
+        (ok (member :no-package-use disabled))
+        (ok (member :double-colon-access disabled))
+        (ok (member :closing-paren-on-own-line disabled))
+        (ok (member :redundant-progn disabled)))))
 
   (testing "Load all config"
     (let ((cfg (config:get-built-in-config :all)))
@@ -124,6 +136,38 @@
         (ok (member :asdf-secondary-system-name rule-names))
         (ok (member :asdf-if-feature-keyword rule-names))
         (ok (member :asdf-reader-conditional rule-names)))))
+
+  (testing "Load strict config"
+    (let ((cfg (config:get-built-in-config :strict)))
+      (ok (not (null cfg)))
+      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+        ;; All default rules are present
+        (ok (member :trailing-whitespace rule-names))
+        (ok (member :no-tabs rule-names))
+        (ok (member :unused-variables rule-names))
+        (ok (member :no-ignore-errors rule-names))
+        ;; Opinionated rules added beyond :default
+        (ok (member :no-package-use rule-names))
+        (ok (member :double-colon-access rule-names))
+        (ok (member :closing-paren-on-own-line rule-names))
+        (ok (member :redundant-progn rule-names))
+        (ok (member :no-allow-other-keys rule-names))
+        (ok (member :error-with-string-only rule-names))
+        (ok (member :bare-float-literal rule-names))
+        (ok (member :asdf-redundant-package-prefix rule-names))
+        (ok (member :asdf-reader-conditional rule-names))
+        (ok (member :coalton-missing-declare rule-names))
+        (ok (member :runtime-intern rule-names))
+        (ok (member :runtime-unintern rule-names))
+        (ok (member :coalton-missing-to-boolean rule-names))
+        (ok (member :unused-loop-variables rule-names))
+        (ok (member :progn-in-conditional rule-names))
+        (ok (member :defpackage-interned-symbol rule-names))
+        (ok (member :missing-otherwise rule-names))
+        ;; These opt-in rules must NOT be in :strict
+        (ok (not (member :missing-docstring rule-names)))
+        (ok (not (member :one-package-per-file rule-names)))
+        (ok (not (member :line-length rule-names))))))
 
   (testing "Load none config"
     (let ((cfg (config:get-built-in-config :none)))

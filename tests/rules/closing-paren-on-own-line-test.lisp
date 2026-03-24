@@ -139,11 +139,11 @@
     ))")))
       (ok (= 1 (length violations)))))
 
-  (testing "Severity is :info"
+  (testing "Severity is :warning"
     (let ((violations (check-closing-paren
                        (format nil "(defun foo ()~%  )"))))
       (ok (= 1 (length violations)))
-      (ok (eq :info (violation:violation-severity (first violations))))))
+      (ok (eq :warning (violation:violation-severity (first violations))))))
 
   (testing "Violation message mentions closing paren"
     (let* ((violations (check-closing-paren
@@ -161,8 +161,12 @@
 ;;; Registration tests
 
 (deftest closing-paren-registration
-  (testing ":closing-paren-on-own-line is in default config"
+  (testing ":closing-paren-on-own-line is NOT in :default config (moved to :strict)"
     (let* ((cfg (mallet/config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (not (member :closing-paren-on-own-line rule-names)))))
+  (testing ":closing-paren-on-own-line IS in :strict config"
+    (let* ((cfg (mallet/config:get-built-in-config :strict))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
       (ok (member :closing-paren-on-own-line rule-names))))
 

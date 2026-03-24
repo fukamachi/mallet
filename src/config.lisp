@@ -11,6 +11,7 @@
            #:load-config
            #:get-rules-for-file
            #:get-built-in-config
+           #:find-project-root
            #:find-config-file
            #:config-rules
            #:config-path-rules
@@ -19,6 +20,7 @@
            #:config-root-dir
            #:file-ignored-p
            #:*default-preset*
+           #:make-strict-config
            ;; CLI overrides
            #:apply-cli-overrides
            #:config-set-severity-overrides
@@ -62,7 +64,7 @@ Stores patterns that match files and the rules/disabled-rules that apply."
   (disable-specs '() :type list))
 
 ;;; Built-in preset names — used to detect shadowing
-(defvar *built-in-preset-names* '(:default :all :none))
+(defvar *built-in-preset-names* '(:default :strict :all :none))
 
 ;;; Config data structure
 
@@ -544,18 +546,20 @@ preset is resolved and returned."
 ;;; Built-in configs
 
 (defun get-built-in-config (&optional (name *default-preset*))
-  "Get a built-in configuration by NAME (:default, :all, or :none)."
+  "Get a built-in configuration by NAME (:default, :strict, :all, or :none)."
   (check-type name keyword)
 
   (case name
     (:default
      (make-default-config))
+    (:strict
+     (make-strict-config))
     (:all
      (make-all-config))
     (:none
      (make-none-config))
     (otherwise
-     (error "Unknown built-in config: ~A. Available: :default, :all, :none" name))))
+     (error "Unknown built-in config: ~A. Available: :default, :strict, :all, :none" name))))
 
 (defun make-default-config ()
   "Create the default configuration - only universally-accepted rules.
@@ -566,7 +570,6 @@ Style preferences are disabled to keep output clean."
             :trailing-whitespace
             :no-tabs
             :missing-final-newline
-            :closing-paren-on-own-line
             :wrong-otherwise
             :unused-variables
             :unused-local-functions
@@ -580,13 +583,15 @@ Style preferences are disabled to keep output clean."
             :missing-else
             :no-eval
             :no-ignore-errors
-            :no-package-use
             :needless-let*
-            :double-colon-access
-            :stale-suppression
-            :redundant-progn))
+            :stale-suppression))
         (disabled-rules
-          '(;; Style preferences - disabled (too noisy, no consensus)
+          '(;; Opinionated practice rules - opt-in (too noisy for legacy codebases)
+            :no-package-use
+            :double-colon-access
+            :closing-paren-on-own-line
+            :redundant-progn
+            ;; Style preferences - disabled (too noisy, no consensus)
             :line-length
             :consecutive-blank-lines
             :progn-in-conditional
@@ -610,6 +615,38 @@ Style preferences are disabled to keep output clean."
     (make-config
      :rules (mapcar #'rules:make-rule enabled-rules)
      :disabled-rules disabled-rules)))
+
+(defun make-strict-config ()
+  "Create the strict configuration - everything in :default plus opinionated best-practice rules.
+Suitable for new projects and AI-assisted coding where stricter checking is desirable."
+  (let* ((base (make-default-config))
+         (extra-rules
+           '(;; Opinionated practice rules (removed from :default)
+             :no-package-use
+             :double-colon-access
+             :closing-paren-on-own-line
+             :redundant-progn
+             ;; Additional practice rules
+             :no-allow-other-keys
+             :error-with-string-only
+             :bare-float-literal
+             :asdf-redundant-package-prefix
+             :asdf-reader-conditional
+             :coalton-missing-declare
+             :runtime-intern
+             :runtime-unintern
+             :coalton-missing-to-boolean
+             ;; Cleanliness
+             :unused-loop-variables
+             ;; Style
+             :progn-in-conditional
+             :defpackage-interned-symbol
+             :missing-otherwise)))
+    (make-config
+     :rules (append (config-rules base)
+                    (mapcar #'rules:make-rule extra-rules))
+     :disabled-rules (set-difference (config-disabled-rules base)
+                                     extra-rules))))
 
 (defun make-all-config ()
   "Create configuration with all rules enabled.

@@ -133,8 +133,12 @@
 ;;; Registration
 
 (deftest no-package-use-registration
-  (testing "Rule is included in default config"
+  (testing "Rule is NOT in :default config (moved to :strict)"
     (let* ((cfg (config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+      (ok (not (member :no-package-use rule-names)))))
+  (testing "Rule IS in :strict config"
+    (let* ((cfg (config:get-built-in-config :strict))
            (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
       (ok (member :no-package-use rule-names)))))
 

@@ -132,6 +132,35 @@
            (violations (rules:check-text rule text #p"test.lisp")))
       (ok (zerop (length violations))))))
 
+;;; Severity tests
+
+(deftest text-rule-severities
+  (testing "trailing-whitespace rule has :warning severity"
+    (let ((rule (make-instance 'rules:trailing-whitespace-rule)))
+      (ok (eq :warning (violation:violation-severity
+                        (first (rules:check-text rule
+                                                 (format nil "foo  ~%bar")
+                                                 #p"test.lisp")))))))
+
+  (testing "no-tabs rule has :warning severity"
+    (let ((rule (make-instance 'rules:no-tabs-rule)))
+      (ok (eq :warning (violation:violation-severity
+                        (first (rules:check-text rule
+                                                 (format nil "~Cfoo" #\Tab)
+                                                 #p"test.lisp")))))))
+
+  (testing "missing-final-newline rule has :warning severity"
+    (let ((rule (make-instance 'rules:final-newline-rule)))
+      (ok (eq :warning (violation:violation-severity
+                        (first (rules:check-text rule "foo" #p"test.lisp")))))))
+
+  (testing "closing-paren-on-own-line rule has :warning severity"
+    (let ((rule (make-instance 'rules:closing-paren-on-own-line-rule)))
+      (ok (eq :warning (violation:violation-severity
+                        (first (rules:check-text rule
+                                                 (format nil "(defun foo ()~%  (+ 1 2)~%  )")
+                                                 #p"test.lisp"))))))))
+
 ;;; Consecutive blank lines tests
 
 (deftest consecutive-blank-lines-rule

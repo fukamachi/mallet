@@ -13,6 +13,8 @@
            #:invalid-option-value-expected
            #:file-not-found
            #:file-not-found-path
+           #:file-already-exists
+           #:file-already-exists-path
            #:no-files-specified
            #:invalid-format
            #:invalid-preset
@@ -95,6 +97,15 @@
                      (file-not-found-path condition))))
   (:documentation "Signaled when a specified file does not exist."))
 
+(define-condition file-already-exists (cli-error)
+  ((path :initarg :path
+         :reader file-already-exists-path))
+  (:report (lambda (condition stream)
+             (format stream "File already exists: ~A~%~
+                            Use --force to overwrite."
+                     (file-already-exists-path condition))))
+  (:documentation "Signaled when a target file already exists and --force was not given."))
+
 (define-condition no-files-specified (cli-error)
   ()
   (:report (lambda (condition stream)
@@ -113,11 +124,6 @@
 
 (define-condition invalid-preset (invalid-option-value)
   ()
-  (:report (lambda (condition stream)
-             (let ((expected (invalid-option-value-expected condition)))
-               (format stream "Invalid preset: ~A~%~A"
-                       (invalid-option-value-value condition)
-                       (or expected "Expected: default, all, or a user-defined preset in .mallet.lisp")))))
   (:documentation "Signaled when an invalid preset is specified."))
 
 (define-condition config-not-found (cli-error)

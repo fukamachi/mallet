@@ -232,6 +232,26 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
         (ok (string= (namestring (truename path)) (namestring (first result)))
             "returned file matches input")))))
 
+;;; Tests for --strict flag repurposing
+
+(deftest strict-flag-sets-preset
+  (testing "--strict sets preset to :strict"
+    (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on init-mode force files)
+        (parse-args '("--strict" "file.lisp"))
+      (declare (ignore format config-path debug no-color fix-mode cli-rules files))
+      (ok (eq :strict preset) "--strict should set preset to :strict")
+      (ok (eq :warning fail-on) "--strict should not change fail-on from :warning default")
+      (ok (null init-mode) "--strict should not set init-mode")
+      (ok (null force) "--strict should not set force")))
+
+  (testing "--strict does not set fail-on to :info"
+    (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on init-mode force files)
+        (parse-args '("--strict" "file.lisp"))
+      (declare (ignore format config-path preset debug no-color fix-mode cli-rules files))
+      (ok (not (eq :info fail-on)) "--strict must not alias --fail-on info")
+      (ok (null init-mode) "--strict should not set init-mode")
+      (ok (null force) "--strict should not set force"))))
+
 ;;; Tests for handle-preset-option
 
 (deftest handle-preset-option-built-ins
@@ -308,7 +328,7 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
 (deftest load-configuration-user-defined-no-config
   (testing "User-defined preset with no config file signals an error"
     (ok (handler-case
-            (progn (load-configuration nil :strict nil) nil)
+            (progn (load-configuration nil :my-ci nil) nil)
           (error () t))))
 
   (testing "Error message mentions the preset name"
@@ -319,7 +339,7 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
 
   (testing "Error message mentions .mallet.lisp"
     (handler-case
-        (load-configuration nil :strict nil)
+        (load-configuration nil :my-ci nil)
       (error (c)
         (let ((msg (string-downcase (format nil "~A" c))))
           (ok (or (search ".mallet.lisp" msg)

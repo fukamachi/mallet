@@ -134,13 +134,17 @@
 ;;; Violation attribute tests
 
 (deftest redundant-progn-attributes
+  (testing "Rule has :warning default severity"
+    (let ((rule (make-instance 'rules:redundant-progn-rule)))
+      (ok (eq :warning (rules:rule-severity rule)))))
+
   (testing "Violation has correct severity"
     (let* ((code "(progn (foo))")
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:redundant-progn-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-severity (first violations)) :info))))
+      (ok (eq (violation:violation-severity (first violations)) :warning))))
 
   (testing "Violation reports correct position"
     (let* ((code "(progn (foo))")
@@ -154,8 +158,12 @@
 ;;; Registration tests — rule in presets and make-rule dispatch
 
 (deftest redundant-progn-in-default-config
-  (testing ":redundant-progn is in default config"
+  (testing ":redundant-progn is NOT in :default config (moved to :strict)"
     (let* ((cfg (config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+      (ok (not (member :redundant-progn rule-names)))))
+  (testing ":redundant-progn IS in :strict config"
+    (let* ((cfg (config:get-built-in-config :strict))
            (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
       (ok (member :redundant-progn rule-names)))))
 
@@ -204,7 +212,7 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations)) :redundant-progn))
-      (ok (eq (violation:violation-severity (first violations)) :info))
+      (ok (eq (violation:violation-severity (first violations)) :warning))
       (ok (string= (violation:violation-message (first violations))
                    "PROGN with a single body form is redundant"))))
 

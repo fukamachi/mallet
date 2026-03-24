@@ -294,13 +294,22 @@ else
     test_fail "Expected exit code 1 (any violations with --fail-on info), got $EXIT_CODE"
 fi
 
-test_start "--strict: exit 1 for any violations (alias for --fail-on info)"
+test_start "--strict: sets preset to :strict (alias for --preset strict)"
 EXIT_CODE=0
-"$CLI" --config "$FIXTURES_CONFIG" --strict "$VIOLATIONS_DIR/unused-variables.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+"$CLI" --strict "$VIOLATIONS_DIR/no-package-use.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
 if [ $EXIT_CODE -eq 1 ]; then
     test_pass
 else
-    test_fail "Expected exit code 1 (--strict with warnings), got $EXIT_CODE"
+    test_fail "Expected exit code 1 (no-package-use only fires under :strict, not :default), got $EXIT_CODE"
+fi
+
+test_start "--strict: strict-only rule fires; same file clean under --preset default"
+EXIT_CODE=0
+"$CLI" --preset default "$VIOLATIONS_DIR/no-package-use.lisp" 2>&1 > /dev/null || EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+    test_pass
+else
+    test_fail "Expected exit code 0 (no-package-use disabled under :default), got $EXIT_CODE"
 fi
 
 test_start "--fail-on error: exit 1 for error violations"

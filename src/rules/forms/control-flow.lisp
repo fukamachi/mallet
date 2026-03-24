@@ -214,7 +214,7 @@ Suppressions are handled automatically by the :around method."
   (:default-initargs
    :name :redundant-progn
    :description "PROGN with a single body form is redundant"
-   :severity :info
+   :severity :warning
    :category :style
    :type :form)
   (:documentation "Rule to detect PROGN forms with exactly one body form."))
