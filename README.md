@@ -66,8 +66,8 @@ mallet --disable unused-variables tests/
 # Fail on warnings and above (the default)
 mallet --fail-on warning src/
 
-# Fail on any violation (equivalent to --strict)
-mallet --fail-on info src/
+# Use the strict preset (adds opinionated best-practice rules)
+mallet --strict src/
 ```
 
 **Severity levels** (for `--fail-on`):

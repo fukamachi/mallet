@@ -60,7 +60,8 @@
            #:analyze-text
            ;; CLI helpers (exported for testing)
            #:should-fail-p
-           #:expand-file-args))
+           #:expand-file-args
+           #:parse-args))
 (in-package #:mallet)
 
 ;;; Special variables
@@ -233,8 +234,7 @@ Signals specific error conditions for invalid input."
            (multiple-value-setq (fail-on args)
              (handle-fail-on-option args)))
           ((string= arg "--strict")
-           ;; Backward compatibility: --strict is alias for --fail-on info
-           (setf fail-on :info))
+           (setf preset :strict))
           ((string= arg "--enable")
            (let (rule-spec)
              (multiple-value-setq (rule-spec args)
@@ -279,7 +279,7 @@ Options:
   --disable <rule>    Disable specific rule (e.g., --disable trailing-whitespace)
 
   --fail-on <level>   Exit 1 if any violation meets or exceeds level (error, warning, info; default: warning)
-  --strict            Alias for --fail-on info (exit 1 for any violation)
+  --strict            Alias for --preset strict
 
   --fix               Auto-fix violations and write files
   --fix-dry-run       Show what would be fixed without writing files
@@ -317,8 +317,8 @@ Examples:
   # Fail on warnings and above (the default)
   mallet --fail-on warning src/
 
-  # Fail on any violation (equivalent to --strict)
-  mallet --fail-on info src/
+  # Use strict preset (more rules than default)
+  mallet --strict src/
 
   # Enable specific rule with custom options
   mallet --enable cyclomatic-complexity:max=15 src/
