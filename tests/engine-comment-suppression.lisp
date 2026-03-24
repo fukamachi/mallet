@@ -289,3 +289,31 @@
                                 violations)))
         (ok (= 1 (length stale-violations))
             "Exactly 1 stale-suppression violation for suppress after last form")))))
+
+;;; Test: U-2 positional — suppress AFTER the violating form does not suppress it
+
+(deftest comment-suppress-after-violation-not-suppressed
+  (testing "Suppress comment placed after the violating form does not retroactively suppress it"
+    (let* ((file (violations-fixture "comment-suppress-after-violation.lisp"))
+           (config (make-needless-let*-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((let*-violations (remove-if-not
+                               (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                               violations)))
+        (ok (= 1 (length let*-violations))
+            "Exactly 1 needless-let* violation (not suppressed by later suppress comment)")))))
+
+;;; Test: U-3 — suppress-next declaim as last sub-form does not leak into next top-level form
+
+(deftest suppress-next-last-subform-no-leak
+  (testing "suppress-next declaim as last sub-form does not suppress violations in the next defun"
+    (let* ((file (violations-fixture "suppress-next-last-subform.lisp"))
+           (config (make-needless-let*-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((let*-violations (remove-if-not
+                               (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                               violations)))
+        (ok (= 1 (length let*-violations))
+            "Exactly 1 needless-let* violation in bar (leaked suppress-next must not silence it")))))

@@ -227,11 +227,16 @@ Returns updated violations list."
     ;; Filter each violation
     (dolist (v form-violations)
       (let* ((rule-name (violation:violation-rule v))
+             (v-line (violation:violation-line v))
              (matched-record (find-if (lambda (record)
                                         (destructuring-bind (id line rules reason) record
-                                          (declare (ignore id line reason))
-                                          (or (member rule-name rules :test #'eq)
-                                              (member :all rules :test #'eq))))
+                                          (declare (ignore id reason))
+                                          ;; Positional: a suppress at line L only matches
+                                          ;; violations at lines >= L (suppress the next form,
+                                          ;; not a preceding one).
+                                          (and (<= line v-line)
+                                               (or (member rule-name rules :test #'eq)
+                                                   (member :all rules :test #'eq)))))
                                       pending-suppress-records)))
         (if matched-record
             ;; Suppressed — mark used

@@ -275,6 +275,10 @@ This :around method:
                           :function-name function-name)
                         nil              ; suppressed — return empty violations list
                         (call-next-method))
+                 ;; If a suppress-next declaim was the last sub-form in this body
+                 ;; (no following sibling consumed it), clear the leaked state now
+                 ;; so it does not silently suppress violations in the next form.
+                 (setf (suppression:next-form-suppressions state) nil)
                  ;; Always pop in reverse push order
                  (when declare-suppressions
                    (suppression:pop-scope-suppression state))

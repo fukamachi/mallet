@@ -504,6 +504,65 @@
                   (t (incf i))))))
     in-string))
 
+(defun %semicolon-is-first-on-line-p (line semi-pos &optional (initial-in-string-p nil))
+  "Return T if the semicolon at SEMI-POS is the first unquoted semicolon on LINE.
+
+   Scans characters in LINE before SEMI-POS, tracking string and inline block-comment
+   state.  Returns NIL as soon as an unquoted semicolon is found before SEMI-POS,
+   meaning the semicolon at SEMI-POS is already inside a comment body started by
+   that earlier semicolon."
+  (let ((in-string initial-in-string-p)
+        (block-depth 0)
+        (i 0))
+    (loop while (< i semi-pos)
+          do (cond
+               ;; Inside an inline block comment: scan for nested #| or |#
+               ((plusp block-depth)
+                (cond
+                  ((and (< (1+ i) semi-pos)
+                        (char= (char line i) #\|)
+                        (char= (char line (1+ i)) #\#))
+                   (decf block-depth)
+                   (incf i 2))
+                  ((and (< (1+ i) semi-pos)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf block-depth)
+                   (incf i 2))
+                  (t (incf i))))
+               ;; Inside a string: handle escapes and closing quote
+               (in-string
+                (cond
+                  ((and (char= (char line i) #\\) (< (1+ i) semi-pos))
+                   (incf i 2))
+                  ((char= (char line i) #\")
+                   (setf in-string nil)
+                   (incf i))
+                  (t (incf i))))
+               ;; Outside string and block comment
+               (t
+                (cond
+                  ;; An earlier unquoted semicolon — the match at semi-pos is inside that comment
+                  ((char= (char line i) #\;)
+                   (return-from %semicolon-is-first-on-line-p nil))
+                  ;; Inline block-comment opener
+                  ((and (< (1+ i) semi-pos)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf block-depth)
+                   (incf i 2))
+                  ;; #\x character literal: skip 3 chars
+                  ((and (char= (char line i) #\#)
+                        (< (+ i 2) semi-pos)
+                        (char= (char line (1+ i)) #\\))
+                   (incf i 3))
+                  ;; String opener
+                  ((char= (char line i) #\")
+                   (setf in-string t)
+                   (incf i))
+                  (t (incf i))))))
+    t))
+
 (defun %string-state-after-line (line initial-in-string-p
                                  &optional (block-comment-depth 0))
   "Return the string-literal state at the end of LINE.
@@ -611,7 +670,11 @@
                                     ";+\\s*mallet:(suppress|disable|enable)"
                                     line)))
                      (when (and semi-pos
-                                (not (%semicolon-in-string-p line semi-pos in-string-at-start)))
+                                (not (%semicolon-in-string-p line semi-pos in-string-at-start))
+                                ;; Reject matches where an earlier unquoted semicolon
+                                ;; already started a comment on this line (e.g.
+                                ;; ";; prose ; mallet:suppress" is not a directive).
+                                (%semicolon-is-first-on-line-p line semi-pos in-string-at-start))
                        (multiple-value-bind (matched groups)
                            (cl-ppcre:scan-to-strings
                             ";+\\s*mallet:(suppress|disable|enable)\\s*(.*)"
