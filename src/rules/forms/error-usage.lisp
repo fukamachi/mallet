@@ -94,6 +94,10 @@ or the actual CL:QUOTE symbol (introduced by the quote reader macro, not from so
              (stringp (second arg)))
     (let* ((sym (second arg))
            (colon-pos (position #\: sym :from-end t)))
+      ;; The parser (interpret-symbol) always adds a package prefix, producing
+      ;; strings like "PKG:name" or "CURRENT:name".  A nil colon-pos therefore
+      ;; means SYM is not a parser-produced symbol string, so returning nil
+      ;; (no violation) is intentional.
       (when colon-pos
         (let ((pkg (subseq sym 0 colon-pos))
               (name (string-upcase (subseq sym (1+ colon-pos)))))
