@@ -217,6 +217,58 @@
         (ok (null stale-violations)
             "No stale-suppression violations: docstring text is not a directive")))))
 
+;;; Test: inner-form ; mallet:suppress suppresses a nested violation
+
+(deftest comment-suppress-inner-form
+  (testing "; mallet:suppress inside a function body suppresses the nested violation"
+    (let* ((file (no-violations-fixture "comment-suppress-inner.lisp"))
+           (config (make-needless-let*-config))
+           (violations (engine:lint-file file :config config)))
+
+      (ok (null violations)
+          "No violations when inner ; mallet:suppress suppresses the nested let*")))
+
+  (testing "Inner suppress is not reported as stale when it matched a violation"
+    (let* ((file (no-violations-fixture "comment-suppress-inner.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression violation when inner suppress was used")))))
+
+;;; Test: inner-form #+mallet (declaim (mallet:suppress-next ...)) suppresses a nested violation
+
+(deftest declaim-suppress-next-inner-form
+  (testing "#+mallet suppress-next declaim inside a function body suppresses the nested violation"
+    (let* ((file (no-violations-fixture "declaim-suppress-inner.lisp"))
+           (config (make-needless-let*-config))
+           (violations (engine:lint-file file :config config)))
+
+      (ok (null violations)
+          "No violations when inner suppress-next declaim suppresses the nested let*"))))
+
+;;; Test: stale inner-form suppress generates a stale-suppression violation
+
+(deftest comment-suppress-inner-stale
+  (testing "Inner ; mallet:suppress with no matching violation is reported as stale"
+    (let* ((file (violations-fixture "comment-suppress-inner-stale.lisp"))
+           (config (make-needless-let*-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((let*-violations (remove-if-not
+                               (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                               violations)))
+        (ok (null let*-violations) "No needless-let* violations (form uses plain let)"))
+
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (= 1 (length stale-violations))
+            "Exactly 1 stale-suppression violation for unused inner suppress")))))
+
 ;;; Test: U-2 — Suppress comment after the last top-level form
 
 (deftest suppress-after-last-form

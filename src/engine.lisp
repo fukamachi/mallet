@@ -408,6 +408,31 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                 (consume-comment-directives pending-directives prev-end-line form-start-line
                                             *suppression-state* pending-suppress-records))
 
+              ;; Also collect :suppress directives from within the form body.
+              ;; consume-comment-directives only picks up directives with
+              ;; D.line <= form-start-line.  Directives inside the form
+              ;; (form-start-line < D.line <= form-end-line) are extracted here so
+              ;; that filter-suppress-violations can match them after the form runs.
+              ;; They are removed from pending-directives to avoid double-counting
+              ;; in the stale-detection pass at EOF.
+              (let ((form-end-line (parser:form-end-line form))
+                    (remaining-directives nil))
+                (dolist (directive pending-directives)
+                  (destructuring-bind (d-line d-type d-rules d-reason) directive
+                    (cond
+                      ((and (eq d-type :suppress)
+                            (< form-start-line d-line)
+                            (<= d-line form-end-line))
+                       (let ((id (suppression:register-suppression
+                                   *suppression-state* d-line d-rules d-reason :suppress)))
+                         (setf (suppression:registered-suppressions *suppression-state*)
+                               (delete id (suppression:registered-suppressions *suppression-state*)
+                                       :key #'car))
+                         (push (list id d-line d-rules d-reason) pending-suppress-records)))
+                      (t
+                       (push directive remaining-directives)))))
+                (setf pending-directives (nreverse remaining-directives)))
+
               (cond
                 ((and (suppression:mallet-declaim-p form-expr)
                       (suppression:mallet-suppress-next-p form-expr))

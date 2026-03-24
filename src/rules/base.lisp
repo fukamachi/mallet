@@ -230,31 +230,57 @@ POSITION-MAP - Optional position map for looking up exact positions of subexpres
 Rules should call this method when recursing into nested forms to ensure suppressions are handled."))
 
 (defmethod check-form-recursive :around ((rule rule) expr file line column &optional function-name position-map)
-  "Handle declare-based suppressions automatically for recursive checking.
-This :around method checks for (declare (mallet:suppress ...)) forms and manages the suppression scope."
+  "Handle declare-based and next-form suppressions automatically for recursive checking.
+
+This :around method:
+- Detects (declaim (mallet:suppress-next ...)) sub-forms, registers them as next-form
+  suppressions, and returns nil immediately (no rule checking on the declaim itself).
+- Consumes any pending next-form suppression (set by a preceding suppress-next declaim
+  sibling) and applies it as a temporary scope suppression for the current form.
+- Checks for (declare (mallet:suppress ...)) forms in the expression body and applies
+  them as scope suppressions."
   (declare (ignore position-map))
   ;; Use dynamic lookup to avoid circular dependency with engine package
   ;; The *suppression-state* special variable is bound by the engine during linting
   (let ((state-symbol (find-symbol "*SUPPRESSION-STATE*" "MALLET/ENGINE")))
-    (if (and state-symbol (boundp state-symbol) (symbol-value state-symbol))
-        (let ((state (symbol-value state-symbol))
-              (declare-suppressions (extract-declare-suppressions expr)))
-          ;; First, push any declare suppressions from this form onto the scope
-          (when declare-suppressions
-            (suppression:push-scope-suppression state declare-suppressions))
-
-          ;; Now check if rule is suppressed at current scope (includes newly pushed suppressions)
-          (unwind-protect
-               (if (suppression:rule-suppressed-p state (rule-name rule)
-                                                  :form-type (if function-name :function-body :lexical-scope)
-                                                  :function-name function-name)
-                   nil  ; Return empty violations list if suppressed
-                   (call-next-method))  ; Not suppressed, proceed with checking
-            ;; Always pop the suppression scope if we pushed one
-            (when declare-suppressions
-              (suppression:pop-scope-suppression state))))
+    (if (not (and state-symbol (boundp state-symbol) (symbol-value state-symbol)))
         ;; No suppression state bound (e.g., in unit tests), just call method
-        (call-next-method))))
+        (call-next-method)
+        (let ((state (symbol-value state-symbol)))
+          (cond
+            ;; Suppress-next declaim embedded in a form body: register it and return nil.
+            ;; The next sibling call to check-form-recursive will consume the suppression.
+            ((and (suppression:mallet-declaim-p expr)
+                  (suppression:mallet-suppress-next-p expr))
+             (suppression:set-next-form-suppression
+               state (suppression:extract-suppress-next-rules expr))
+             nil)
+
+            (t
+             ;; Consume any suppress-next set by a preceding declaim sibling.
+             ;; This is a one-time consume: cleared here so deeper recursive calls
+             ;; do not inherit it.
+             (let ((next-rules (suppression:consume-next-form-suppression state))
+                   (declare-suppressions (extract-declare-suppressions expr)))
+               ;; Push suppressions onto scope (next-form first so it can be popped last)
+               (when next-rules
+                 (suppression:push-scope-suppression state next-rules))
+               (when declare-suppressions
+                 (suppression:push-scope-suppression state declare-suppressions))
+
+               (unwind-protect
+                    (if (suppression:rule-suppressed-p
+                          state (rule-name rule)
+                          :form-type (if function-name :function-body :lexical-scope)
+                          :function-name function-name)
+                        nil              ; suppressed — return empty violations list
+                        (call-next-method))
+                 ;; Always pop in reverse push order
+                 (when declare-suppressions
+                   (suppression:pop-scope-suppression state))
+                 (when next-rules
+                   (suppression:pop-scope-suppression state))))))))))
+
 
 (defun form-can-have-declarations-p (form-head)
   "Check if FORM-HEAD represents a form that can have declarations."
