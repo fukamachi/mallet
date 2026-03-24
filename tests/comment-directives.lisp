@@ -279,4 +279,17 @@
     ;; A directive-like pattern after #\; on the same line must not be matched.
     (let ((result (suppression:parse-comment-directives
                     (format nil "(foo #\\; mallet:suppress rule1)~%"))))
-      (ok (null result) "#\\; semicolon is not treated as a comment"))))
+      (ok (null result) "#\\; semicolon is not treated as a comment")))
+
+  (testing "Trailing ; mallet:suppress after #\\; character literal is still recognized"
+    ;; (format t "~C" #\;) ; mallet:suppress :needless-let*
+    ;; The #\; is a character literal (consumes the ; at that position).
+    ;; The real directive ; mallet:suppress appears later on the same line —
+    ;; %semicolon-is-first-on-line-p must detect #\; as a char literal (not an
+    ;; earlier unquoted semicolon) and return T so the trailing directive is matched.
+    (let ((result (suppression:parse-comment-directives
+                    "(format t \"~C\" #\\;) ; mallet:suppress :needless-let*")))
+      (ok (= 1 (length result)) "trailing directive after #\\; char literal is matched")
+      (when (= 1 (length result))
+        (ok (eq :suppress (second (first result))) "type is :suppress")
+        (ok (equal '(:needless-let*) (third (first result))) "rule is :needless-let*")))))
