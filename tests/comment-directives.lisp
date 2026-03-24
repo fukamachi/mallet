@@ -293,3 +293,68 @@
       (when (= 1 (length result))
         (ok (eq :suppress (second (first result))) "type is :suppress")
         (ok (equal '(:needless-let*) (third (first result))) "rule is :needless-let*")))))
+
+(deftest parse-comment-directives-block-comment-in-line-comment
+  (testing "#| inside ;;; line comment does not start a block comment"
+    ;; Without fix, the #| in ;;; increments depth, causing the directive on
+    ;; line 2 to be seen as inside a block comment and ignored.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil ";;; note about #| delimiters~%; mallet:suppress rule1~%"))))
+      (ok (= 1 (length result)) "directive after ;;; #| line is matched")
+      (ok (= 2 (first (first result))) "directive is on line 2")))
+
+  (testing "|# inside ;;; line comment does not close a real block comment prematurely"
+    ;; Without fix, the |# in ;;; decrements depth to 0, causing the directive
+    ;; on line 3 to be wrongly matched (should be inside the block comment).
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#| open block~%;;; |# fake closer~%; mallet:suppress rule1~%|#~%; mallet:suppress rule2~%"))))
+      (ok (= 1 (length result)) "only directive after real block comment close is matched")
+      (ok (= 5 (first (first result))) "directive is on line 5")))
+
+  (testing "#| inside a string literal does not start a block comment"
+    ;; Without fix, #| inside a string increments depth, causing the directive
+    ;; on line 2 to be seen as inside a block comment.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(foo \"#|\")~%; mallet:suppress rule1~%"))))
+      (ok (= 1 (length result)) "directive after string with #| is matched")
+      (ok (= 2 (first (first result))) "directive is on line 2")))
+
+  (testing "#\\| character literal before #| does not create a false |# close"
+    ;; #\|#| contains char literal #\| (for |) followed by #| (block comment opener).
+    ;; Without fix, |# is counted as a closer (depth stays 0) and #| is missed,
+    ;; so the directive on line 2 is wrongly matched instead of being suppressed.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(code #\\|#| block comment~%; mallet:suppress rule1~%|#~%; mallet:suppress rule2~%"))))
+      (ok (= 1 (length result)) "only directive after block comment close is matched")
+      (ok (= 4 (first (first result))) "directive is on line 4")))
+
+  (testing "Real mid-line #| opener (not in string or comment) is still counted"
+    ;; Verifies the fix doesn't over-correct: a genuine #| not preceded by ;
+    ;; or inside a string must still open a block comment so the next line is
+    ;; treated as inside it.  A stub returning (values 0 0) would fail this.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "(foo) #| block starts here~%; mallet:suppress rule1~%|#~%; mallet:suppress rule2~%"))))
+      (ok (= 1 (length result)) "directive inside block comment is not matched")
+      (ok (= 4 (first (first result))) "only directive after |# is matched")))
+
+  (testing "|# inside string literal does not close a real block comment"
+    ;; Block comment is open from line 1.  Line 2 has |# inside a string,
+    ;; which the fix must ignore.  Without the fix to %count-block-comment-delimiters
+    ;; treating strings, |# in the string would decrement depth to 0 and the
+    ;; directive on line 3 would be wrongly matched.
+    ;; A stub returning (values 0 0) would also fail this: depth never increases
+    ;; so both line-3 and line-5 directives get matched.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#| open block~%(foo \"|#\")~%; mallet:suppress rule1~%|#~%; mallet:suppress rule2~%"))))
+      (ok (= 1 (length result)) "only directive after real |# close is matched")
+      (ok (= 5 (first (first result))) "directive is on line 5")))
+
+  (testing "Same-line #| ... |# counts one opener and one closer correctly"
+    ;; Line 1 has two openers and one closer: net depth +1.
+    ;; The directive-like text on line 2 is inside the second (unclosed) block comment.
+    ;; With a correct implementation only the line-4 directive is matched.
+    ;; A stub (values 0 0) would leave depth at 0 and match both directives.
+    (let ((result (suppression:parse-comment-directives
+                    (format nil "#| first |# #| second~%; mallet:suppress rule1~%|#~%; mallet:suppress rule2~%"))))
+      (ok (= 1 (length result)) "only directive after second block comment close is matched")
+      (ok (= 4 (first (first result))) "directive is on line 4"))))
