@@ -11,6 +11,7 @@
            #:load-config
            #:get-rules-for-file
            #:get-built-in-config
+           #:find-project-root
            #:find-config-file
            #:config-rules
            #:config-path-rules
@@ -63,7 +64,7 @@ Stores patterns that match files and the rules/disabled-rules that apply."
   (disable-specs '() :type list))
 
 ;;; Built-in preset names — used to detect shadowing
-(defvar *built-in-preset-names* '(:default :all :none))
+(defvar *built-in-preset-names* '(:default :strict :all :none))
 
 ;;; Config data structure
 

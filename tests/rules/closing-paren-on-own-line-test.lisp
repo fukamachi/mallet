@@ -161,8 +161,12 @@
 ;;; Registration tests
 
 (deftest closing-paren-registration
-  (testing ":closing-paren-on-own-line is in default config"
+  (testing ":closing-paren-on-own-line is NOT in :default config (moved to :strict)"
     (let* ((cfg (mallet/config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
+      (ok (not (member :closing-paren-on-own-line rule-names)))))
+  (testing ":closing-paren-on-own-line IS in :strict config"
+    (let* ((cfg (mallet/config:get-built-in-config :strict))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
       (ok (member :closing-paren-on-own-line rule-names))))
 

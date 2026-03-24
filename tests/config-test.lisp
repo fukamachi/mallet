@@ -91,6 +91,8 @@
         (ok (member :asdf-operate-in-perform rule-names))
         (ok (member :asdf-secondary-system-name rule-names))
         (ok (member :asdf-if-feature-keyword rule-names))
+        ;; no-ignore-errors is in the default preset
+        (ok (member :no-ignore-errors rule-names))
         ;; asdf-reader-conditional is disabled in default
         (ok (not (member :asdf-reader-conditional rule-names)))
         ;; one-package-per-file is opt-in only; must not be in default

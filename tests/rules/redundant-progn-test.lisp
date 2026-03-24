@@ -134,6 +134,10 @@
 ;;; Violation attribute tests
 
 (deftest redundant-progn-attributes
+  (testing "Rule has :warning default severity"
+    (let ((rule (make-instance 'rules:redundant-progn-rule)))
+      (ok (eq :warning (rules:rule-severity rule)))))
+
   (testing "Violation has correct severity"
     (let* ((code "(progn (foo))")
            (forms (parser:parse-forms code #p"test.lisp"))
@@ -154,8 +158,12 @@
 ;;; Registration tests — rule in presets and make-rule dispatch
 
 (deftest redundant-progn-in-default-config
-  (testing ":redundant-progn is in default config"
+  (testing ":redundant-progn is NOT in :default config (moved to :strict)"
     (let* ((cfg (config:get-built-in-config :default))
+           (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
+      (ok (not (member :redundant-progn rule-names)))))
+  (testing ":redundant-progn IS in :strict config"
+    (let* ((cfg (config:get-built-in-config :strict))
            (rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
       (ok (member :redundant-progn rule-names)))))
 

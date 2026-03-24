@@ -80,6 +80,7 @@
    (:file "engine")
    (:file "formatter")
    (:file "fixer")
+   (:file "init")
 
    (:file "main")))
 
@@ -103,6 +104,7 @@
    (:file "engine-integration-test")
    (:file "engine-comment-suppression")
    (:file "engine-cross-file-integration-test")
+   (:file "init-test")
    (:file "engine-coalton-lisp-test")
    (:file "engine-coalton-lisp-dispatch-test")
    (:file "engine-coalton-lisp-fixture-test")

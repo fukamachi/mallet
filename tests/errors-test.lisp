@@ -51,9 +51,9 @@
     (let ((err (make-condition 'errors:invalid-preset
                                :option "--preset"
                                :value "bad"
-                               :expected "default or all")))
-      (ok (search "Invalid preset: bad" (format nil "~A" err)))
-      (ok (search "default or all" (format nil "~A" err)))))
+                               :expected "default, strict, all, or none")))
+      (ok (search "bad" (format nil "~A" err)))
+      (ok (search "default, strict, all, or none" (format nil "~A" err)))))
 
   (testing "file-not-found has clear message"
     (let ((err (make-condition 'errors:file-not-found :path "missing.lisp")))
