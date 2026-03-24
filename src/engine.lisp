@@ -433,7 +433,11 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                          (setf (suppression:registered-suppressions *suppression-state*)
                                (delete id (suppression:registered-suppressions *suppression-state*)
                                        :key #'car))
-                         (push (list id d-line d-rules d-reason) pending-suppress-records)))
+                         ;; push reverses document order, but filter-suppress-violations
+                       ;; uses find-if with positional check (<= record-line violation-line),
+                       ;; so the reversed list naturally yields closest-preceding-suppress
+                       ;; semantics: higher-line records are checked first and match first.
+                       (push (list id d-line d-rules d-reason) pending-suppress-records)))
                       (t
                        (push directive remaining-directives)))))
                 (setf pending-directives (nreverse remaining-directives)))
@@ -453,6 +457,16 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                    (push (list id form-start-line next-rules nil) pending-suppress-records)))
 
                 ((suppression:mallet-declaim-p form-expr)
+                 ;; A non-suppress-next declaim (e.g. disable/enable) produces no violations.
+                 ;; Any pending suppress records that were positionally associated with this
+                 ;; declaim must be flushed now; otherwise they silently suppress the next
+                 ;; real form's violations without emitting a stale warning.
+                 (when pending-suppress-records
+                   (setf stale-suppress-entries
+                         (nth-value 1
+                           (filter-suppress-violations nil pending-suppress-records
+                                                       *suppression-state* stale-suppress-entries)))
+                   (setf pending-suppress-records nil))
                  (suppression:update-suppression-for-declaim form-expr *suppression-state*))
 
                 (t

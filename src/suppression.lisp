@@ -551,11 +551,17 @@
                         (char= (char line (1+ i)) #\|))
                    (incf block-depth)
                    (incf i 2))
-                  ;; #\x character literal: skip 3 chars
+                  ;; #\x character literal: skip 3 chars.
+                  ;; Mirror %semicolon-in-string-p: use (< (1+ i) semi-pos) as outer guard
+                  ;; so that #\; where i+2 == semi-pos is handled by the inner branch
+                  ;; (the char literal consumes the target semicolon — return t, not nil).
                   ((and (char= (char line i) #\#)
-                        (< (+ i 2) semi-pos)
+                        (< (1+ i) semi-pos)
                         (char= (char line (1+ i)) #\\))
-                   (incf i 3))
+                   (if (>= (+ i 2) semi-pos)
+                       ;; The semicolon at semi-pos IS the character literal body — not a real ;
+                       (return-from %semicolon-is-first-on-line-p t)
+                       (incf i 3)))
                   ;; String opener
                   ((char= (char line i) #\")
                    (setf in-string t)
