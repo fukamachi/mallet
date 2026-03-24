@@ -1,0 +1,7 @@
+# Expected violations for error-without-custom-condition.lisp
+# Format: line:column rule-name severity
+
+6:4 error-without-custom-condition warning
+11:4 error-without-custom-condition warning
+16:4 error-without-custom-condition warning
+21:4 error-without-custom-condition warning
