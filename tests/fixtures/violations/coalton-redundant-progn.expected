@@ -1,5 +1,5 @@
 # Expected violations for coalton-redundant-progn.lisp
 # Rule detects (progn single-form) inside coalton-toplevel
 
-11:4 redundant-progn info
-15:4 redundant-progn info
+11:4 redundant-progn warning
+15:4 redundant-progn warning

@@ -140,7 +140,7 @@
            (rule (make-instance 'rules:redundant-progn-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-severity (first violations)) :info))))
+      (ok (eq (violation:violation-severity (first violations)) :warning))))
 
   (testing "Violation reports correct position"
     (let* ((code "(progn (foo))")
@@ -204,7 +204,7 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations)) :redundant-progn))
-      (ok (eq (violation:violation-severity (first violations)) :info))
+      (ok (eq (violation:violation-severity (first violations)) :warning))
       (ok (string= (violation:violation-message (first violations))
                    "PROGN with a single body form is redundant"))))
 

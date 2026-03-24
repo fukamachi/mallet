@@ -139,11 +139,11 @@
     ))")))
       (ok (= 1 (length violations)))))
 
-  (testing "Severity is :info"
+  (testing "Severity is :warning"
     (let ((violations (check-closing-paren
                        (format nil "(defun foo ()~%  )"))))
       (ok (= 1 (length violations)))
-      (ok (eq :info (violation:violation-severity (first violations))))))
+      (ok (eq :warning (violation:violation-severity (first violations))))))
 
   (testing "Violation message mentions closing paren"
     (let* ((violations (check-closing-paren
