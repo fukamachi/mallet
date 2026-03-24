@@ -8,20 +8,20 @@
 ;; Bad: error with format string and arguments
 (defun validate-range (x limit)
   (when (< x limit)
-    (error "value ~A below limit" x)))
+    (error "value ~A is below limit" x)))
 
-;; Bad: error with CL-qualified condition symbol
-(defun check-type-qualified (x)
-  (when (not (integerp x))
-    (error 'cl:simple-error :message "bad")))
+;; Bad: error with CL-qualified built-in condition
+(defun check-type-valid (x)
+  (unless (integerp x)
+    (error 'cl:simple-error :format-control "not an integer")))
 
-;; Bad: error with unqualified known CL condition name
-(defun check-type-unqualified (x)
-  (when (not (stringp x))
-    (error 'simple-error "message")))
+;; Bad: error with unqualified known CL condition
+(defun check-bounds (x)
+  (when (< x 0)
+    (error 'simple-error :format-control "out of bounds")))
 
 ;; Good: error with custom condition type
-(defun check-bounds (x)
+(defun check-range (x)
   (when (< x 0)
     (error 'out-of-bounds :value x)))
 
