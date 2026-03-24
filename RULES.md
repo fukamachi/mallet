@@ -42,7 +42,7 @@ The **Default** column below reflects `:default` preset membership. Rules marked
 | [`:no-ignore-errors`](#no-ignore-errors) | Use of `cl:ignore-errors` | warning | on | |
 | [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | off | |
 | [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | strict | |
-| [`:error-with-string-only`](#error-with-string-only) | Calling `error` with only a format string | warning | off | |
+| [`:error-without-custom-condition`](#error-without-custom-condition) | Calling `error` without a custom condition type | warning | off | |
 | [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
 | [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
@@ -374,15 +374,16 @@ Avoid accessing internal symbols via `::` package qualifier. Using `::` bypasses
 
 **Severity**: warning | **Default**: disabled (`:strict` and above)
 
-### `:error-with-string-only`
+### `:error-without-custom-condition`
 
-Avoid calling `error` with only a format string. Signaling a string creates a `simple-error`, which callers cannot selectively handle with `handler-case`. Define and signal a proper condition type instead.
+Avoid calling `error` with a string literal or a built-in CL condition type. These prevent callers from handling errors specifically with `handler-case`. Define and signal a custom condition type instead.
 
 ```lisp
-;; Bad: callers can only catch simple-error
+;; Bad: callers can only catch simple-error or cl:error
 (error "connection failed: ~A" host)
+(error 'cl:simple-error :format-control "failed: ~A" :format-arguments (list host))
 
-;; Good: define a condition type
+;; Good: define a custom condition type
 (define-condition connection-error (error)
   ((host :initarg :host :reader connection-error-host)))
 (error 'connection-error :host host)
