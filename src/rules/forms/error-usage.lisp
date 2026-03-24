@@ -27,8 +27,24 @@
 ;;; a specific condition type to catch with handler-case.
 
 (defparameter +cl-condition-names+
-  '("SIMPLE-ERROR" "ERROR" "TYPE-ERROR" "PROGRAM-ERROR" "SERIOUS-CONDITION"
-    "SIMPLE-CONDITION" "CONDITION" "SIMPLE-TYPE-ERROR" "CONTROL-ERROR")
+  '(;; Root condition hierarchy
+    "CONDITION" "SERIOUS-CONDITION" "ERROR" "WARNING" "SIMPLE-CONDITION"
+    ;; Simple variants
+    "SIMPLE-ERROR" "SIMPLE-WARNING" "SIMPLE-TYPE-ERROR"
+    ;; Program errors
+    "PROGRAM-ERROR" "CONTROL-ERROR" "PACKAGE-ERROR"
+    ;; Type errors
+    "TYPE-ERROR"
+    ;; Cell errors (unbound variable / undefined function)
+    "CELL-ERROR" "UNBOUND-VARIABLE" "UNDEFINED-FUNCTION"
+    ;; Arithmetic errors
+    "ARITHMETIC-ERROR" "DIVISION-BY-ZERO"
+    "FLOATING-POINT-OVERFLOW" "FLOATING-POINT-UNDERFLOW"
+    "FLOATING-POINT-INEXACT" "FLOATING-POINT-INVALID-OPERATION"
+    ;; Stream / IO errors
+    "STREAM-ERROR" "END-OF-FILE" "FILE-ERROR" "READER-ERROR"
+    ;; Other standard conditions
+    "PARSE-ERROR" "PRINT-NOT-READABLE" "STORAGE-CONDITION" "STYLE-WARNING")
   "Known CL built-in condition names (uppercase). Used to flag unqualified references.")
 
 (defclass error-without-custom-condition-rule (base:rule)
