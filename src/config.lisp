@@ -3,7 +3,8 @@
   (:local-nicknames
    (#:glob #:trivial-glob)
    (#:rules #:mallet/rules)
-   (#:utils #:mallet/utils))
+   (#:utils #:mallet/utils)
+   (#:errors #:mallet/errors))
   (:export #:config
            #:make-config
            #:parse-config
@@ -25,7 +26,19 @@
            #:path-override
            #:path-override-patterns
            #:path-override-rules
-           #:path-override-disabled-rules))
+           #:path-override-disabled-rules
+           ;; Multi-form config reader
+           #:read-mallet-forms
+           ;; Preset registry
+           #:preset-definition
+           #:preset-definition-name
+           #:preset-definition-extends
+           #:preset-definition-enable-specs
+           #:preset-definition-disable-specs
+           #:parse-preset-definition
+           #:build-preset-registry
+           #:resolve-preset
+           #:*built-in-preset-names*))
 (in-package #:mallet/config)
 
 (defvar *default-preset* :default)
@@ -38,6 +51,18 @@ Stores patterns that match files and the rules/disabled-rules that apply."
   (patterns '() :type list)          ; List of glob patterns
   (rules '() :type list)             ; List of rule instances
   (disabled-rules '() :type list))   ; List of disabled rule names (keywords)
+
+;;; Preset definition structure
+
+(defstruct preset-definition
+  "Structure representing a user-defined preset parsed from a :mallet-preset form."
+  (name nil :type keyword)
+  (extends nil)
+  (enable-specs '() :type list)
+  (disable-specs '() :type list))
+
+;;; Built-in preset names — used to detect shadowing
+(defvar *built-in-preset-names* '(:default :all :none))
 
 ;;; Config data structure
 
@@ -84,6 +109,105 @@ PATH-RULES, IGNORE patterns, and SET-SEVERITY-OVERRIDES (alist of (category . se
                  :ignore (or ignore '())
                  :root-dir root-dir
                  :set-severity-overrides (or set-severity-overrides '())))
+
+;;; Preset parsing and registry
+
+(defun parse-preset-definition (sexp)
+  "Parse a :mallet-preset s-expression into a preset-definition struct.
+Format: (:mallet-preset :name (:extends :parent) (:enable ...) (:disable ...))"
+  (check-type sexp list)
+  (unless (eq (first sexp) :mallet-preset)
+    (error "Preset form must start with :mallet-preset, got: ~S" (first sexp)))
+  (let ((name (second sexp)))
+    (unless (keywordp name)
+      (error "Preset name must be a keyword, got: ~S" name))
+    (let ((extends nil)
+          (enable-specs '())
+          (disable-specs '()))
+      (dolist (form (cddr sexp))
+        (when (consp form)
+          (case (first form)
+            (:extends
+             (setf extends (second form)))
+            (:enable
+             (let ((rule-name (utils:resolve-rule-alias (second form)))
+                   (options (cddr form)))
+               (push (cons rule-name options) enable-specs)))
+            (:disable
+             (let ((rule-name (utils:resolve-rule-alias (second form))))
+               (push rule-name disable-specs))))))
+      (make-preset-definition
+       :name name
+       :extends extends
+       :enable-specs (nreverse enable-specs)
+       :disable-specs (nreverse disable-specs)))))
+
+(defun build-preset-registry (preset-definitions)
+  "Build a hash table from a list of preset-definition structs, keyed by name."
+  (let ((registry (make-hash-table :test 'eq)))
+    (dolist (defn preset-definitions)
+      (setf (gethash (preset-definition-name defn) registry) defn))
+    registry))
+
+(defun resolve-preset (name registry &optional resolving-stack)
+  "Resolve preset NAME to a config object using REGISTRY and built-in presets.
+RESOLVING-STACK tracks the chain being followed to detect circular references.
+Signals circular-preset-reference on cycles, unknown-preset when not found."
+  (check-type name keyword)
+  (check-type registry hash-table)
+  ;; Circular reference detection: name appearing in the stack means a cycle
+  (when (member name resolving-stack)
+    (error 'errors:circular-preset-reference
+           :chain (append resolving-stack (list name))))
+  (let ((defn (gethash name registry)))
+    (cond
+      ;; Found in registry — user-defined preset
+      (defn
+       ;; Emit shadowing note when overriding a built-in name
+       (when (member name *built-in-preset-names*)
+         (format *error-output*
+                 "; Using project-defined ~A preset (shadowing built-in)~%"
+                 (string-downcase (symbol-name name))))
+       (let* ((new-stack (append resolving-stack (list name)))
+              (extends-name (preset-definition-extends defn))
+              ;; Resolve parent: follow :extends if present, else use :none as base
+              ;; When a preset extends its own name (e.g., user-defined :default
+              ;; extending built-in :default), resolve directly from built-ins
+              ;; to avoid false circular reference detection.
+              (parent-config
+                (cond
+                  ((null extends-name)
+                   (make-none-config))
+                  ((and (eq extends-name name)
+                        (member extends-name *built-in-preset-names*))
+                   (get-built-in-config extends-name))
+                  (t
+                   (resolve-preset extends-name registry new-stack))))
+              (parent-rules (config-rules parent-config))
+              (parent-disabled (config-disabled-rules parent-config))
+              ;; Build override forms for parse-override-rules
+              (override-forms
+                (append
+                 (mapcar (lambda (spec)
+                           ;; parse-override-rules expects (:enable rule-name . options)
+                           (cons :enable (cons (car spec) (cdr spec))))
+                         (preset-definition-enable-specs defn))
+                 (mapcar (lambda (rule-name)
+                           (list :disable rule-name))
+                         (preset-definition-disable-specs defn)))))
+         (multiple-value-bind (result-rules result-disabled)
+             (parse-override-rules override-forms parent-rules parent-disabled)
+           (make-config :rules result-rules
+                        :disabled-rules result-disabled))))
+      ;; Not in registry — try built-in presets
+      ((member name *built-in-preset-names*)
+       (get-built-in-config name))
+      ;; Not found anywhere — signal with available names
+      (t
+       (let ((user-names (loop for k being the hash-keys of registry collect k)))
+         (error 'errors:unknown-preset
+                :name name
+                :available-names (append user-names *built-in-preset-names*)))))))
 
 ;;; Config parsing
 
@@ -147,14 +271,24 @@ Returns (values rules disabled-rules explicit-severity-names) where:
 
         (values (nreverse result-rules) result-disabled explicit-severity-names)))))
 
-(defun parse-config (sexp &key preset-override) ; mallet:suppress cyclomatic-complexity
+(defun parse-config (sexp &key preset-override preset-registry)
   "Parse S-expression SEXP into a config object.
 Uses new syntax: (:enable :rule-name ...), (:disable :rule-name), (:ignore ...), and (:for-paths ...).
-If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file."
+If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file.
+If PRESET-REGISTRY is provided, user-defined presets are resolved from it before
+falling back to built-in presets."
   (check-type sexp list)
 
   (unless (eq (first sexp) :mallet-config)
     (error "Config must start with :mallet-config"))
+
+  (flet ((resolve-extends (name)
+           (unless (keywordp name)
+             (error "String paths for :extends are no longer supported. ~
+                     Use a preset name keyword instead of ~S." name))
+           (if preset-registry
+               (resolve-preset name preset-registry)
+               (get-built-in-config name))))
 
   ;; Pre-pass: collect all :set-severity overrides before the main loop so that
   ;; :for-paths blocks are always processed with the complete override set, regardless
@@ -190,12 +324,9 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
             do (let ((key (first item)))
                  (case key
                    (:extends
-                    ;; Process extends to get base rules
                     ;; CLI preset-override takes precedence over config file :extends
                     (let ((extends-value (or preset-override (second item))))
-                      (setf extends (if (keywordp extends-value)
-                                        (get-built-in-config extends-value)
-                                        (load-config extends-value)))))
+                      (setf extends (resolve-extends extends-value))))
                    (:enable
                     ;; New syntax: (:enable :rule-name :option value ...)
                     (let ((rule-name (utils:resolve-rule-alias (second item)))
@@ -258,9 +389,7 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
 
     ;; If preset-override is provided but no :extends clause was found, use preset-override
     (when (and preset-override (not extends))
-      (setf extends (if (keywordp preset-override)
-                        (get-built-in-config preset-override)
-                        (load-config preset-override))))
+      (setf extends (resolve-extends preset-override)))
 
     ;; Create rule instances
     (let ((rules (mapcar #'create-rule-from-spec (nreverse rule-specs))))
@@ -294,25 +423,82 @@ If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config f
                      :disabled-rules disabled-rules
                      :path-rules (nreverse path-rules)
                      :ignore ignore-patterns
-                     :set-severity-overrides set-severity-overrides))))))
+                     :set-severity-overrides set-severity-overrides)))))))
+
+;;; Multi-form config reader
+
+(defun read-mallet-forms (path)
+  "Read all top-level s-expressions from PATH.
+Returns (values preset-forms config-form) where preset-forms is a list of
+:mallet-preset s-expressions and config-form is the :mallet-config s-expression
+or nil if none is present.
+
+Binds *read-eval* to nil for safety. Signals:
+- errors:unknown-config-form if an unrecognized top-level form is found
+- errors:multiple-config-forms if more than one :mallet-config form appears
+- errors:duplicate-preset-name if two :mallet-preset forms share a name"
+  (let ((pathname (etypecase path
+                    (string (uiop:parse-native-namestring path))
+                    (pathname path))))
+    (with-open-file (in pathname :direction :input)
+      (let ((*read-eval* nil)
+            (preset-forms '())
+            (config-form nil))
+        (loop
+          (let ((form (read in nil :eof)))
+            (when (eq form :eof)
+              (return))
+            (unless (consp form)
+              (error 'errors:unknown-config-form :form form))
+            (case (first form)
+              (:mallet-config
+               (when config-form
+                 (error 'errors:multiple-config-forms))
+               (setf config-form form))
+              (:mallet-preset
+               (let ((name (second form)))
+                 (when (find name preset-forms :key #'second)
+                   (error 'errors:duplicate-preset-name :name name))
+                 (push form preset-forms)))
+              (otherwise
+               (error 'errors:unknown-config-form :form form)))))
+        (values (nreverse preset-forms) config-form)))))
 
 ;;; Config file loading
 
 (defun load-config (path &key preset-override)
   "Load configuration from file at PATH.
 Sets root-dir to the directory containing the config file.
-If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file."
-  (let ((pathname (etypecase path
-                    (string (uiop:parse-native-namestring path))
-                    (pathname path))))
-    (unless (probe-file pathname)
-      (error "Config file not found: ~A" pathname))
+If PRESET-OVERRIDE is provided, it overrides the :extends clause in the config file.
 
-    (with-open-file (in pathname :direction :input)
-      (let* ((sexp (read in))
-             (config (parse-config sexp :preset-override preset-override)))
-        ;; Set root-dir to the directory containing the config file
-        (setf (config-root-dir config) (uiop:pathname-directory-pathname pathname))
+Supports multi-sexp .mallet.lisp files with :mallet-preset and :mallet-config forms.
+When no :mallet-config form is present but a :default preset is defined, the :default
+preset is resolved and returned."
+  (let* ((pathname (etypecase path
+                     (string (uiop:parse-native-namestring path))
+                     (pathname path)))
+         (root-dir (uiop:pathname-directory-pathname pathname)))
+    (unless (probe-file pathname)
+      (error 'errors:config-not-found :path pathname))
+
+    (multiple-value-bind (preset-forms config-sexp)
+        (read-mallet-forms pathname)
+      (let* ((preset-defs (mapcar #'parse-preset-definition preset-forms))
+             (registry (build-preset-registry preset-defs))
+             (config
+               (cond
+                 (config-sexp
+                  (parse-config config-sexp
+                                :preset-override preset-override
+                                :preset-registry registry))
+                 ((and (not preset-override)
+                       (gethash :default registry))
+                  (resolve-preset :default registry))
+                 (preset-override
+                  (resolve-preset preset-override registry))
+                 (t
+                  (get-built-in-config :default)))))
+        (setf (config-root-dir config) root-dir)
         config))))
 
 ;;; Rule selection

@@ -159,16 +159,7 @@ Returns (rule-name . options-plist)."
   (let ((preset-name (pop args)))
     (unless preset-name
       (error 'errors:missing-option-value :option "--preset"))
-    (values
-     (cond
-       ((string= preset-name "default") :default)
-       ((string= preset-name "all") :all)
-       ((string= preset-name "none") :none)
-       (t (error 'errors:invalid-preset
-                 :option "--preset"
-                 :value preset-name
-                 :expected "default, all, or none")))
-     args)))
+    (values (intern (string-upcase preset-name) :keyword) args)))
 
 (defun handle-enable-option (args)
   "Handle --enable option. Returns (values rule-spec remaining-args)."
@@ -279,7 +270,7 @@ Usage: mallet [options] <file>...
 Options:
   --format <format>   Output format (text, line, or json; default: text)
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
-  --preset <name>     Use built-in preset (default, all, or none)
+  --preset <name>     Use preset: built-in (default, all, none) or user-defined from .mallet.lisp
   --all, -a           Alias for --preset all
   --none              Alias for --preset none
 
@@ -306,6 +297,7 @@ Presets:
   default             Only universally-accepted rules (quiet, recommended)
   all                 All rules enabled (useful for exploration)
   none                No rules enabled (explicitly enable specific rules)
+  <name>              User-defined preset from .mallet.lisp (e.g., --preset strict)
 
 Severity Levels (for --fail-on):
   error               Objectively wrong code
@@ -390,7 +382,17 @@ Returns the final config with CLI preset override applied."
              (let ((discovered (config:find-config-file start-directory)))
                (when discovered
                  (config:load-config discovered :preset-override preset))))
-        (config:get-built-in-config (or preset :default)))))
+        (if (or (null preset)
+                (member preset config:*built-in-preset-names*))
+            (config:get-built-in-config (or preset :default))
+            (error 'errors:invalid-preset
+                   :option "--preset"
+                   :value (string-downcase (symbol-name preset))
+                   :expected (format nil "Not a built-in preset and no .mallet.lisp was found.~%~
+                                         Define preset :~A in .mallet.lisp or use a built-in preset: ~{~A~^, ~}"
+                                    (string-downcase (symbol-name preset))
+                                    (mapcar (lambda (n) (string-downcase (symbol-name n)))
+                                            config:*built-in-preset-names*)))))))
 
 (defun has-cli-rules-p (cli-rules)
   "Check if cli-rules has any actual overrides."

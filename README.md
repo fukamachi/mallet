@@ -103,17 +103,25 @@ mallet -a --fix src/              # Fix with all rules enabled
 Create `.mallet.lisp` in your project root:
 
 ```lisp
+;; Define reusable presets
+(:mallet-preset :strict
+ (:extends :default)
+ (:enable :line-length :max 100)
+ (:enable :consecutive-blank-lines :max 2))
+
+(:mallet-preset :ci
+ (:extends :strict)
+ (:enable :function-length)
+ (:enable :cyclomatic-complexity :max 15))
+
+;; Project configuration
 (:mallet-config
- (:extends :default)  ; or :all
+ (:extends :strict)
 
  ;; Ignore files/directories (uses glob patterns)
  (:ignore "**/example.lisp"         ; ignore at any level
           "**/*-generated.lisp"     ; ignore generated files
           "vendor/**/*.lisp")       ; ignore vendor directory
-
- ;; Enable rules with options
- (:enable :line-length :max 100)
- (:enable :consecutive-blank-lines :max 2)
 
  ;; Enable a rule with a custom severity override (wins over :set-severity)
  (:enable :cyclomatic-complexity :severity :warning)
@@ -131,10 +139,25 @@ Create `.mallet.lisp` in your project root:
    (:disable :unused-variables)))
 ```
 
-**Presets:**
+**User-defined presets:**
+
+Define named presets with `:mallet-preset` to create reusable rule sets. Presets compose via `:extends`:
+
+```lisp
+;; Customize the default by shadowing the built-in
+(:mallet-preset :default
+ (:extends :default)
+ (:enable :line-length :max 120)
+ (:enable :consecutive-blank-lines))
+```
+
+A user-defined `:default` is picked automatically when no `--preset` flag is given. Use `--preset <name>` on the CLI to select any preset.
+
+**Built-in presets:**
 
 - `:default` - Only universally-accepted rules (catch mistakes, not enforce style)
 - `:all` - All rules enabled (for exploration)
+- `:none` - No rules enabled (build up from scratch)
 
 **Path overrides:**
 
