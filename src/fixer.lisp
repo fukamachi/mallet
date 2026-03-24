@@ -1,6 +1,7 @@
 (defpackage #:mallet/fixer
   (:use #:cl)
   (:local-nicknames
+   (#:errors #:mallet/errors)
    (#:violation #:mallet/violation))
   (:export #:apply-fixes
            #:apply-fixes-to-file))
@@ -175,8 +176,8 @@ Returns modified text."
   (check-type end-line (integer 1))
 
   (when (< end-line start-line)
-    (error 'simple-error :format-control "end-line (~A) must be >= start-line (~A)"
-                        :format-arguments (list end-line start-line)))
+    (error 'errors:mallet-simple-error :format-control "end-line (~A) must be >= start-line (~A)"
+                                       :format-arguments (list end-line start-line)))
 
   (with-output-to-string (out)
     (with-input-from-string (in text)
@@ -258,8 +259,8 @@ the next line from being concatenated."
   (check-type replacement-content string)
 
   (when (< end-line start-line)
-    (error 'simple-error :format-control "end-line (~A) must be >= start-line (~A)"
-                        :format-arguments (list end-line start-line)))
+    (error 'errors:mallet-simple-error :format-control "end-line (~A) must be >= start-line (~A)"
+                                       :format-arguments (list end-line start-line)))
 
   (with-output-to-string (out)
     (with-input-from-string (in text)
