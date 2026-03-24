@@ -151,7 +151,7 @@
      (:file "no-package-use-test")
      (:file "double-colon-access-test")
      (:file "test-framework-detection-test")
-     (:file "error-with-string-only-test")
+     (:file "error-without-custom-condition-test")
      (:file "docstring-utilities-test")
      (:file "missing-docstring-test")
      (:file "missing-package-docstring-test")

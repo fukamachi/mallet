@@ -95,7 +95,7 @@ Severity and default inclusion are **independent decisions**.
 - **Severity** answers: "When this rule is enabled, how serious is a violation?"
 - **Default** answers: "Should this rule be enabled out of the box?"
 
-A rule can be `:warning` severity (violations should be fixed) but excluded from default (not every project needs it). For example, `error-with-string-only` is `:warning` because untyped conditions are a real problem worth fixing — but not every project prioritizes structured error handling, so it is not in the default preset.
+A rule can be `:warning` severity (violations should be fixed) but excluded from default (not every project needs it). For example, `error-without-custom-condition` is `:warning` because untyped conditions are a real problem worth fixing — but not every project prioritizes structured error handling, so it is not in the default preset.
 
 Conversely, a rule's severity should not be lowered just to exclude it from default. If a violation genuinely warrants attention when the rule is enabled, it should be `:warning` regardless of default inclusion.
 
@@ -111,4 +111,4 @@ Rules excluded from `:default` typically fail on one of:
 
 - **No consensus** — Reasonable developers disagree (e.g., line length limits, `+constant+` naming)
 - **Noisy** — Too many false positives in real-world code without context (e.g., unused loop variables)
-- **Niche** — Useful for specific project policies but not universally applicable (e.g., `error-with-string-only`)
+- **Niche** — Useful for specific project policies but not universally applicable (e.g., `error-without-custom-condition`)

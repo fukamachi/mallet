@@ -36,7 +36,12 @@
   (testing "interned-package-symbol resolves to defpackage-interned-symbol"
     (let ((result (handler-bind ((warning #'muffle-warning))
                     (utils:resolve-rule-alias :interned-package-symbol))))
-      (ok (eq :defpackage-interned-symbol result)))))
+      (ok (eq :defpackage-interned-symbol result))))
+
+  (testing "error-with-string-only resolves to error-without-custom-condition"
+    (let ((result (handler-bind ((warning #'muffle-warning))
+                    (utils:resolve-rule-alias :error-with-string-only))))
+      (ok (eq :error-without-custom-condition result)))))
 
 (deftest resolve-rule-alias-unknown-names
   (testing "unknown name is returned unchanged"

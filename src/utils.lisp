@@ -104,7 +104,8 @@ This combines proper-list-p and length checking in a single traversal for effici
     (:allow-other-keys    . :no-allow-other-keys)
     (:if-without-else     . :missing-else)
     (:final-newline       . :missing-final-newline)
-    (:interned-package-symbol . :defpackage-interned-symbol))
+    (:interned-package-symbol . :defpackage-interned-symbol)
+    (:error-with-string-only  . :error-without-custom-condition))
   "Deprecated rule name aliases mapping old-name to canonical new-name.")
 
 (defun resolve-rule-alias (name)
