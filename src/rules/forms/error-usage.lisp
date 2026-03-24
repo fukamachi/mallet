@@ -26,7 +26,7 @@
 ;;; it is semantically equivalent to the string form and does not give callers
 ;;; a specific condition type to catch with handler-case.
 
-(defparameter +cl-condition-names+
+(defparameter *cl-condition-names*
   '(;; Root condition hierarchy
     "CONDITION" "SERIOUS-CONDITION" "ERROR" "WARNING" "SIMPLE-CONDITION"
     ;; Simple variants
@@ -83,7 +83,7 @@ a valid fix because callers cannot distinguish them from any other error."))
 
 SYM is a CL condition if:
   - It has a cl: or common-lisp: package prefix, OR
-  - It is unqualified (CURRENT: prefix) and its symbol name matches +cl-condition-names+
+  - It is unqualified (CURRENT: prefix) and its symbol name matches *cl-condition-names*
 
 Note: The QUOTE head may be either a string (\"PACKAGE:quote\" from interpret-symbol)
 or the actual CL:QUOTE symbol (introduced by the quote reader macro, not from source)."
@@ -102,7 +102,7 @@ or the actual CL:QUOTE symbol (introduced by the quote reader macro, not from so
            (member pkg '("cl" "common-lisp" "CL" "COMMON-LISP") :test #'string-equal)
            ;; Unqualified (CURRENT: prefix) matching a known CL condition name
            (and (string-equal pkg "CURRENT")
-                (member name +cl-condition-names+ :test #'string=))))))))
+                (member name *cl-condition-names* :test #'string=))))))))
 
 (defmethod base:check-form ((rule error-without-custom-condition-rule) form file)
   "Check FORM from FILE for (error ...) calls with non-custom conditions."
