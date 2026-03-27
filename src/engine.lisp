@@ -107,12 +107,17 @@ Returns updated violations list."
                        (<= line (cdr interval))))
                 all-intervals)))))
 
-(defun filter-text-token-violations (violations directives state last-line)
+(defun filter-text-token-violations (violations directives state last-line rules)
   "Filter text/token VIOLATIONS using comment :disable/:enable DIRECTIVES.
 
    Violations whose line falls within a disabled interval for their rule are removed.
    For each suppressed violation, MARK-SUPPRESSION-USED is called on the corresponding
    suppression ID in STATE.
+
+   RULES is the list of active rule objects; only :text and :token typed rules have their
+   :disable directives registered for stale tracking. Form-level rules suppress via
+   consume-comment-directives and must not be registered here (doing so would generate
+   false stale-suppression violations when no text/token violations exist in the region).
 
    :suppress directives are NOT applied to text/token violations.
 
@@ -122,14 +127,20 @@ Returns updated violations list."
   (let ((intervals (build-disable-intervals directives last-line))
         ;; Map each :disable directive to a suppression ID for stale tracking
         (directive-ids (make-hash-table :test 'equal)))  ; (rule . line) -> id
-    ;; Register each :disable directive in state for stale tracking
+    ;; Register each :disable directive in state for stale tracking.
+    ;; Only register rules whose type is :text or :token; form-level rules
+    ;; (:form, :pattern) are handled by consume-comment-directives and must
+    ;; not be tracked here to avoid false stale-suppression violations.
     (dolist (directive directives)
       (destructuring-bind (d-line d-type d-rules d-reason) directive
         (when (eq d-type :disable)
           (dolist (rule d-rules)
-            (let ((id (suppression:register-suppression
-                        state d-line (list rule) d-reason :text-token-disable)))
-              (setf (gethash (cons rule d-line) directive-ids) id))))))
+            (let ((rule-obj (find rule rules :key #'rules:rule-name :test #'eq)))
+              (when (and rule-obj
+                         (member (rules:rule-type rule-obj) '(:text :token)))
+                (let ((id (suppression:register-suppression
+                            state d-line (list rule) d-reason :text-token-disable)))
+                  (setf (gethash (cons rule d-line) directive-ids) id))))))))
     ;; Filter violations
     (let ((kept nil)
           (used-rule-lines (make-hash-table :test 'equal)))  ; (rule . line) -> t
@@ -227,11 +238,16 @@ Returns updated violations list."
     ;; Filter each violation
     (dolist (v form-violations)
       (let* ((rule-name (violation:violation-rule v))
+             (v-line (violation:violation-line v))
              (matched-record (find-if (lambda (record)
                                         (destructuring-bind (id line rules reason) record
-                                          (declare (ignore id line reason))
-                                          (or (member rule-name rules :test #'eq)
-                                              (member :all rules :test #'eq))))
+                                          (declare (ignore id reason))
+                                          ;; Positional: a suppress at line L only matches
+                                          ;; violations at lines >= L (suppress the next form,
+                                          ;; not a preceding one).
+                                          (and (<= line v-line)
+                                               (or (member rule-name rules :test #'eq)
+                                                   (member :all rules :test #'eq)))))
                                       pending-suppress-records)))
         (if matched-record
             ;; Suppressed — mark used
@@ -368,7 +384,7 @@ If ignored-p is T, the file was ignored and violations will be NIL."
     ;; Filter text/token violations by comment :disable/:enable directives
     (setf violations
           (filter-text-token-violations violations all-directives
-                                         text-token-suppression-state last-line))
+                                         text-token-suppression-state last-line rules))
 
     ;; Run form-level rules
     (when (some (lambda (r) (eq (rules:rule-type r) :form)) rules)
@@ -408,6 +424,35 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                 (consume-comment-directives pending-directives prev-end-line form-start-line
                                             *suppression-state* pending-suppress-records))
 
+              ;; Also collect :suppress directives from within the form body.
+              ;; consume-comment-directives only picks up directives with
+              ;; D.line <= form-start-line.  Directives inside the form
+              ;; (form-start-line < D.line <= form-end-line) are extracted here so
+              ;; that filter-suppress-violations can match them after the form runs.
+              ;; They are removed from pending-directives to avoid double-counting
+              ;; in the stale-detection pass at EOF.
+              (let ((form-end-line (parser:form-end-line form))
+                    (remaining-directives nil))
+                (dolist (directive pending-directives)
+                  (destructuring-bind (d-line d-type d-rules d-reason) directive
+                    (cond
+                      ((and (eq d-type :suppress)
+                            (< form-start-line d-line)
+                            (<= d-line form-end-line))
+                       (let ((id (suppression:register-suppression
+                                   *suppression-state* d-line d-rules d-reason :suppress)))
+                         (setf (suppression:registered-suppressions *suppression-state*)
+                               (delete id (suppression:registered-suppressions *suppression-state*)
+                                       :key #'car))
+                         ;; push reverses document order, but filter-suppress-violations
+                         ;; uses find-if with positional check (<= record-line violation-line),
+                         ;; so the reversed list naturally yields closest-preceding-suppress
+                         ;; semantics: higher-line records are checked first and match first.
+                       (push (list id d-line d-rules d-reason) pending-suppress-records)))
+                      (t
+                       (push directive remaining-directives)))))
+                (setf pending-directives (nreverse remaining-directives)))
+
               (cond
                 ((and (suppression:mallet-declaim-p form-expr)
                       (suppression:mallet-suppress-next-p form-expr))
@@ -423,6 +468,16 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                    (push (list id form-start-line next-rules nil) pending-suppress-records)))
 
                 ((suppression:mallet-declaim-p form-expr)
+                 ;; A non-suppress-next declaim (e.g. disable/enable) produces no violations.
+                 ;; Any pending suppress records that were positionally associated with this
+                 ;; declaim must be flushed now; otherwise they silently suppress the next
+                 ;; real form's violations without emitting a stale warning.
+                 (when pending-suppress-records
+                   (setf stale-suppress-entries
+                         (nth-value 1
+                           (filter-suppress-violations nil pending-suppress-records
+                                                       *suppression-state* stale-suppress-entries)))
+                   (setf pending-suppress-records nil))
                  (suppression:update-suppression-for-declaim form-expr *suppression-state*))
 
                 (t

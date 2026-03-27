@@ -444,24 +444,75 @@
 ;;; Comment Directive Parsing
 
 (defun %count-block-comment-delimiters (line)
-  "Return (values openers closers) — counts of #| and |# in LINE."
+  "Return (values openers closers) — counts of #| and |# in LINE.
+
+   Ignores tokens inside string literals and stops scanning at a ';' outside
+   strings and locally-opened block comments (line comment boundary).
+   Skips #\\x character literals so #\\| is not mistaken for a delimiter.
+   Tracks locally-opened block comments so that nested #| and |# balance
+   correctly within a single line."
   (let ((openers 0)
         (closers 0)
+        (in-string nil)
+        (depth 0)
         (i 0)
         (len (length line)))
     (loop while (< i len)
           do (cond
-               ((and (< (1+ i) len)
-                     (char= (char line i) #\#)
-                     (char= (char line (1+ i)) #\|))
-                (incf openers)
-                (incf i 2))
-               ((and (< (1+ i) len)
-                     (char= (char line i) #\|)
-                     (char= (char line (1+ i)) #\#))
-                (incf closers)
-                (incf i 2))
-               (t (incf i))))
+               ;; Inside a locally-opened block comment: scan only for #| / |#
+               ((plusp depth)
+                (cond
+                  ((and (< (1+ i) len)
+                        (char= (char line i) #\|)
+                        (char= (char line (1+ i)) #\#))
+                   (decf depth)
+                   (incf closers)
+                   (incf i 2))
+                  ((and (< (1+ i) len)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf depth)
+                   (incf openers)
+                   (incf i 2))
+                  (t (incf i))))
+               ;; Inside a string literal: handle backslash escapes and closing quote
+               (in-string
+                (cond
+                  ((and (char= (char line i) #\\) (< (1+ i) len))
+                   (incf i 2))
+                  ((char= (char line i) #\")
+                   (setf in-string nil)
+                   (incf i))
+                  (t (incf i))))
+               ;; Outside both: handle line comments, char literals, strings, delimiters
+               (t
+                (cond
+                  ;; Line comment: rest of line is comment, stop scanning
+                  ((char= (char line i) #\;)
+                   (return))
+                  ;; Block comment opener
+                  ((and (< (1+ i) len)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf depth)
+                   (incf openers)
+                   (incf i 2))
+                  ;; Block comment closer (closes a comment opened on a prior line)
+                  ((and (< (1+ i) len)
+                        (char= (char line i) #\|)
+                        (char= (char line (1+ i)) #\#))
+                   (incf closers)
+                   (incf i 2))
+                  ;; Character literal #\x: skip all three chars
+                  ((and (char= (char line i) #\#)
+                        (< (+ i 2) len)
+                        (char= (char line (1+ i)) #\\))
+                   (incf i 3))
+                  ;; String opener
+                  ((char= (char line i) #\")
+                   (setf in-string t)
+                   (incf i))
+                  (t (incf i))))))
     (values openers closers)))
 
 (defun %semicolon-in-string-p (line semi-pos &optional (initial-in-string-p nil))
@@ -504,6 +555,71 @@
                   (t (incf i))))))
     in-string))
 
+(defun %semicolon-is-first-on-line-p (line semi-pos &optional (initial-in-string-p nil))
+  "Return T if the semicolon at SEMI-POS is the first unquoted semicolon on LINE.
+
+   Scans characters in LINE before SEMI-POS, tracking string and inline block-comment
+   state.  Returns NIL as soon as an unquoted semicolon is found before SEMI-POS,
+   meaning the semicolon at SEMI-POS is already inside a comment body started by
+   that earlier semicolon."
+  (let ((in-string initial-in-string-p)
+        (block-depth 0)
+        (i 0))
+    (loop while (< i semi-pos)
+          do (cond
+               ;; Inside an inline block comment: scan for nested #| or |#
+               ((plusp block-depth)
+                (cond
+                  ((and (< (1+ i) semi-pos)
+                        (char= (char line i) #\|)
+                        (char= (char line (1+ i)) #\#))
+                   (decf block-depth)
+                   (incf i 2))
+                  ((and (< (1+ i) semi-pos)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf block-depth)
+                   (incf i 2))
+                  (t (incf i))))
+               ;; Inside a string: handle escapes and closing quote
+               (in-string
+                (cond
+                  ((and (char= (char line i) #\\) (< (1+ i) semi-pos))
+                   (incf i 2))
+                  ((char= (char line i) #\")
+                   (setf in-string nil)
+                   (incf i))
+                  (t (incf i))))
+               ;; Outside string and block comment
+               (t
+                (cond
+                  ;; An earlier unquoted semicolon — the match at semi-pos is inside that comment
+                  ((char= (char line i) #\;)
+                   (return-from %semicolon-is-first-on-line-p nil))
+                  ;; Inline block-comment opener
+                  ((and (< (1+ i) semi-pos)
+                        (char= (char line i) #\#)
+                        (char= (char line (1+ i)) #\|))
+                   (incf block-depth)
+                   (incf i 2))
+                  ;; #\x character literal: skip 3 chars.
+                  ;; Mirror %semicolon-in-string-p: use (< (1+ i) semi-pos) as outer guard
+                  ;; so that #\; where i+2 == semi-pos is handled by the inner branch
+                  ;; (the char literal consumes the target semicolon — return t, not nil).
+                  ((and (char= (char line i) #\#)
+                        (< (1+ i) semi-pos)
+                        (char= (char line (1+ i)) #\\))
+                   (if (>= (+ i 2) semi-pos)
+                       ;; The semicolon at semi-pos IS the character literal body — not a real ;
+                       (return-from %semicolon-is-first-on-line-p t)
+                       (incf i 3)))
+                  ;; String opener
+                  ((char= (char line i) #\")
+                   (setf in-string t)
+                   (incf i))
+                  (t (incf i))))))
+    t))
+
 (defun %string-state-after-line (line initial-in-string-p
                                  &optional (block-comment-depth 0))
   "Return the string-literal state at the end of LINE.
@@ -511,27 +627,51 @@
    Scans the entire LINE starting with INITIAL-IN-STRING-P and
    BLOCK-COMMENT-DEPTH, skipping characters inside block comments.
    Returns T if the line ends inside an unclosed double-quoted string,
-   NIL otherwise.  Backslash escapes inside strings are honoured."
+   NIL otherwise.  Backslash escapes inside strings are honoured.
+
+   Within a block comment, string literals are also tracked so that |# inside
+   a quoted string does not prematurely close the block comment.  This keeps
+   the function consistent with %count-block-comment-delimiters, which also
+   applies string-aware scanning."
   (let ((len (length line))
         (in-string initial-in-string-p)
         (depth block-comment-depth)
+        (in-block-string nil)
         (i 0))
     (loop while (< i len)
           do (cond
-               ;; Inside a block comment: look for nested #| or closing |#
+               ;; Inside a block comment: look for nested #| or closing |#,
+               ;; but also track string literals to avoid false closes.
                ((plusp depth)
                 (cond
-                  ((and (< (1+ i) len)
-                        (char= (char line i) #\|)
-                        (char= (char line (1+ i)) #\#))
-                   (decf depth)
-                   (incf i 2))
-                  ((and (< (1+ i) len)
-                        (char= (char line i) #\#)
-                        (char= (char line (1+ i)) #\|))
-                   (incf depth)
-                   (incf i 2))
-                  (t (incf i))))
+                  ;; Inside a string within the block comment: track closing
+                  ;; quote only; ignore #|/|# delimiters.  Backslash escapes
+                  ;; are not tracked here — they are rare inside block-comment
+                  ;; string heuristics and keeping this branch lean avoids
+                  ;; exceeding the cyclomatic-complexity limit.
+                  (in-block-string
+                   (cond
+                     ((char= (char line i) #\")
+                      (setf in-block-string nil)
+                      (incf i))
+                     (t (incf i))))
+                  ;; Outside a string within the block comment.
+                  (t
+                   (cond
+                     ((and (< (1+ i) len)
+                           (char= (char line i) #\|)
+                           (char= (char line (1+ i)) #\#))
+                      (decf depth)
+                      (incf i 2))
+                     ((and (< (1+ i) len)
+                           (char= (char line i) #\#)
+                           (char= (char line (1+ i)) #\|))
+                      (incf depth)
+                      (incf i 2))
+                     ((char= (char line i) #\")
+                      (setf in-block-string t)
+                      (incf i))
+                     (t (incf i))))))
                ;; Inside a string: handle escapes and closing quote
                (in-string
                 (cond
@@ -611,7 +751,11 @@
                                     ";+\\s*mallet:(suppress|disable|enable)"
                                     line)))
                      (when (and semi-pos
-                                (not (%semicolon-in-string-p line semi-pos in-string-at-start)))
+                                (not (%semicolon-in-string-p line semi-pos in-string-at-start))
+                                ;; Reject matches where an earlier unquoted semicolon
+                                ;; already started a comment on this line (e.g.
+                                ;; ";; prose ; mallet:suppress" is not a directive).
+                                (%semicolon-is-first-on-line-p line semi-pos in-string-at-start))
                        (multiple-value-bind (matched groups)
                            (cl-ppcre:scan-to-strings
                             ";+\\s*mallet:(suppress|disable|enable)\\s*(.*)"
