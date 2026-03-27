@@ -628,7 +628,7 @@ Suitable for new projects and AI-assisted coding where stricter checking is desi
              :redundant-progn
              ;; Additional practice rules
              :no-allow-other-keys
-             :error-with-string-only
+             :error-without-custom-condition
              :bare-float-literal
              :asdf-redundant-package-prefix
              :asdf-reader-conditional
