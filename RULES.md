@@ -30,8 +30,8 @@ The **Default** column below reflects `:default` preset membership. Rules marked
 | Rule | Description | Severity | Default | Options |
 |------|-------------|----------|---------|---------|
 | [`:no-eval`](#no-eval) | Runtime use of `cl:eval` | warning | on | |
-| [`:runtime-intern`](#runtime-intern) | Runtime use of symbol-interning functions | warning | off | |
-| [`:runtime-unintern`](#runtime-unintern) | Runtime use of `cl:unintern` | warning | off | |
+| [`:runtime-intern`](#runtime-intern) | Runtime use of symbol-interning functions | warning | strict | |
+| [`:runtime-unintern`](#runtime-unintern) | Runtime use of `cl:unintern` | warning | strict | |
 | [`:asdf-operate-in-perform`](#asdf-operate-in-perform) | Calling `asdf:operate` inside `:perform` | warning | on | |
 
 ### [Practice](#practice) — Commonly accepted best practices
@@ -40,12 +40,12 @@ The **Default** column below reflects `:default` preset membership. Rules marked
 |------|-------------|----------|---------|---------|
 | [`:no-package-use`](#no-package-use) | Use of `:use` in `defpackage` | warning | strict | |
 | [`:no-ignore-errors`](#no-ignore-errors) | Use of `cl:ignore-errors` | warning | on | |
-| [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | off | |
+| [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | strict | |
 | [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | strict | |
-| [`:error-without-custom-condition`](#error-without-custom-condition) | Calling `error` without a custom condition type | warning | off | |
+| [`:error-without-custom-condition`](#error-without-custom-condition) | Calling `error` without a custom condition type | warning | strict | |
 | [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
-| [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | off | |
-| [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | off | |
+| [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | strict | |
+| [`:bare-float-literal`](#bare-float-literal) | Float literals should have explicit type markers | info | strict | |
 | [`:coalton-missing-declare`](#coalton-missing-declare) | Coalton function `define` missing `declare` type signature | warning | off | |
 
 ### [Cleanliness](#cleanliness) — Dead code and unused definitions
@@ -56,7 +56,7 @@ The **Default** column below reflects `:default` preset membership. Rules marked
 | [`:unused-local-functions`](#unused-local-functions) | Local functions that are never called | warning | on | | |
 | [`:unused-local-nicknames`](#unused-local-nicknames) | Local nicknames that are never used | warning | on | yes | |
 | [`:unused-imported-symbols`](#unused-imported-symbols) | Imported symbols that are never used | warning | on | yes | |
-| [`:unused-loop-variables`](#unused-loop-variables) | Loop variables that are never used | info | off | | |
+| [`:unused-loop-variables`](#unused-loop-variables) | Loop variables that are never used | info | strict | | |
 | [`:stale-suppression`](#stale-suppression) | Suppression directive has no effect | warning | on | | |
 
 ### [Style](#style) — Idiomatic patterns and naming
@@ -65,13 +65,13 @@ The **Default** column below reflects `:default` preset membership. Rules marked
 |------|-------------|----------|---------|---------|
 | [`:one-package-per-file`](#one-package-per-file) | Files should define their own package | info | off | |
 | [`:missing-else`](#missing-else) | Use `when`/`unless` instead of `if` without else | warning | on | |
-| [`:progn-in-conditional`](#progn-in-conditional) | Use `cond`/`when`/`unless` instead of bare `progn` in `if`/`and`/`or` | info | off | |
-| [`:missing-otherwise`](#missing-otherwise) | `case`/`typecase` without `otherwise` clause | warning | off | |
-| [`:defpackage-interned-symbol`](#defpackage-interned-symbol) | Use uninterned symbols in package definitions | info | off | |
+| [`:progn-in-conditional`](#progn-in-conditional) | Use `cond`/`when`/`unless` instead of bare `progn` in `if`/`and`/`or` | info | strict | |
+| [`:missing-otherwise`](#missing-otherwise) | `case`/`typecase` without `otherwise` clause | warning | strict | |
+| [`:defpackage-interned-symbol`](#defpackage-interned-symbol) | Use uninterned symbols in package definitions | info | strict | |
 | [`:needless-let*`](#needless-let) | Use `let` when bindings are independent | warning | on | |
 | [`:special-variable-naming`](#special-variable-naming) | Special variables should be named `*foo*` | info | off | |
 | [`:constant-naming`](#constant-naming) | Constants should be named `+foo+` | info | off | |
-| [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) | Redundant package prefixes in `.asd` files | info | off | |
+| [`:asdf-redundant-package-prefix`](#asdf-redundant-package-prefix) | Redundant package prefixes in `.asd` files | info | strict | |
 | [`:missing-docstring`](#missing-docstring) | Top-level definitions missing docstrings | info | off | |
 | [`:missing-package-docstring`](#missing-package-docstring) | Package definitions missing docstrings | info | off | |
 | [`:missing-variable-docstring`](#missing-variable-docstring) | Variable definitions missing docstrings | info | off | |

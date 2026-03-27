@@ -632,10 +632,8 @@ Suitable for new projects and AI-assisted coding where stricter checking is desi
              :bare-float-literal
              :asdf-redundant-package-prefix
              :asdf-reader-conditional
-             :coalton-missing-declare
              :runtime-intern
              :runtime-unintern
-             :coalton-missing-to-boolean
              ;; Cleanliness
              :unused-loop-variables
              ;; Style
