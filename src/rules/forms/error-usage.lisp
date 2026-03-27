@@ -103,7 +103,7 @@ or the actual CL:QUOTE symbol (introduced by the quote reader macro, not from so
               (name (string-upcase (subseq sym (1+ colon-pos)))))
           (or
            ;; Package-qualified CL condition: cl:simple-error or common-lisp:simple-error
-           (member pkg '("cl" "common-lisp" "CL" "COMMON-LISP") :test #'string-equal)
+           (member pkg '("cl" "common-lisp") :test #'string-equal)
            ;; Unqualified (CURRENT: prefix) matching a known CL condition name
            (and (string-equal pkg "CURRENT")
                 (member name *cl-condition-names* :test #'string=))))))))
