@@ -1,5 +1,5 @@
 (defsystem "mallet"
-  :version "0.2.0"
+  :version "0.9.0"
   :description "A sensible Common Lisp linter that catches mistakes, not style"
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
   :license "MIT"
