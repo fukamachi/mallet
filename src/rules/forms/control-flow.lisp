@@ -242,7 +242,18 @@ Suppressions are handled automatically by the :around method."
   (let ((violations '())
         (visited (make-hash-table :test 'eq)))
 
-    (labels ((check-expr (current-expr fallback-line fallback-column)
+    (labels ((case-like-head-p (head)
+               "Return T if HEAD names a case-family form whose clauses have
+datum keys (case/typecase/ecase/ctypecase/etypecase/
+handler-case/restart-case/handler-bind/restart-bind)."
+               (and (stringp head)
+                    (member (base:symbol-name-from-string head)
+                            '("CASE" "TYPECASE" "ECASE" "CTYPECASE" "ETYPECASE"
+                              "HANDLER-CASE" "RESTART-CASE"
+                              "HANDLER-BIND" "RESTART-BIND")
+                            :test #'string-equal)))
+
+             (check-expr (current-expr fallback-line fallback-column)
                "Recursively check expression for redundant progn."
                (base:with-safe-code-expr (current-expr visited)
                  (multiple-value-bind (actual-line actual-column)
@@ -271,15 +282,32 @@ Suppressions are handled automatically by the :around method."
                                               :fix nil)
                                violations)))
 
-                     ;; Recursively check nested forms
+                     ;; Always walk HEAD for nested forms.
                      (a:nconcf violations
                                (base:collect-violations-from-subexprs rule head file
                                                                       actual-line actual-column
                                                                       position-map))
-                     (a:nconcf violations
-                               (base:collect-violations-from-subexprs rule rest-args file
-                                                                      actual-line actual-column
-                                                                      position-map)))))))
+
+                     (cond
+                       ;; Case-family form: walk keyform + each clause BODY; skip KEY position.
+                       ((and (case-like-head-p head) (consp rest-args))
+                        ;; Walk the keyform (first rest-args) via local check-expr,
+                        ;; preserving cycle-detection continuity via the shared visited table.
+                        (check-expr (first rest-args) actual-line actual-column)
+                        ;; Walk each clause body, unconditionally skipping (first clause).
+                        (dolist (clause (rest rest-args))
+                          (when (consp clause)
+                            (a:nconcf violations
+                                      (base:collect-violations-from-subexprs
+                                       rule (rest clause) file
+                                       actual-line actual-column
+                                       position-map)))))
+                       ;; Non-case-family: preserve existing wholesale recursion.
+                       (t
+                        (a:nconcf violations
+                                  (base:collect-violations-from-subexprs rule rest-args file
+                                                                         actual-line actual-column
+                                                                         position-map)))))))))
 
       ;; Start checking from the provided expression
       (check-expr expr line column))
