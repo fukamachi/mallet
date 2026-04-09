@@ -283,3 +283,114 @@
   (testing "coalton-aware-p returns T for redundant-progn-rule"
     (let ((rule (make-instance 'rules:redundant-progn-rule)))
       (ok (rules:coalton-aware-p rule)))))
+
+;;; Regression: progn in case-family clause-key position must not fire
+
+(deftest redundant-progn-case-key
+  ;; --- False-positive fixes: atom key `progn` in all five case-family forms ---
+  (testing "Valid: case with progn as atom clause key"
+    (let* ((code "(case x (progn 1) (otherwise 2))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: typecase with progn as atom clause key"
+    (let* ((code "(typecase x (integer 1) (progn (foo)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: ecase with progn as atom clause key"
+    (let* ((code "(ecase x (progn 1) (other 2))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: ctypecase with progn as atom clause key"
+    (let* ((code "(ctypecase x (progn 1) (number 2))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: etypecase with progn as atom clause key"
+    (let* ((code "(etypecase x (progn 1) (string 2))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  ;; --- False-positive fix: list key containing progn symbol ---
+  (testing "Valid: case with list key containing progn symbol"
+    (let* ((code "(case x ((progn foo) body) (otherwise 2))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  ;; --- False-positive fixes: handler-case / restart-case / handler-bind / restart-bind ---
+  (testing "Valid: handler-case with progn as condition-type atom key"
+    (let* ((code "(handler-case (foo) (progn (e) (bar)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: restart-case with progn as restart-name atom key"
+    (let* ((code "(restart-case (foo) (progn () (bar)))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: handler-bind with progn as condition-type in binding"
+    (let* ((code "(handler-bind ((progn #'h)) (foo))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: restart-bind with progn as restart-name in binding"
+    (let* ((code "(restart-bind ((progn #'h)) (foo))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  ;; --- True-positive: real progn in a clause body must still fire ---
+  (testing "Invalid: single-body progn inside case clause body still fires"
+    (let* ((code "(case x (a (progn (only))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
+
+  ;; --- True-positive: real progn used as case keyform must still fire ---
+  (testing "Invalid: single-body progn as case keyform still fires"
+    (let* ((code "(case (progn (first form)) (a 1))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
+
+  ;; --- Nested case-in-case: skip logic must compose recursively ---
+  (testing "Invalid: nested case with inner clause-body progn fires exactly once"
+    (let* ((code "(case x (a (case y (progn 1) (otherwise (progn (foo))))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
+
+  ;; --- Robustness: stray-atom clause must not crash ---
+  (testing "Valid: malformed case with stray atom clause does not crash"
+    (let* ((code "(case x a (otherwise 2))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
