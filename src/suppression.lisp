@@ -766,12 +766,12 @@
                                   (type (intern (string-upcase type-str) :keyword))
                                   (reason nil)
                                   (rules-str rest-str))
-                             ;; Split out optional reason after " -- " (space-bounded to avoid
-                             ;; matching "--" embedded within rule names like "my--rule")
-                             (let ((sep-pos (cl-ppcre:scan "\\s+--(?:\\s|$)" rules-str)))
+                             ;; Split out optional reason after " -- " or " — " (em dash).
+                             ;; Space-bounded to avoid matching "--" embedded in rule names.
+                             (let ((sep-pos (cl-ppcre:scan "\\s+(?:--|—)(?:\\s|$)" rules-str)))
                                (when sep-pos
                                  (let ((reason-part (string-trim " "
-                                                      (cl-ppcre:regex-replace "^.*?\\s+--\\s*" rules-str ""))))
+                                                      (cl-ppcre:regex-replace "^.*?\\s+(?:--|—)\\s*" rules-str ""))))
                                    (setf reason (if (string= reason-part "") nil reason-part)))
                                  (setf rules-str (string-trim " " (subseq rules-str 0 sep-pos)))))
                              ;; Split rules by whitespace, filtering empty strings

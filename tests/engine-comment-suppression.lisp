@@ -43,6 +43,15 @@
    :rules (list (rules:make-rule :line-length)
                 (rules:make-rule :stale-suppression))))
 
+(defun make-double-colon-config ()
+  (config:make-config
+   :rules (list (rules:make-rule :double-colon-access))))
+
+(defun make-double-colon-and-stale-config ()
+  (config:make-config
+   :rules (list (rules:make-rule :double-colon-access)
+                (rules:make-rule :stale-suppression))))
+
 ;;; Test 1: Stale suppression — comment with no matching violation
 
 (deftest comment-suppress-stale-no-violation
@@ -79,6 +88,25 @@
                                 violations)))
         (ok (null stale-violations)
             "No stale-suppression violations when rule not in config")))))
+
+(deftest comment-suppress-dormant-rule-not-stale
+  (testing "Suppression for a rule not in the active rule set is not flagged as stale"
+    ;; Regression: a ; mallet:suppress comment targeting a rule that is not
+    ;; enabled in the current config should be treated as dormant (a no-op),
+    ;; not reported as stale.  Otherwise a suppression written for one preset
+    ;; (e.g. :all) generates noise under another preset (e.g. :strict) even
+    ;; though the suppressed rule cannot possibly fire.
+    (let* ((file (violations-fixture "comment-suppress-stale.lisp"))
+           ;; :line-length is active; the file's suppress comment targets
+           ;; :needless-let*, which is NOT in this config.
+           (config (make-line-length-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+
+      (let ((stale-violations (remove-if-not
+                                (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                violations)))
+        (ok (null stale-violations)
+            "No stale-suppression for a rule that is not in the active set")))))
 
 ;;; Test 2: Negative control — same form WITHOUT trailing comment DOES produce a violation
 
@@ -441,3 +469,40 @@
                                violations)))
         (ok (= 1 (length let*-violations))
             "Exactly 1 needless-let* violation in bar (leaked suppress-next must not silence it")))))
+
+;;; Test: ; mallet:suppress for token-level rules — form-scope semantics
+
+(deftest token-suppress-same-line
+  (testing "; mallet:suppress on same line inside the form suppresses the violation"
+    (let* ((file (no-violations-fixture "token-suppress-active.lisp"))
+           (config (make-double-colon-config))
+           (violations (engine:lint-file file :config config)))
+      (ok (null violations)
+          "No double-colon-access violation when suppress comment is on the same line")))
+
+  (testing "; mallet:suppress on token-level rule does not produce stale-suppression"
+    (let* ((file (no-violations-fixture "token-suppress-active.lisp"))
+           (config (make-double-colon-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+      (let ((stale (remove-if-not
+                     (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                     violations)))
+        (ok (null stale)
+            "No stale-suppression when suppress comment suppressed a real token-level violation"))))
+
+  (testing "; mallet:suppress BEFORE the form suppresses all token violations within it"
+    (let* ((file (no-violations-fixture "token-suppress-before-form.lisp"))
+           (config (make-double-colon-config))
+           (violations (engine:lint-file file :config config)))
+      (ok (null violations)
+          "No double-colon-access violations when suppress precedes the form")))
+
+  (testing "; mallet:suppress BEFORE the form does not produce stale-suppression"
+    (let* ((file (no-violations-fixture "token-suppress-before-form.lisp"))
+           (config (make-double-colon-and-stale-config))
+           (violations (engine:lint-file file :config config)))
+      (let ((stale (remove-if-not
+                     (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                     violations)))
+        (ok (null stale)
+            "No stale-suppression when before-form suppress suppressed real token violations")))))

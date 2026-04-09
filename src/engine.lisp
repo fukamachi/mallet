@@ -119,7 +119,8 @@ Returns updated violations list."
    consume-comment-directives and must not be registered here (doing so would generate
    false stale-suppression violations when no text/token violations exist in the region).
 
-   :suppress directives are NOT applied to text/token violations.
+   :suppress directives are NOT applied here; they are handled in the form-level loop
+   with form-scope semantics (see lint-file), which works uniformly for token and form rules.
 
    Returns the filtered violations list."
   (when (null directives)
@@ -271,8 +272,13 @@ Returns updated violations list."
   "Generate :stale-suppression violations for each unused suppression entry.
 
    Only generates violations if the :stale-suppression rule is present in RULES.
-   Generates one violation per suppressed rule in each stale entry."
-  (let ((stale-rule (find :stale-suppression rules :key #'rules:rule-name)))
+   Generates one violation per suppressed rule in each stale entry.
+
+   Suppressions for rules that are not in the active RULES set are treated as
+   dormant rather than stale — they simply have no effect in this run, so it
+   is wrong to flag them as unused.  :all suppressions are always checked."
+  (let ((stale-rule (find :stale-suppression rules :key #'rules:rule-name))
+        (active-rule-names (mapcar #'rules:rule-name rules)))
     (when stale-rule
       (dolist (entry stale-entries)
         (let* ((plist (cdr entry))
@@ -280,16 +286,18 @@ Returns updated violations list."
                (d-rules (getf plist :rules))
                (d-reason (getf plist :reason)))
           (dolist (rule-name d-rules)
-            (push (make-instance 'violation:violation
-                                 :rule :stale-suppression
-                                 :file file
-                                 :line d-line
-                                 :column 0
-                                 :severity (rules:rule-severity stale-rule)
-                                 :category (rules:rule-category stale-rule)
-                                 :message (rules:make-stale-suppression-message rule-name d-reason)
-                                 :fix nil)
-                  violations))))))
+            (when (or (eq rule-name :all)
+                      (member rule-name active-rule-names :test #'eq))
+              (push (make-instance 'violation:violation
+                                   :rule :stale-suppression
+                                   :file file
+                                   :line d-line
+                                   :column 0
+                                   :severity (rules:rule-severity stale-rule)
+                                   :category (rules:rule-category stale-rule)
+                                   :message (rules:make-stale-suppression-message rule-name d-reason)
+                                   :fix nil)
+                    violations)))))))
   violations)
 
 
@@ -386,9 +394,22 @@ If ignored-p is T, the file was ignored and violations will be NIL."
           (filter-text-token-violations violations all-directives
                                          text-token-suppression-state last-line rules))
 
-    ;; Run form-level rules
-    (when (some (lambda (r) (eq (rules:rule-type r) :form)) rules)
+    ;; Run form-level rules and/or form-scope suppress for token violations.
+    ;; We enter this block when:
+    ;;   (a) there are form-level rules to run, OR
+    ;;   (b) there are text/token violations that may need form-scope ; mallet:suppress
+    ;;       applied — requires form parsing to know each form's line range.
+    (when (or (some (lambda (r) (eq (rules:rule-type r) :form)) rules)
+              (and violations
+                   (some (lambda (d) (eq (second d) :suppress)) all-directives)))
       (suppression:ensure-mallet-package-exists)
+
+      ;; Adopt text/token violations for form-scope suppress processing.
+      ;; The form loop applies ; mallet:suppress to token violations within each
+      ;; form's line range — the same semantics as for form-level rules — so that
+      ;; suppression works uniformly regardless of rule type.
+      (let ((pending-token-violations violations))
+        (setf violations '())
 
       (multiple-value-bind (forms parse-errors)
           (let ((*features* (cons :mallet *features*)))
@@ -516,13 +537,46 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                                           (process-single-form
                                             synthetic cl-only-rules file file-type nil))))))))
 
-                   ;; Filter violations against pending :suppress records
-                   ;; (includes both comment :suppress and declaim suppress-next)
+                   ;; Filter violations against pending :suppress records.
+                   ;; Include text/token violations within this form's line range so
+                   ;; that ; mallet:suppress works uniformly for all rule types.
                    (when pending-suppress-records
-                     (multiple-value-setq (form-violations stale-suppress-entries)
-                       (filter-suppress-violations form-violations pending-suppress-records
-                                                   *suppression-state* stale-suppress-entries))
-                     (setf pending-suppress-records nil))
+                     (let* ((form-end-line (parser:form-end-line form))
+                            ;; Extract token violations within this form's line range
+                            (in-form-tt
+                              (when pending-token-violations
+                                (remove-if-not
+                                  (lambda (v)
+                                    (and (>= (violation:violation-line v) form-start-line)
+                                         (<= (violation:violation-line v) form-end-line)))
+                                  pending-token-violations)))
+                            ;; Combine form and in-range token violations for unified filtering
+                            (combined (if in-form-tt
+                                          (nconc form-violations in-form-tt)
+                                          form-violations)))
+                       (multiple-value-setq (combined stale-suppress-entries)
+                         (filter-suppress-violations combined pending-suppress-records
+                                                     *suppression-state* stale-suppress-entries))
+                       (setf pending-suppress-records nil)
+                       ;; Split surviving combined violations back into form vs token
+                       (if in-form-tt
+                           (let ((in-form-tt-set (make-hash-table :test 'eq)))
+                             (dolist (v in-form-tt)
+                               (setf (gethash v in-form-tt-set) t))
+                             ;; Surviving token violations: in-form-tt members that made it through
+                             (let ((surviving-tt
+                                     (remove-if-not
+                                       (lambda (v) (gethash v in-form-tt-set))
+                                       combined)))
+                               ;; Update pending-token-violations: replace in-form-tt entries
+                               ;; with only those that survived (were not suppressed)
+                               (setf pending-token-violations
+                                     (nconc (remove-if (lambda (v) (gethash v in-form-tt-set))
+                                                       pending-token-violations)
+                                            surviving-tt)))
+                             (setf form-violations
+                                   (remove-if (lambda (v) (gethash v in-form-tt-set)) combined)))
+                           (setf form-violations combined))))
 
                    (setf violations (nconc violations form-violations)))))
 
@@ -574,7 +628,11 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                                    (suppression:collect-stale-suppressions
                                      text-token-suppression-state))))
             (setf violations
-                  (generate-stale-suppression-violations all-stale rules file violations))))))
+                  (generate-stale-suppression-violations all-stale rules file violations))))
+
+        ;; Merge remaining (non-suppressed) text/token violations back into the
+        ;; final list. These are violations not covered by any form-scope suppress.
+        (setf violations (nconc pending-token-violations violations)))))
 
     ;; Generate fix metadata and populate category from rule
     (dolist (v violations)

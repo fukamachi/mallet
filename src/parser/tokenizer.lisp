@@ -1,4 +1,4 @@
-; mallet:suppress one-package-per-file implementation file shares mallet/parser package defined in parser.lisp
+; mallet:suppress one-package-per-file -- implementation file shares mallet/parser package defined in parser.lisp
 (in-package #:mallet/parser)
 
 ;; Regex pattern for Common Lisp numeric tokens
@@ -139,7 +139,13 @@ Returns a list of TOKEN objects."
                   (value (subseq raw 1 (1- (length raw)))))
              (push (make-token :string value file line start-column raw) tokens)
              (incf pos (length raw))
-             (incf column (length raw))))
+             ;; Update line/column for newlines inside the string literal.
+             (let ((last-newline (position #\Newline raw :from-end t)))
+               (cond (last-newline
+                      (incf line (count #\Newline raw))
+                      (setf column (- (length raw) last-newline 1)))
+                     (t
+                      (incf column (length raw)))))))
 
           ;; Symbols and numbers
           ((constituent-char-p ch)

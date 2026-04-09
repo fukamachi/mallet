@@ -36,7 +36,23 @@
         (ok (= 1 (first directive)))
         (ok (eq :suppress (second directive)))
         (ok (equal '(:rule1) (third directive)))
-        (ok (string= "intentional" (fourth directive)))))))
+        (ok (string= "intentional" (fourth directive))))))
+  (testing "Suppress with reason after em dash —"
+    (let ((result (suppression:parse-comment-directives
+                    "; mallet:suppress rule1 — em dash reason")))
+      (ok (= 1 (length result)))
+      (let ((directive (first result)))
+        (ok (= 1 (first directive)))
+        (ok (eq :suppress (second directive)))
+        (ok (equal '(:rule1) (third directive)))
+        (ok (string= "em dash reason" (fourth directive))))))
+  (testing "Suppress with rule only, em dash with no reason text"
+    (let ((result (suppression:parse-comment-directives
+                    "; mallet:suppress rule1 —")))
+      (ok (= 1 (length result)))
+      (let ((directive (first result)))
+        (ok (equal '(:rule1) (third directive)))
+        (ok (null (fourth directive)))))))
 
 (deftest parse-comment-directives-multiple-semicolons
   (testing "Multiple semicolons like ;;; mallet:disable"
