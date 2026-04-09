@@ -237,7 +237,18 @@
            (rule (make-instance 'rules:redundant-progn-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :redundant-progn)))))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
+
+  (testing "Valid: cl:case with progn clause-key inside coalton-toplevel is not flagged"
+    (let* ((code "(coalton-toplevel
+                   (cl:define-function f (x)
+                     (cl:case x
+                       (progn 1)
+                       (cl:otherwise 2))))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:redundant-progn-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))
 
 (deftest redundant-progn-coalton-negative
   (testing "Negative: coalton-toplevel with normal define produces zero violations"
