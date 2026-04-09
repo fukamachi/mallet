@@ -21,3 +21,14 @@
 
 (let ((x 1))
   (use x))
+
+;;; Valid: progn symbol as case clause key (not a progn form)
+(defun classify-head (x)
+  (case x
+    (progn :progn-keyword)
+    (otherwise :other)))
+
+;;; Valid: progn symbol in handler-case condition-type position
+(defun run-safely ()
+  (handler-case (do-it)
+    (progn (e) (log e))))
