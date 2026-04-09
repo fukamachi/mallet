@@ -243,14 +243,16 @@ Suppressions are handled automatically by the :around method."
         (visited (make-hash-table :test 'eq)))
 
     (labels ((case-like-head-p (head)
-               "Return T if HEAD names a case-family form whose clauses have
-datum keys (case/typecase/ecase/ctypecase/etypecase/
-handler-case/restart-case/handler-bind/restart-bind)."
+               "Return T if HEAD names a form whose clauses have a non-evaluated
+datum as their first element (case/typecase/ecase/ctypecase/etypecase/
+handler-case/restart-case).  handler-bind and restart-bind are intentionally
+excluded: their `(rest rest-args)' is a body of ordinary forms, not
+datum-keyed clauses — treating them like clauses would silently swallow a
+real redundant progn wrapping the body."
                (and (stringp head)
                     (member (base:symbol-name-from-string head)
                             '("CASE" "TYPECASE" "ECASE" "CTYPECASE" "ETYPECASE"
-                              "HANDLER-CASE" "RESTART-CASE"
-                              "HANDLER-BIND" "RESTART-BIND")
+                              "HANDLER-CASE" "RESTART-CASE")
                             :test #'string-equal)))
 
              (check-expr (current-expr fallback-line fallback-column)

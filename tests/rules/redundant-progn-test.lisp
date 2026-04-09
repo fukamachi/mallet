@@ -357,19 +357,25 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations))))
 
-  (testing "Valid: handler-bind with progn as condition-type in binding"
-    (let* ((code "(handler-bind ((progn #'h)) (foo))")
+  ;; --- handler-bind / restart-bind: excluded from case-family skip logic
+  ;; because their `(rest rest-args)' is a body of ordinary forms, not
+  ;; datum-keyed clauses.  A real redundant progn wrapping the body must
+  ;; still fire.
+  (testing "Invalid: single-body progn in handler-bind body still fires"
+    (let* ((code "(handler-bind ((error #'h)) (progn (only)))")
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:redundant-progn-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (ok (null violations))))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
 
-  (testing "Valid: restart-bind with progn as restart-name in binding"
-    (let* ((code "(restart-bind ((progn #'h)) (foo))")
+  (testing "Invalid: single-body progn in restart-bind body still fires"
+    (let* ((code "(restart-bind ((retry #'try)) (progn (only)))")
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:redundant-progn-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (ok (null violations))))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :redundant-progn))))
 
   ;; --- True-positive: real progn in a clause body must still fire ---
   (testing "Invalid: single-body progn inside case clause body still fires"
