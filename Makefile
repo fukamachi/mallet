@@ -47,7 +47,7 @@ bundle:
 
 build:
 	@sbcl --noinform --non-interactive \
-		--load init.lisp --eval "(asdf:make :mallet)"
+		--load init.lisp --eval "(asdf:make :mallet/executable)"
 
 docker-build:
 	docker build -t $(LOCAL_IMAGE_NAME):$(VERSION) .

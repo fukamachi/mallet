@@ -8,11 +8,9 @@
                "cl-ppcre"
                "eclector"
                "trivial-glob")
-  :in-order-to ((test-op (test-op "mallet/tests")))
+  :in-order-to ((test-op (test-op "mallet/tests"))
+                (program-op (program-op "mallet/executable")))
   :pathname "src"
-  :build-operation "program-op"
-  :build-pathname "../mallet"
-  :entry-point "mallet:main"
   :serial t
   :components
   (;; Shared utilities
@@ -84,6 +82,14 @@
    (:file "init")
 
    (:file "main")))
+
+(defsystem "mallet/executable"
+  :description "Executable build target for Mallet. Depends on flexi-streams so that cl-unicode's build-time subsystem is resolvable in bundled (no-Quicklisp) environments."
+  :depends-on ("mallet"
+               "flexi-streams")
+  :build-operation "program-op"
+  :build-pathname "mallet"
+  :entry-point "mallet:main")
 
 (defsystem "mallet/tests"
   :depends-on ("mallet"

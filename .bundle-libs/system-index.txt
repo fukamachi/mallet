@@ -9,6 +9,8 @@ software/closer-mop-20260101-git/closer-mop.asd
 software/eclector-20260101-git/eclector-concrete-syntax-tree.asd
 software/eclector-20260101-git/eclector.asd
 software/eclector-20260101-git/eclector.syntax-extensions.asd
+software/flexi-streams-20241012-git/flexi-streams-test.asd
+software/flexi-streams-20241012-git/flexi-streams.asd
 software/mgl-pax-20260101-git/autoload/autoload.asd
 software/mgl-pax-20260101-git/dref/dref-test.asd
 software/mgl-pax-20260101-git/dref/dref.asd
@@ -20,5 +22,7 @@ software/mgl-pax-20260101-git/mgl-pax.asdf.asd
 software/named-readtables-20260101-git/named-readtables-test.asd
 software/named-readtables-20260101-git/named-readtables.asd
 software/trivial-glob-5dc3289defb0debaa239679a7286b3c9b57212b5/trivial-glob.asd
+software/trivial-gray-streams-20241012-git/trivial-gray-streams-test.asd
+software/trivial-gray-streams-20241012-git/trivial-gray-streams.asd
 software/uiop-3.3.7/asdf-driver.asd
 software/uiop-3.3.7/uiop.asd
