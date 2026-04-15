@@ -22,3 +22,10 @@
   "Summarize a list using cl-interpol expression interpolation."
   (let ((count (length items)))
     #?"${count} item${(if (= count 1) \"\" \"s\")}"))
+
+(defun summarize-unescaped (items)
+  "Issue #48 pattern: variable referenced ONLY inside ${(or x \"\")} with
+unescaped quotes inside the interpolation. Must not produce a false-positive
+unused-variables warning for COUNT — that's the exact bug being fixed."
+  (let ((count (length items)))
+    #?"${count} item${(if (= count 1) "" "s")}"))

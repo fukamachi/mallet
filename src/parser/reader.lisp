@@ -78,25 +78,27 @@ return :unknown-reader-macro after consuming the following form."
   (handler-case
       (call-next-method)
     (eclector.readtable:unknown-macro-sub-character (condition)
-      ;; Extract sub-char from eclector-internal slot.  This accesses
-      ;; an implementation detail (%SUB-CHAR) that may change across
-      ;; eclector versions.  If the slot lookup fails, fall back to
-      ;; consuming the next form and returning :unknown-reader-macro.
-      (let ((sub (handler-case
-                     (slot-value condition
-                                (load-time-value
-                                 (find-symbol "%SUB-CHAR" "ECLECTOR.READTABLE")))
-                   (error () nil))))
+      ;; Extract sub-char from the condition.  Prefer eclector's public
+      ;; reader SUB-CHARACTER (newer versions); fall back to the internal
+      ;; slot %SUB-CHAR (older versions where the reader didn't exist).
+      (let ((sub (or (handler-case
+                         (let ((reader (find-symbol "SUB-CHARACTER"
+                                                    "ECLECTOR.READTABLE")))
+                           (when (and reader (fboundp reader))
+                             (funcall reader condition)))
+                       (error () nil))
+                     (handler-case
+                         (let ((slot (find-symbol "%SUB-CHAR"
+                                                  "ECLECTOR.READTABLE")))
+                           (when slot
+                             (slot-value condition slot)))
+                       (error () nil)))))
         (cond
-          ;; cl-interpol #?"..." — extract interpolated references
+          ;; cl-interpol #?"..." — delegate to cl-interpol's reader
           ((and sub (char= sub #\?))
-           (let ((str (handler-case (cl:read input-stream)
-                        (error () nil))))
-             (if (stringp str)
-                 (let ((forms (extract-interpolation-forms str)))
-                   (if forms
-                       (list* "PROGN" forms)
-                       ':unknown-reader-macro))
+           (let ((expanded (read-cl-interpol-form input-stream)))
+             (if expanded
+                 (list "PROGN" expanded)
                  ':unknown-reader-macro)))
           ;; Other unknown dispatch macros (or failed sub-char extraction)
           ;; — consume and return placeholder
@@ -310,118 +312,123 @@ Returns the character position of the unmatched opener, or NIL if balanced."
                            :column column)
             parse-errors))))
 
-;;; cl-interpol interpolation extractor
+;;; cl-interpol delegation
+;;;
+;;; Parsing #?"..." strings is delegated to cl-interpol's own reader.  This
+;;; correctly handles all cl-interpol features (the various inner delimiters,
+;;; escaped characters, regex mode, etc.) and — critically for issue #48 —
+;;; correctly understands that " inside ${...} is a string-literal delimiter,
+;;; not a terminator for the outer interpolation string.
+;;;
+;;; The expansion produced by cl-interpol is a `(with-output-to-string ...)`
+;;; form.  We translate the native CL symbols in that form into Mallet's
+;;; string-symbol representation so downstream rules (in particular,
+;;; unused-variables) see references the same way they do for normal code.
 
-(defun find-matching-brace (text start)
-  "Find the position of the matching closing brace in TEXT starting after START.
-START should be the position right after the opening '{'.
-Handles nested braces and string literals (braces inside strings are ignored).
-Returns the position of the matching '}', or NIL if not found."
-  (let ((depth 1)
-        (i start)
-        (len (length text))
-        (in-string nil)
-        (escape-next nil))
-    (loop while (and (< i len) (plusp depth))
-          do (let ((ch (char text i)))
-               (cond
-                 (escape-next
-                  (setf escape-next nil))
-                 ((and (char= ch #\\) in-string)
-                  (setf escape-next t))
-                 ((char= ch #\")
-                  (setf in-string (not in-string)))
-                 ((not in-string)
-                  (cond
-                    ((char= ch #\{) (incf depth))
-                    ((char= ch #\}) (decf depth))))))
-          do (incf i))
-    (when (zerop depth)
-      (1- i))))
+(defun cl-symbol-to-mallet-repr (sym scratch-pkg)
+  "Convert a CL symbol SYM to Mallet's string-symbol representation.
+- NIL              → \"CL:NIL\"
+- T                → \"CL:T\"
+- Keyword          → \":NAME\"
+- Uninterned       → bare \"NAME\"           (gensyms)
+- Symbol in SCRATCH-PKG → bare \"NAME\"      (mirrors CURRENT-package convention)
+- Symbol in CL pkg → \"CL:NAME\"             (matches known-function-p prefix list)
+- Other interned   → \"PACKAGE-NAME:NAME\""
+  (cond
+    ((null sym) "CL:NIL")
+    ((eq sym t) "CL:T")
+    ((symbolp sym)
+     (let ((pkg (symbol-package sym))
+           (name (symbol-name sym)))
+       (cond
+         ((null pkg) name)
+         ((eq pkg (find-package :keyword))
+          (concatenate 'string ":" name))
+         ((eq pkg scratch-pkg) name)
+         ((eq pkg (find-package :common-lisp))
+          (concatenate 'string "CL:" name))
+         (t (concatenate 'string (package-name pkg) ":" name)))))
+    (t sym)))
 
-(defun parse-one-form-from-string (content)
-  "Parse one Lisp form from CONTENT string using eclector.
-Returns the parsed expression (just the :expr part), or NIL on failure."
-  (when (and content (> (length (string-trim '(#\Space #\Tab #\Newline) content)) 0))
-    (handler-case
-        (let* ((client (make-instance 'string-parse-result-client))
-               (stream (make-string-input-stream content))
-               (result (eclector.parse-result:read client stream nil :eof)))
-          (when (and result (not (eq result :eof)))
-            (getf result :expr)))
-      (error () nil))))
+(defun convert-cl-form-to-mallet (form scratch-pkg)
+  "Recursively convert a native CL form (from cl-interpol's expansion) into
+Mallet's string-symbol representation.  Preserves cons-cell structure
+including dotted tails.  Atoms other than symbols pass through unchanged.
 
-(defun parse-all-forms-from-string (content)
-  "Parse all Lisp forms from CONTENT string using eclector.
-Returns a list of parsed expressions (just :expr parts), skipping errors."
-  (when (and content (> (length (string-trim '(#\Space #\Tab #\Newline) content)) 0))
-    (let ((client (make-instance 'string-parse-result-client))
-          (stream (make-string-input-stream content))
-          (forms '()))
-      (loop
-        (handler-case
-            (let ((result (eclector.parse-result:read client stream nil :eof)))
-              (if (eq result :eof)
-                  (return)
-                  (let ((expr (getf result :expr)))
-                    (when expr
-                      (push expr forms)))))
-          (error () (return))))
-      (nreverse forms))))
+Unwraps synthetic single-form `(cl:progn EXPR)` wrappers introduced by
+cl-interpol's reader (read.lisp:245 always wraps `${...}` content in PROGN).
+These wrappers are an artifact of macroexpansion, not user code; passing
+them through unwrapped would produce false-positive REDUNDANT-PROGN warnings."
+  (cond
+    ((null form) nil)
+    ((symbolp form) (cl-symbol-to-mallet-repr form scratch-pkg))
+    ((and (consp form)
+          (eq (car form) 'cl:progn)
+          (consp (cdr form))
+          (null (cddr form)))
+     ;; (cl:progn EXPR) → EXPR (synthetic single-form progn wrapper)
+     (convert-cl-form-to-mallet (cadr form) scratch-pkg))
+    ((consp form)
+     (let* ((head (cons nil nil))
+            (tail head))
+       (loop for cell = form then (cdr cell)
+             while (consp cell)
+             do (let ((converted (convert-cl-form-to-mallet (car cell)
+                                                            scratch-pkg)))
+                  (setf (cdr tail) (cons converted nil))
+                  (setf tail (cdr tail)))
+             finally (unless (null cell)
+                       (setf (cdr tail)
+                             (convert-cl-form-to-mallet cell scratch-pkg))))
+       (cdr head)))
+    ((vectorp form)
+     (map 'vector (lambda (x) (convert-cl-form-to-mallet x scratch-pkg)) form))
+    (t form)))
 
-(defun extract-interpolation-forms (string-body)
-  "Scan STRING-BODY (contents of a cl-interpol #?\"...\" string) for ${...} and @{...}
-patterns and parse each into Lisp forms.
+(defun read-cl-interpol-form (input-stream)
+  "Read a cl-interpol #?\"...\" form from INPUT-STREAM (positioned just after
+`#?`) by delegating to CL-INTERPOL:INTERPOL-READER, then convert the
+resulting expansion into Mallet's representation.
 
-Handles:
-- ${expr}: parse one form
-- @{func args...}: parse all forms
-- Nested braces inside interpolation blocks
-- Empty interpolation or parse errors: skip
+Safety properties:
+- A FRESH temporary package is created via MAKE-PACKAGE (gensym name) for
+  each call.  Symbols read from inside ${...} are interned there.  The
+  package is deleted in UNWIND-PROTECT cleanup so the Lisp image isn't
+  polluted.
+- *READTABLE* is bound to a clean copy of the standard readtable, isolating
+  cl-interpol's internal cl:read from Mallet's eclector readtable.  Side
+  effect: nested reader macros inside ${...} (e.g. ${#?'inner'}) won't
+  parse; we catch the error and return NIL.
+- *READ-EVAL* is bound to NIL so #.(...) inside ${...} cannot execute code.
+- CL-INTERPOL:*OPTIONAL-DELIMITERS-P* is bound to NIL — bare $variable
+  interpolation is intentionally NOT supported (it's a non-default
+  cl-interpol feature).
 
-Note: cl:read has already consumed one level of backslash escaping before
-this function sees the string contents, so we do NOT apply any manual
-escape handling for \\$ or \\@ here.
-
-Returns a flat list of all parsed expressions."
-  (let ((forms '())
-        (i 0)
-        (len (length string-body)))
-    (loop while (< i len)
-          do (let ((ch (char string-body i)))
-               (cond
-                 ;; ${...} expression interpolation
-                 ((and (char= ch #\$)
-                       (< (1+ i) len)
-                       (char= (char string-body (1+ i)) #\{))
-                  (let* ((content-start (+ i 2))
-                         (close-pos (find-matching-brace string-body content-start)))
-                    (if close-pos
-                        (let* ((content (subseq string-body content-start close-pos))
-                               (expr (parse-one-form-from-string content)))
-                          (when expr
-                            (push expr forms))
-                          (setf i (1+ close-pos)))
-                        ;; No matching brace: skip the $ and continue
-                        (incf i))))
-
-                 ;; @{...} function-call interpolation
-                 ((and (char= ch #\@)
-                       (< (1+ i) len)
-                       (char= (char string-body (1+ i)) #\{))
-                  (let* ((content-start (+ i 2))
-                         (close-pos (find-matching-brace string-body content-start)))
-                    (if close-pos
-                        (let* ((content (subseq string-body content-start close-pos))
-                               (exprs (parse-all-forms-from-string content)))
-                          (dolist (expr exprs)
-                            (push expr forms))
-                          (setf i (1+ close-pos)))
-                        ;; No matching brace: skip the @ and continue
-                        (incf i))))
-
-                 (t (incf i)))))
-    (nreverse forms)))
+Returns the converted form on success, or NIL on any error or when the
+string contains no interpolations (caller treats NIL as :unknown-reader-macro)."
+  (let ((scratch-pkg (make-package
+                      (gensym "MALLET-INTERPOL-SCRATCH-")
+                      :use '(:common-lisp))))
+    (unwind-protect
+         (handler-case
+             ;; Dynamic bindings affect cl-interpol's internal cl:read inside
+             ;; ${...}: *package* controls symbol interning, *readtable*
+             ;; isolates from Mallet's eclector readtable, *read-eval* nil
+             ;; defends against #.(...), *optional-delimiters-p* nil opts out
+             ;; of bare $variable interpolation.
+             (let ((*package* scratch-pkg)
+                   (*readtable* (copy-readtable nil))
+                   (*read-eval* nil)
+                   (cl-interpol:*optional-delimiters-p* nil))
+               (let ((form (cl-interpol:interpol-reader
+                            input-stream #\? nil :recursive-p nil)))
+                 (cond
+                   ((stringp form) nil)      ; constant string, no interpolation
+                   ((consp form) (convert-cl-form-to-mallet form scratch-pkg))
+                   (t nil))))
+           (error () nil))
+      (when (find-package scratch-pkg)
+        (delete-package scratch-pkg)))))
 
 ;;; Main parsing function
 

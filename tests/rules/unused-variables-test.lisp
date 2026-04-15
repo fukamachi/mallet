@@ -2078,4 +2078,26 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= 1 (length violations)))
       (ok (search "Variable 'y' is unused"
-                  (violation:violation-message (first violations)))))))
+                  (violation:violation-message (first violations))))))
+
+  ;; Issue #48: cl-interpol's inner ${...} can contain unescaped " characters
+  ;; (because cl-interpol uses READ-DELIMITED-LIST for ${...} content, the
+  ;; standard CL reader handles strings inside).  Mallet's old cl:read-based
+  ;; parser truncated at the first inner " and lost the variable reference.
+  (testing "Issue #48: variable used only inside ${(or x \"\")} with unescaped quotes"
+    (let* ((code "(let ((ctx \"hi\")) #?\"${(or ctx \"\")}\")")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "cl-interpol's WITH-OUTPUT-TO-STRING gensym is not reported as unused"
+    ;; cl-interpol expands #?"...${name}..." into
+    ;; (with-output-to-string (#:G123) ... (princ name #:G123) ...).
+    ;; The gensym stream variable IS used by every princ/write-string in the
+    ;; body, so unused-variables must not report it.
+    (let* ((code "(defun greet (name) #?\"Hello, ${name}!\")")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations)))))

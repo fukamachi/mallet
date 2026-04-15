@@ -4,6 +4,7 @@
   :author "Eitaro Fukamachi <e.arrows@gmail.com>"
   :license "MIT"
   :depends-on ("alexandria"
+               "cl-interpol"
                "cl-ppcre"
                "eclector"
                "trivial-glob")
@@ -116,8 +117,7 @@
     ((:file "tokenizer-test")
      (:file "reader-test")
      (:file "loop-test")
-     (:file "unknown-reader-macros")
-     (:file "interpolation-extractor-test")))
+     (:file "unknown-reader-macros")))
 
    (:module "rules"
     :pathname "rules"
