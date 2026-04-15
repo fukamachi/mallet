@@ -1,0 +1,91 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Every Friday at 18:23
+    - cron: "23 18 * * 5"
+
+jobs:
+  test:
+    name: ${{ matrix.lisp }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        lisp: [abcl-bin, ccl-bin, clisp, cmu-bin, ecl, sbcl-bin]
+        os: [ubuntu-latest]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      ## Very slow
+      # - name: apt-get update
+      #   run: sudo apt-get update
+      #
+      # - name: Install Pandoc and TeX Live
+      #   run: |
+      #     sudo apt-get -y --no-install-recommends install \
+      #         pandoc texlive-latex-extra texlive-fonts-extra
+
+      - name: Install Roswell
+        env:
+          LISP: ${{ matrix.lisp }}
+        run: |
+          if [ $LISP = clisp ]; then
+              # KLUDGE: If we install CLISP with Roswell, then we
+              # either get complaints about multiple -B options or run
+              # into https://github.com/roswell/roswell/issues/449, so
+              # let's install it with apt. This will be picked up by
+              # 'ros --lisp clisp run'.
+              sudo apt-get -y install clisp
+              LISP=sbcl
+          fi
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+
+      - name: Install Maven for ABCL
+        env:
+          LISP: ${{ matrix.lisp }}
+        run: if [ $LISP = abcl-bin ]; then sudo apt-get -y install maven; fi
+
+      - name: Install latest Named-readtables from GitHub
+        run: ros install melisgl/named-readtables
+
+      - name: Install latest Try from GitHub
+        run: ros install melisgl/try
+
+      - name: Install latest 3bmd from GitHub
+        run: ros install 3b/3bmd
+
+      - name: Install latest Slime from GitHub
+        # KLUDGE: 'ros install slime/slime' fails because it is not
+        # interpreted as a github reference but is special cased.
+        run: |
+          cd ~/.roswell/local-projects/
+          git clone https://github.com/slime/slime.git
+
+      - name: Run DRef tests
+        env:
+          LISP: ${{ matrix.lisp }}
+        run: |
+          ros run -e '(ql:quickload :dref-test)' -q
+          ./dref/test/test.sh $LISP
+
+      - name: Run MGL-PAX tests
+        env:
+          LISP: ${{ matrix.lisp }}
+        run: |
+          ros run -e '(ql:quickload :mgl-pax-test)' -q
+          ./test/test.sh $LISP
+
+      - name: Run Elisp tests (on SBCL only)
+        env:
+          LISP: ${{ matrix.lisp }}
+        run: |
+          if [ "$LISP" = "sbcl" -o "$LISP" = "sbcl-bin" ]; then
+              sudo apt-get -y install emacs-nox w3m-el
+              ./test/test-el.sh "ros --lisp sbcl-bin run"
+          fi
