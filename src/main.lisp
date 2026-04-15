@@ -70,6 +70,10 @@
 (defvar *debug-mode* nil
   "When T, enable detailed diagnostic output.")
 
+(defparameter *version*
+  #.(asdf:component-version (asdf:find-system :mallet))
+  "Mallet version string, embedded at compile time from mallet.asd.")
+
 ;;; CLI Implementation
 
 ;;; CLI parsing helpers for rule options
@@ -256,7 +260,7 @@ Signals specific error conditions for invalid input."
            (print-help)
            (uiop:quit 0))
           ((string= arg "--version")
-           (format t "Mallet version 0.1.0~%")
+           (format t "Mallet version ~A~%" *version*)
            (uiop:quit 0))
           ((and (> (length arg) 0) (char= (char arg 0) #\-))
            (error 'errors:unknown-option :option arg))
