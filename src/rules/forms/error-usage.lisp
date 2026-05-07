@@ -67,9 +67,16 @@ a valid fix because callers cannot distinguish them from any other error."))
   "Return T if HEAD (parser string symbol or CL symbol) is a call to CL:ERROR."
   (typecase head
     (string
-     ;; Parser represents symbols as strings with package prefix.
-     ;; error appears as \"CURRENT:error\" (unqualified) or \"cl:error\" (qualified)
-     (base:symbol-matches-p head "ERROR"))
+     ;; Parser represents symbols as strings with package prefix:
+     ;; "CURRENT:error" (unqualified), "cl:error" (qualified), "common-lisp:error".
+     ;; A non-CL package prefix (e.g. "log:error") must NOT match — issue #50.
+     (let ((colon-pos (position #\: head :from-end t)))
+       (when colon-pos
+         (let ((pkg  (subseq head 0 colon-pos))
+               (name (subseq head (1+ colon-pos))))
+           (and (string-equal name "ERROR")
+                (or (member pkg '("cl" "common-lisp") :test #'string-equal)
+                    (string-equal pkg "CURRENT")))))))
     (symbol
      ;; Directly interned CL symbol (rare but possible from reader macros)
      (and (string-equal (symbol-name head) "ERROR")
