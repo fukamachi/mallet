@@ -10,11 +10,16 @@
 #     MALLET_VERSION       Tag to install (e.g. v0.9.1). Defaults to the latest release.
 #     MALLET_INSTALL_DIR   Where to drop the binary. Defaults to ~/.local/bin.
 #     MALLET_REPO          GitHub repo slug. Defaults to fukamachi/mallet.
+#     MALLET_BASE_URL      Root for download URLs. Defaults to https://github.com.
+#                          Set to a mirror or a local server for testing.
+#     MALLET_API_BASE_URL  Root for the GitHub REST API. Defaults to https://api.github.com.
 
 set -eu
 
 REPO="${MALLET_REPO:-fukamachi/mallet}"
 INSTALL_DIR="${MALLET_INSTALL_DIR:-${HOME}/.local/bin}"
+BASE_URL="${MALLET_BASE_URL:-https://github.com}"
+API_BASE_URL="${MALLET_API_BASE_URL:-https://api.github.com}"
 
 log()  { printf '==> %s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
@@ -65,16 +70,16 @@ if [ -n "${MALLET_VERSION:-}" ]; then
   tag="${MALLET_VERSION#v}"
 else
   log "resolving latest release for ${REPO}"
-  api_url="https://api.github.com/repos/${REPO}/releases/latest"
+  api_url="${API_BASE_URL}/repos/${REPO}/releases/latest"
   tag="$(fetch_stdout "$api_url" | awk -F'"' '/"tag_name":/{print $4; exit}')"
   [ -n "$tag" ] || fail "could not resolve latest release tag from $api_url"
 fi
 log "installing mallet ${tag} for ${os}/${arch}"
 
 asset="mallet-${tag}-${os}-${arch}.tar.gz"
-base_url="https://github.com/${REPO}/releases/download/${tag}"
-tarball_url="${base_url}/${asset}"
-sums_url="${base_url}/SHA256SUMS"
+release_url="${BASE_URL}/${REPO}/releases/download/${tag}"
+tarball_url="${release_url}/${asset}"
+sums_url="${release_url}/SHA256SUMS"
 
 tmp="$(mktemp -d 2>/dev/null || mktemp -d -t mallet-install)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
