@@ -16,40 +16,27 @@ permissions:
   contents: write
 
 jobs:
-  # Linux jobs run inside the manylinux2014 container (CentOS 7 base, glibc
-  # 2.17). The resulting binary covers every supported Linux LTS we care
-  # about: RHEL/Rocky/Alma 7+, Ubuntu 18.04+, Debian 10+.
+  # Linux jobs build inside a manylinux2014 container (CentOS 7 base, glibc
+  # 2.17) so the binary covers every supported Linux LTS — RHEL/Rocky/Alma
+  # 7+, Ubuntu 18.04+, Debian 10+. We don't put the *job* in the container
+  # because the runner injects a Node.js binary that requires glibc 2.28+;
+  # actions/checkout / upload-artifact must run on the host. The actual
+  # build is deferred to scripts/release-linux-in-container.sh, which is
+  # also driven by scripts/test-release-in-docker.sh for local repros.
   build-linux:
     name: Build linux-${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-22.04
             arch: x86_64
-            container: quay.io/pypa/manylinux2014_x86_64
-            sbcl_config: Config.x86-64-linux
+            container_image: quay.io/pypa/manylinux2014_x86_64
           - runner: ubuntu-22.04-arm
             arch: aarch64
-            container: quay.io/pypa/manylinux2014_aarch64
-            sbcl_config: Config.arm64-linux
-    env:
-      MALLET_OS: linux
-      MALLET_ARCH: ${{ matrix.arch }}
+            container_image: quay.io/pypa/manylinux2014_aarch64
     steps:
-      - name: Install yum dependencies
-        run: |
-          yum install -y -q epel-release
-          yum install -y -q git make gcc curl libcurl-devel zlib-devel \
-                            libzstd-devel sbcl openssl-devel
-          # CentOS 7 ships openssl 1.0.2 as libcrypto.so.10. cl+ssl probes
-          # for libcrypto.so.{3,1.1,1.0.0,unversioned}; expose 1.0.2 under
-          # the 1.0.0 SO name (ABI-compatible) so dexador can load.
-          ln -sf /usr/lib64/libcrypto.so.10 /usr/lib64/libcrypto.so.1.0.0
-          ln -sf /usr/lib64/libssl.so.10    /usr/lib64/libssl.so.1.0.0
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -64,72 +51,17 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "stage=mallet-${tag}-linux-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
 
-      - name: Build static libzstd
+      - name: Build inside ${{ matrix.container_image }}
         run: |
-          set -eu
-          ZSTD_VERSION=1.5.6
-          cd /tmp
-          curl -fsSL -o zstd.tgz \
-            "https://github.com/facebook/zstd/releases/download/v${ZSTD_VERSION}/zstd-${ZSTD_VERSION}.tar.gz"
-          tar xzf zstd.tgz
-          make -C "zstd-${ZSTD_VERSION}/lib" -j"$(nproc)" libzstd.a
-          install -m 644 "zstd-${ZSTD_VERSION}/lib/libzstd.a" /usr/local/lib/libzstd.a
-
-      - name: Build SBCL 2.6.0 from source with static libzstd
-        env:
-          SBCL_VERSION: 2.6.0
-        run: |
-          set -eu
-          cd /tmp
-          curl -fsSL -o sbcl-source.tar.bz2 \
-            "https://sourceforge.net/projects/sbcl/files/sbcl/${SBCL_VERSION}/sbcl-${SBCL_VERSION}-source.tar.bz2/download"
-          tar xjf sbcl-source.tar.bz2
-          cd "sbcl-${SBCL_VERSION}"
-          # Replace the dynamic -lzstd reference with the static archive.
-          sed -i.bak "s|-lzstd|/usr/local/lib/libzstd.a|" \
-            "src/runtime/${{ matrix.sbcl_config }}"
-          # EPEL sbcl 1.4.0 is the bootstrap host. SBCL has historically
-          # tolerated multi-year host gaps, so 1.4.0 → 2.6.0 chains directly.
-          sh make.sh --fancy
-          INSTALL_ROOT=/usr/local sh install.sh
-          echo "/usr/local/bin" >> "$GITHUB_PATH"
-
-      - name: Verify SBCL has no dynamic libzstd dependency
-        run: |
-          set -eu
-          ldd "$(command -v sbcl)" || true
-          if ldd "$(command -v sbcl)" | grep -q libzstd; then
-            echo "ERROR: SBCL still has dynamic libzstd dependency" >&2
-            exit 1
-          fi
-          sbcl --version
-
-      - name: Install qlot from source
-        run: |
-          set -eu
-          cd /tmp
-          git clone --depth 1 https://github.com/fukamachi/qlot.git
-          cd qlot
-          make install
-          # SBCL on this manylinux2014 + openssl combo consistently exits 255
-          # *after* qlot has finished its work successfully (cl+ssl OpenSSL
-          # cleanup race). Wrap qlot so 255 is treated as success; any other
-          # non-zero exit is still surfaced.
-          mv /usr/local/bin/qlot /usr/local/bin/qlot-real
-          printf '%s\n' \
-            '#!/bin/sh' \
-            'qlot-real "$@"' \
-            'rc=$?' \
-            '[ "$rc" = "255" ] && rc=0' \
-            'exit "$rc"' \
-            > /usr/local/bin/qlot
-          chmod +x /usr/local/bin/qlot
-
-      - name: Build, package, and verify
-        env:
-          MALLET_VERSION: ${{ steps.version.outputs.tag }}
-        run: |
-          bash scripts/release-build.sh
+          mkdir -p dist
+          docker run --rm \
+            -v "$PWD:/work" \
+            -e MALLET_VERSION="${{ steps.version.outputs.tag }}" \
+            -e MALLET_OS=linux \
+            -e MALLET_ARCH=${{ matrix.arch }} \
+            -w /work \
+            ${{ matrix.container_image }} \
+            bash /work/scripts/release-linux-in-container.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
