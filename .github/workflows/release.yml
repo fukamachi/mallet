@@ -83,10 +83,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-13
-            arch: x86_64
-            zstd_a: /usr/local/lib/libzstd.a
-            sbcl_config: Config.x86-64-darwin
           - runner: macos-14
             arch: aarch64
             zstd_a: /opt/homebrew/lib/libzstd.a
