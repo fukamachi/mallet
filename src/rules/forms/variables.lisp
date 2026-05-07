@@ -576,7 +576,12 @@ CONTEXT determines interpretation of ambiguous 2-element lists:
     (t nil)))
 
 (defun extract-ignored-vars (body)
-  "Extract variable names from (declare (ignore ...)) and (declare (ignorable ...)) forms."
+  "Extract variable names from (declare (ignore ...)), (declare (ignorable ...)),
+and (declare (special ...)) forms.
+
+SPECIAL declarations are included because they turn the binding into a dynamic
+binding — any function call in BODY may read or write the variable through
+dynamic scope, so it cannot be flagged as unused on lexical grounds alone."
   (let ((ignored '()))
     (dolist (form body)
       (when (and (consp form)
@@ -586,7 +591,8 @@ CONTEXT determines interpretation of ambiguous 2-element lists:
           (dolist (decl-spec (rest form))
             (when (and (consp decl-spec)
                        (or (base:symbol-matches-p (first decl-spec) "IGNORE")
-                           (base:symbol-matches-p (first decl-spec) "IGNORABLE")))
+                           (base:symbol-matches-p (first decl-spec) "IGNORABLE")
+                           (base:symbol-matches-p (first decl-spec) "SPECIAL")))
               ;; Only iterate if it's a proper list (not a dotted pair)
               (when (and (listp (rest decl-spec)) (a:proper-list-p (rest decl-spec)))
                 (dolist (var (rest decl-spec))

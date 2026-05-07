@@ -57,6 +57,33 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: let binding with declare special (dynamic binding)"
+    (let* ((code "(let ((my-var 42))
+                     (declare (special my-var))
+                     (do-something))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: let* binding with declare special (dynamic binding)"
+    (let* ((code "(let* ((my-var 42))
+                     (declare (special my-var))
+                     (do-something))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+      (ok (null violations))))
+
+  (testing "Valid: declare special with multiple variables"
+    (let* ((code "(let ((a 1) (b 2))
+                     (declare (special a b))
+                     (do-something))")
+           (forms (parser:parse-forms code #p"test.lisp"))
+           (rule (make-instance 'rules:unused-variables-rule))
+           (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)))))
 
 (deftest unused-variables-invalid
