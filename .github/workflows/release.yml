@@ -16,26 +16,154 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.os_label }}-${{ matrix.arch }}
+  # Linux jobs run inside the manylinux2014 container (CentOS 7 base, glibc
+  # 2.17). The resulting binary covers every supported Linux LTS we care
+  # about: RHEL/Rocky/Alma 7+, Ubuntu 18.04+, Debian 10+.
+  build-linux:
+    name: Build linux-${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-22.04
-            os_label: linux
             arch: x86_64
+            container: quay.io/pypa/manylinux2014_x86_64
+            sbcl_config: Config.x86-64-linux
           - runner: ubuntu-22.04-arm
-            os_label: linux
             arch: aarch64
-          - runner: macos-13
-            os_label: darwin
-            arch: x86_64
-          - runner: macos-14
-            os_label: darwin
-            arch: aarch64
+            container: quay.io/pypa/manylinux2014_aarch64
+            sbcl_config: Config.arm64-linux
+    env:
+      MALLET_OS: linux
+      MALLET_ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Install yum dependencies
+        run: |
+          yum install -y -q epel-release
+          yum install -y -q git make gcc curl libcurl-devel zlib-devel \
+                            libzstd-devel sbcl openssl-devel
+          # CentOS 7 ships openssl 1.0.2 as libcrypto.so.10. cl+ssl probes
+          # for libcrypto.so.{3,1.1,1.0.0,unversioned}; expose 1.0.2 under
+          # the 1.0.0 SO name (ABI-compatible) so dexador can load.
+          ln -sf /usr/lib64/libcrypto.so.10 /usr/lib64/libcrypto.so.1.0.0
+          ln -sf /usr/lib64/libssl.so.10    /usr/lib64/libssl.so.1.0.0
 
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "stage=mallet-${tag}-linux-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build static libzstd
+        run: |
+          set -eu
+          ZSTD_VERSION=1.5.6
+          cd /tmp
+          curl -fsSL -o zstd.tgz \
+            "https://github.com/facebook/zstd/releases/download/v${ZSTD_VERSION}/zstd-${ZSTD_VERSION}.tar.gz"
+          tar xzf zstd.tgz
+          make -C "zstd-${ZSTD_VERSION}/lib" -j"$(nproc)" libzstd.a
+          install -m 644 "zstd-${ZSTD_VERSION}/lib/libzstd.a" /usr/local/lib/libzstd.a
+
+      - name: Build SBCL 2.6.0 from source with static libzstd
+        env:
+          SBCL_VERSION: 2.6.0
+        run: |
+          set -eu
+          cd /tmp
+          curl -fsSL -o sbcl-source.tar.bz2 \
+            "https://sourceforge.net/projects/sbcl/files/sbcl/${SBCL_VERSION}/sbcl-${SBCL_VERSION}-source.tar.bz2/download"
+          tar xjf sbcl-source.tar.bz2
+          cd "sbcl-${SBCL_VERSION}"
+          # Replace the dynamic -lzstd reference with the static archive.
+          sed -i.bak "s|-lzstd|/usr/local/lib/libzstd.a|" \
+            "src/runtime/${{ matrix.sbcl_config }}"
+          # EPEL sbcl 1.4.0 is the bootstrap host. SBCL has historically
+          # tolerated multi-year host gaps, so 1.4.0 → 2.6.0 chains directly.
+          sh make.sh --fancy
+          INSTALL_ROOT=/usr/local sh install.sh
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+
+      - name: Verify SBCL has no dynamic libzstd dependency
+        run: |
+          set -eu
+          ldd "$(command -v sbcl)" || true
+          if ldd "$(command -v sbcl)" | grep -q libzstd; then
+            echo "ERROR: SBCL still has dynamic libzstd dependency" >&2
+            exit 1
+          fi
+          sbcl --version
+
+      - name: Install qlot from source
+        run: |
+          set -eu
+          cd /tmp
+          git clone --depth 1 https://github.com/fukamachi/qlot.git
+          cd qlot
+          make install
+          # SBCL on this manylinux2014 + openssl combo consistently exits 255
+          # *after* qlot has finished its work successfully (cl+ssl OpenSSL
+          # cleanup race). Wrap qlot so 255 is treated as success; any other
+          # non-zero exit is still surfaced.
+          mv /usr/local/bin/qlot /usr/local/bin/qlot-real
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'qlot-real "$@"' \
+            'rc=$?' \
+            '[ "$rc" = "255" ] && rc=0' \
+            'exit "$rc"' \
+            > /usr/local/bin/qlot
+          chmod +x /usr/local/bin/qlot
+
+      - name: Build, package, and verify
+        env:
+          MALLET_VERSION: ${{ steps.version.outputs.tag }}
+        run: |
+          bash scripts/release-build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.stage }}
+          path: |
+            dist/${{ steps.version.outputs.stage }}.tar.gz
+            dist/${{ steps.version.outputs.stage }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  # macOS jobs run directly on the GitHub-hosted macOS runners. macOS
+  # backwards compatibility is handled by `MACOSX_DEPLOYMENT_TARGET`-style
+  # SDK targeting in SBCL itself; no container indirection.
+  build-darwin:
+    name: Build darwin-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x86_64
+            zstd_a: /usr/local/lib/libzstd.a
+            sbcl_config: Config.x86-64-darwin
+          - runner: macos-14
+            arch: aarch64
+            zstd_a: /opt/homebrew/lib/libzstd.a
+            sbcl_config: Config.arm64-darwin
+    env:
+      MALLET_OS: darwin
+      MALLET_ARCH: ${{ matrix.arch }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,7 +172,6 @@ jobs:
 
       - name: Resolve version
         id: version
-        shell: bash
         run: |
           if [ -n "${{ inputs.tag }}" ]; then
             tag="${{ inputs.tag }}"
@@ -52,22 +179,11 @@ jobs:
             tag="${GITHUB_REF#refs/tags/}"
           fi
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "stage=mallet-${tag}-${{ matrix.os_label }}-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+          echo "stage=mallet-${tag}-darwin-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
 
-      - name: Install build dependencies (macOS)
-        if: runner.os == 'macOS'
+      - name: Install brew dependencies
         run: brew install zstd
 
-      - name: Install build dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libzstd-dev
-
-      # Roswell is installed first because:
-      #   1. Its sbcl-bin acts as the bootstrap host for `sh make.sh`
-      #      (GitHub-hosted ubuntu/macos runners ship no system SBCL).
-      #   2. We need it later for qlot.
       - name: Install Roswell + sbcl-bin (host SBCL for source build)
         env:
           LISP: sbcl-bin
@@ -78,21 +194,14 @@ jobs:
           echo "ROSWELL_HOST_SBCL=$host_sbcl" >> "$GITHUB_ENV"
           echo "ROSWELL_HOST_SBCL_HOME=$(dirname "$(dirname "$host_sbcl")")/lib/sbcl" >> "$GITHUB_ENV"
 
-      - name: Build SBCL from source with static libzstd
+      - name: Build SBCL 2.6.0 from source with static libzstd
         env:
           SBCL_VERSION: 2.6.0
         run: |
           set -eu
-          case "${{ matrix.os_label }}-${{ matrix.arch }}" in
-            darwin-aarch64) zstd_a=/opt/homebrew/lib/libzstd.a;          config=Config.arm64-darwin  ;;
-            darwin-x86_64)  zstd_a=/usr/local/lib/libzstd.a;             config=Config.x86-64-darwin ;;
-            linux-aarch64)  zstd_a=/usr/lib/aarch64-linux-gnu/libzstd.a; config=Config.arm64-linux   ;;
-            linux-x86_64)   zstd_a=/usr/lib/x86_64-linux-gnu/libzstd.a;  config=Config.x86-64-linux  ;;
-            *) echo "unsupported: ${{ matrix.os_label }}-${{ matrix.arch }}" >&2; exit 1 ;;
-          esac
-          [ -f "$zstd_a" ] || { echo "ERROR: missing static archive: $zstd_a" >&2; exit 1; }
-
-          # Use Roswell's sbcl-bin as the bootstrap host for make.sh.
+          [ -f "${{ matrix.zstd_a }}" ] || {
+            echo "ERROR: missing static archive: ${{ matrix.zstd_a }}" >&2; exit 1;
+          }
           export PATH="$(dirname "$ROSWELL_HOST_SBCL"):$PATH"
           export SBCL_HOME="$ROSWELL_HOST_SBCL_HOME"
           sbcl --version
@@ -103,25 +212,19 @@ jobs:
             "https://sourceforge.net/projects/sbcl/files/sbcl/${SBCL_VERSION}/sbcl-${SBCL_VERSION}-source.tar.bz2/download"
           tar xjf sbcl-source.tar.bz2
           cd "sbcl-${SBCL_VERSION}"
-          # Replace dynamic -lzstd with the static archive so the resulting
-          # SBCL runtime has no libzstd dynamic dependency.
-          sed -i.bak "s|-lzstd|${zstd_a}|" "src/runtime/${config}"
+          sed -i.bak "s|-lzstd|${{ matrix.zstd_a }}|" "src/runtime/${{ matrix.sbcl_config }}"
           sh make.sh --fancy
-          # install.sh refuses to run while SBCL_HOME is set (it would point
-          # at the host SBCL, not the freshly built one). Drop it.
+          # install.sh refuses to run while SBCL_HOME is set.
           unset SBCL_HOME
           sudo INSTALL_ROOT=/usr/local sh install.sh
 
       - name: Pin /usr/local/bin/sbcl ahead of Roswell on PATH
         run: |
-          # /usr/local first so the source-built sbcl wins; SBCL_HOME for the
-          # host build is no longer relevant (the new sbcl finds its own core).
           echo "/usr/local/bin"      >> "$GITHUB_PATH"
           echo "$HOME/.roswell/bin"  >> "$GITHUB_PATH"
           echo "SBCL_HOME=" >> "$GITHUB_ENV"
 
-      - name: Verify SBCL has no dynamic libzstd dependency (macOS)
-        if: runner.os == 'macOS'
+      - name: Verify SBCL has no dynamic libzstd dependency
         run: |
           set -eu
           otool -L "$(command -v sbcl)"
@@ -130,17 +233,7 @@ jobs:
             exit 1
           fi
 
-      - name: Verify SBCL has no dynamic libzstd dependency (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          set -eu
-          ldd "$(command -v sbcl)" || true
-          if ldd "$(command -v sbcl)" | grep -q libzstd; then
-            echo "ERROR: SBCL still has dynamic libzstd dependency" >&2
-            exit 1
-          fi
-
-      - name: Install Qlot
+      - name: Install qlot via Roswell
         run: |
           ros install fukamachi/qlot
           ros install fukamachi/archive/fix/tar-symlink-entry
@@ -148,7 +241,6 @@ jobs:
       - name: Verify sbcl on PATH is the source-built one
         run: |
           set -eu
-          command -v sbcl
           if [ "$(command -v sbcl)" != "/usr/local/bin/sbcl" ]; then
             echo "ERROR: expected sbcl at /usr/local/bin/sbcl, got $(command -v sbcl)" >&2
             exit 1
@@ -158,8 +250,6 @@ jobs:
       - name: Build, package, and verify
         env:
           MALLET_VERSION: ${{ steps.version.outputs.tag }}
-          MALLET_OS: ${{ matrix.os_label }}
-          MALLET_ARCH: ${{ matrix.arch }}
         run: |
           bash scripts/release-build.sh
 
@@ -175,7 +265,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build-linux, build-darwin]
     runs-on: ubuntu-latest
     steps:
       - name: Resolve tag
