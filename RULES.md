@@ -41,7 +41,7 @@ The **Default** column below reflects `:default` preset membership. Rules marked
 | [`:no-package-use`](#no-package-use) | Use of `:use` in `defpackage` | warning | strict | |
 | [`:no-ignore-errors`](#no-ignore-errors) | Use of `cl:ignore-errors` | warning | on | |
 | [`:no-allow-other-keys`](#no-allow-other-keys) | Use of `&allow-other-keys` in lambda lists | warning | strict | |
-| [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | strict | |
+| [`:double-colon-access`](#double-colon-access) | Accessing internal symbols via `::` | warning | off | |
 | [`:error-without-custom-condition`](#error-without-custom-condition) | Calling `error` without a custom condition type | warning | strict | |
 | [`:asdf-component-strings`](#asdf-component-strings) | ASDF components should use strings | warning | on | |
 | [`:asdf-reader-conditional`](#asdf-reader-conditional) | `#+`/`#-` reader conditionals in defsystem | info | strict | |
@@ -372,7 +372,7 @@ Avoid accessing internal symbols via `::` package qualifier. Using `::` bypasses
 (my-lib:public-function arg)
 ```
 
-**Severity**: warning | **Default**: disabled (`:strict` and above)
+**Severity**: warning | **Default**: disabled
 
 ### `:error-without-custom-condition`
 

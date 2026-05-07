@@ -148,7 +148,7 @@
         (ok (member :no-ignore-errors rule-names))
         ;; Opinionated rules added beyond :default
         (ok (member :no-package-use rule-names))
-        (ok (member :double-colon-access rule-names))
+        (ok (not (member :double-colon-access rule-names)))
         (ok (member :closing-paren-on-own-line rule-names))
         (ok (member :redundant-progn rule-names))
         (ok (member :no-allow-other-keys rule-names))
