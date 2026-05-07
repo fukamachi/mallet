@@ -64,6 +64,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libzstd-dev
 
+      # Roswell is installed first because:
+      #   1. Its sbcl-bin acts as the bootstrap host for `sh make.sh`
+      #      (GitHub-hosted ubuntu/macos runners ship no system SBCL).
+      #   2. We need it later for qlot.
+      - name: Install Roswell + sbcl-bin (host SBCL for source build)
+        env:
+          LISP: sbcl-bin
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+          host_sbcl="$(find "$HOME/.roswell/impls" -name sbcl -type f -perm -u+x | head -1)"
+          [ -n "$host_sbcl" ] || { echo "ERROR: Roswell did not install sbcl-bin" >&2; exit 1; }
+          echo "ROSWELL_HOST_SBCL=$host_sbcl" >> "$GITHUB_ENV"
+          echo "ROSWELL_HOST_SBCL_HOME=$(dirname "$(dirname "$host_sbcl")")/lib/sbcl" >> "$GITHUB_ENV"
+
       - name: Build SBCL from source with static libzstd
         env:
           SBCL_VERSION: 2.6.0
@@ -78,6 +92,11 @@ jobs:
           esac
           [ -f "$zstd_a" ] || { echo "ERROR: missing static archive: $zstd_a" >&2; exit 1; }
 
+          # Use Roswell's sbcl-bin as the bootstrap host for make.sh.
+          export PATH="$(dirname "$ROSWELL_HOST_SBCL"):$PATH"
+          export SBCL_HOME="$ROSWELL_HOST_SBCL_HOME"
+          sbcl --version
+
           mkdir -p /tmp/sbcl-build
           cd /tmp/sbcl-build
           curl -fsSL -o sbcl-source.tar.bz2 \
@@ -88,8 +107,18 @@ jobs:
           # SBCL runtime has no libzstd dynamic dependency.
           sed -i.bak "s|-lzstd|${zstd_a}|" "src/runtime/${config}"
           sh make.sh --fancy
+          # install.sh refuses to run while SBCL_HOME is set (it would point
+          # at the host SBCL, not the freshly built one). Drop it.
+          unset SBCL_HOME
           sudo INSTALL_ROOT=/usr/local sh install.sh
-          sbcl --version
+
+      - name: Pin /usr/local/bin/sbcl ahead of Roswell on PATH
+        run: |
+          # /usr/local first so the source-built sbcl wins; SBCL_HOME for the
+          # host build is no longer relevant (the new sbcl finds its own core).
+          echo "/usr/local/bin"      >> "$GITHUB_PATH"
+          echo "$HOME/.roswell/bin"  >> "$GITHUB_PATH"
+          echo "SBCL_HOME=" >> "$GITHUB_ENV"
 
       - name: Verify SBCL has no dynamic libzstd dependency (macOS)
         if: runner.os == 'macOS'
@@ -110,16 +139,6 @@ jobs:
             echo "ERROR: SBCL still has dynamic libzstd dependency" >&2
             exit 1
           fi
-
-      - name: Install Roswell (provides qlot — SBCL is our source build)
-        env:
-          LISP: sbcl-bin
-        run: |
-          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
-          # Add Roswell bin, then prepend /usr/local/bin so our source-built
-          # sbcl always wins over any wrapper Roswell might create.
-          echo "$HOME/.roswell/bin" >> "$GITHUB_PATH"
-          echo "/usr/local/bin"     >> "$GITHUB_PATH"
 
       - name: Install Qlot
         run: |
