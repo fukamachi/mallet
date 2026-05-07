@@ -52,7 +52,19 @@
     (ok (null (check-error-custom "(signal \"something\")"))))
 
   (testing "cerror with string is not flagged (different function)"
-    (ok (null (check-error-custom "(cerror \"continue\" \"something\")")))))
+    (ok (null (check-error-custom "(cerror \"continue\" \"something\")"))))
+
+  (testing "(log:error \"msg\") with non-CL package is not flagged (issue #50)"
+    (ok (null (check-error-custom "(log:error \"something went wrong\")"))))
+
+  (testing "(my-pkg:error \"msg\") with arbitrary package is not flagged"
+    (ok (null (check-error-custom "(my-pkg:error \"bad\")"))))
+
+  (testing "(log:error \"fmt ~A\" v) format-string + arg with non-CL package is not flagged"
+    (ok (null (check-error-custom "(log:error \"value ~A\" v)"))))
+
+  (testing "(log:error 'simple-error ...) non-CL head with quoted CL condition is not flagged"
+    (ok (null (check-error-custom "(log:error 'simple-error \"detail\")")))))
 
 ;;; Invalid cases (violations expected) — string literal first arg
 
@@ -105,7 +117,12 @@
 
   (testing "error with empty string is flagged"
     (let ((violations (check-error-custom "(error \"\")")))
-      (ok (= (length violations) 1)))))
+      (ok (= (length violations) 1))))
+
+  (testing "(CL:error \"msg\") uppercase qualifier is flagged (case-insensitivity guard)"
+    (let ((violations (check-error-custom "(CL:error \"bad\")")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :error-without-custom-condition)))))
 
 ;;; Invalid cases (violations expected) — quoted CL-package condition symbols
 
