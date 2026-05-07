@@ -54,21 +54,87 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "stage=mallet-${tag}-${{ matrix.os_label }}-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
 
-      - name: Install Roswell (SBCL)
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install zstd
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libzstd-dev
+
+      - name: Build SBCL from source with static libzstd
+        env:
+          SBCL_VERSION: 2.6.0
+        run: |
+          set -eu
+          case "${{ matrix.os_label }}-${{ matrix.arch }}" in
+            darwin-aarch64) zstd_a=/opt/homebrew/lib/libzstd.a;          config=Config.arm64-darwin  ;;
+            darwin-x86_64)  zstd_a=/usr/local/lib/libzstd.a;             config=Config.x86-64-darwin ;;
+            linux-aarch64)  zstd_a=/usr/lib/aarch64-linux-gnu/libzstd.a; config=Config.arm64-linux   ;;
+            linux-x86_64)   zstd_a=/usr/lib/x86_64-linux-gnu/libzstd.a;  config=Config.x86-64-linux  ;;
+            *) echo "unsupported: ${{ matrix.os_label }}-${{ matrix.arch }}" >&2; exit 1 ;;
+          esac
+          [ -f "$zstd_a" ] || { echo "ERROR: missing static archive: $zstd_a" >&2; exit 1; }
+
+          mkdir -p /tmp/sbcl-build
+          cd /tmp/sbcl-build
+          curl -fsSL -o sbcl-source.tar.bz2 \
+            "https://sourceforge.net/projects/sbcl/files/sbcl/${SBCL_VERSION}/sbcl-${SBCL_VERSION}-source.tar.bz2/download"
+          tar xjf sbcl-source.tar.bz2
+          cd "sbcl-${SBCL_VERSION}"
+          # Replace dynamic -lzstd with the static archive so the resulting
+          # SBCL runtime has no libzstd dynamic dependency.
+          sed -i.bak "s|-lzstd|${zstd_a}|" "src/runtime/${config}"
+          sh make.sh --fancy
+          sudo INSTALL_ROOT=/usr/local sh install.sh
+          sbcl --version
+
+      - name: Verify SBCL has no dynamic libzstd dependency (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -eu
+          otool -L "$(command -v sbcl)"
+          if otool -L "$(command -v sbcl)" | grep -q libzstd; then
+            echo "ERROR: SBCL still has dynamic libzstd dependency" >&2
+            exit 1
+          fi
+
+      - name: Verify SBCL has no dynamic libzstd dependency (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -eu
+          ldd "$(command -v sbcl)" || true
+          if ldd "$(command -v sbcl)" | grep -q libzstd; then
+            echo "ERROR: SBCL still has dynamic libzstd dependency" >&2
+            exit 1
+          fi
+
+      - name: Install Roswell (provides qlot — SBCL is our source build)
         env:
           LISP: sbcl-bin
         run: |
           curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
-          mkdir -p "$HOME/.local/bin"
-          printf '#!/bin/sh\nexec ros run -- "$@"\n' > "$HOME/.local/bin/sbcl"
-          chmod u+x "$HOME/.local/bin/sbcl"
-          echo "$HOME/.local/bin"      >> "$GITHUB_PATH"
-          echo "$HOME/.roswell/bin"    >> "$GITHUB_PATH"
+          # Add Roswell bin, then prepend /usr/local/bin so our source-built
+          # sbcl always wins over any wrapper Roswell might create.
+          echo "$HOME/.roswell/bin" >> "$GITHUB_PATH"
+          echo "/usr/local/bin"     >> "$GITHUB_PATH"
 
       - name: Install Qlot
         run: |
           ros install fukamachi/qlot
           ros install fukamachi/archive/fix/tar-symlink-entry
+
+      - name: Verify sbcl on PATH is the source-built one
+        run: |
+          set -eu
+          command -v sbcl
+          if [ "$(command -v sbcl)" != "/usr/local/bin/sbcl" ]; then
+            echo "ERROR: expected sbcl at /usr/local/bin/sbcl, got $(command -v sbcl)" >&2
+            exit 1
+          fi
+          sbcl --version
 
       - name: Build, package, and verify
         env:

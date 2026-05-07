@@ -71,6 +71,11 @@ log "smoke test"
 if [ "$OS" = "linux" ]; then
   log "ldd"
   ldd ./mallet || true
+  log "verify libzstd is statically linked (no dynamic libzstd dependency)"
+  if ldd ./mallet | grep -q libzstd; then
+    echo "ERROR: binary still has dynamic libzstd dependency; libzstd should be statically linked into SBCL" >&2
+    exit 1
+  fi
   log "glibc symbol versions"
   if command -v objdump >/dev/null 2>&1; then
     objdump -T ./mallet | awk '/GLIBC_/ {print $5}' | sort -u
@@ -78,11 +83,15 @@ if [ "$OS" = "linux" ]; then
 elif [ "$OS" = "darwin" ]; then
   log "otool -L"
   otool -L ./mallet || true
+  log "verify no Homebrew dylib dependencies"
+  if otool -L ./mallet | tail -n +2 | awk '{print $1}' | grep -E '^(/opt/homebrew|/usr/local/opt|/usr/local/Cellar)/' >&2; then
+    echo "ERROR: binary references Homebrew paths; libzstd should be statically linked into SBCL" >&2
+    exit 1
+  fi
   log "LC_BUILD_VERSION / LC_VERSION_MIN_MACOSX"
-  otool -l ./mallet | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX/{flag=1} flag{print; n++} n>=4{flag=0; n=0}'
-  log "ad-hoc codesign"
-  codesign --force --sign - ./mallet
-  codesign --verify --verbose ./mallet
+  otool -l ./mallet | awk '/LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX/{flag=1} flag{print; n++} n>=5{flag=0; n=0}'
+  log "verify ad-hoc signature (SBCL linker-signs the runtime)"
+  codesign --verify --verbose --no-strict ./mallet
 fi
 
 log "stage tarball at ${STAGE_DIR}"
