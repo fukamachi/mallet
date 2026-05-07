@@ -89,7 +89,16 @@
                "flexi-streams")
   :build-operation "program-op"
   :build-pathname "mallet"
-  :entry-point "mallet:main")
+  :entry-point "mallet:main"
+  ;; ASDF's program-op on SBCL calls uiop:dump-image without compression.
+  ;; Override perform so the released binary uses zstd core compression
+  ;; (~5x smaller). The :before method on program-op still runs and sets
+  ;; *image-entry-point* from :entry-point above.
+  :perform (program-op (op c)
+            (uiop:dump-image (asdf:output-file op c)
+                             :executable t
+                             #+sb-core-compression :compression
+                             #+sb-core-compression t)))
 
 (defsystem "mallet/tests"
   :depends-on ("mallet"
