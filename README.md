@@ -14,6 +14,28 @@ A simple start, with room to grow.
 
 ## Installation
 
+### From a release (recommended)
+
+Pre-built binaries are published on the [GitHub Releases](https://github.com/fukamachi/mallet/releases) page for `linux-x86_64`, `linux-aarch64`, `darwin-x86_64`, and `darwin-aarch64`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fukamachi/mallet/main/scripts/install.sh | sh
+```
+
+By default this installs into `~/.local/bin/mallet`. Override with environment variables:
+
+```bash
+# Pin a version
+curl -fsSL https://raw.githubusercontent.com/fukamachi/mallet/main/scripts/install.sh | MALLET_VERSION=v0.9.1 sh
+
+# Install system-wide
+curl -fsSL https://raw.githubusercontent.com/fukamachi/mallet/main/scripts/install.sh | MALLET_INSTALL_DIR=/usr/local/bin sudo sh
+```
+
+Or fetch the tarball manually from the Releases page and unpack it; each archive contains `bin/mallet`, the license, and a `VERSION` manifest.
+
+### From source
+
 ```bash
 git clone https://github.com/fukamachi/mallet.git
 cd mallet

@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. 0.9.1). Used only for manual dispatch.'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os_label }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            os_label: linux
+            arch: x86_64
+          - runner: ubuntu-22.04-arm
+            os_label: linux
+            arch: aarch64
+          - runner: macos-13
+            os_label: darwin
+            arch: x86_64
+          - runner: macos-14
+            os_label: darwin
+            arch: aarch64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "stage=mallet-${tag}-${{ matrix.os_label }}-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Roswell (SBCL)
+        env:
+          LISP: sbcl-bin
+        run: |
+          curl -L https://raw.githubusercontent.com/roswell/roswell/master/scripts/install-for-ci.sh | sh
+          mkdir -p "$HOME/.local/bin"
+          printf '#!/bin/sh\nexec ros run -- "$@"\n' > "$HOME/.local/bin/sbcl"
+          chmod u+x "$HOME/.local/bin/sbcl"
+          echo "$HOME/.local/bin"      >> "$GITHUB_PATH"
+          echo "$HOME/.roswell/bin"    >> "$GITHUB_PATH"
+
+      - name: Install Qlot
+        run: |
+          ros install fukamachi/qlot
+          ros install fukamachi/archive/fix/tar-symlink-entry
+
+      - name: Build, package, and verify
+        env:
+          MALLET_VERSION: ${{ steps.version.outputs.tag }}
+          MALLET_OS: ${{ matrix.os_label }}
+          MALLET_ARCH: ${{ matrix.arch }}
+        run: |
+          bash scripts/release-build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.stage }}
+          path: |
+            dist/${{ steps.version.outputs.stage }}.tar.gz
+            dist/${{ steps.version.outputs.stage }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: meta
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect tarballs and compute SHA256SUMS
+        run: |
+          set -eu
+          mkdir -p release
+          find artifacts -type f -name '*.tar.gz' -exec cp {} release/ \;
+          cd release
+          ls -l
+          sha256sum *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            release/*.tar.gz
+            release/SHA256SUMS
