@@ -108,14 +108,14 @@
 ;;; Registration tests
 
 (deftest double-colon-access-registration
-  (testing ":double-colon-access is NOT in :default config (moved to :strict)"
+  (testing ":double-colon-access is NOT in :default config"
     (let* ((cfg (mallet/config:get-built-in-config :default))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
       (ok (not (member :double-colon-access rule-names)))))
-  (testing ":double-colon-access IS in :strict config"
+  (testing ":double-colon-access is NOT in :strict config (opt-in only)"
     (let* ((cfg (mallet/config:get-built-in-config :strict))
            (rule-names (mapcar #'rules:rule-name (mallet/config:config-rules cfg))))
-      (ok (member :double-colon-access rule-names))))
+      (ok (not (member :double-colon-access rule-names)))))
 
   (testing ":double-colon-access is in :all config"
     (let* ((cfg (mallet/config:get-built-in-config :all))

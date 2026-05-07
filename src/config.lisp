@@ -623,7 +623,6 @@ Suitable for new projects and AI-assisted coding where stricter checking is desi
          (extra-rules
            '(;; Opinionated practice rules (removed from :default)
              :no-package-use
-             :double-colon-access
              :closing-paren-on-own-line
              :redundant-progn
              ;; Additional practice rules
