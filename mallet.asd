@@ -128,6 +128,7 @@
    (:file "engine-coalton-lisp-dispatch-test")
    (:file "engine-coalton-lisp-fixture-test")
    (:file "preset-integration-test")
+   (:file "list-rules-test")
 
    (:module "parser"
     :pathname "parser"

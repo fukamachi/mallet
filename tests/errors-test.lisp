@@ -29,6 +29,17 @@
     (ok (typep (make-condition 'errors:unknown-option :option "--foo")
                'error))))
 
+(deftest unknown-rule-error-reporting
+  (testing "unknown-rule message identifies the bad rule name"
+    (let ((err (make-condition 'errors:unknown-rule :value "no-such-rule")))
+      (ok (search "no-such-rule" (format nil "~A" err))
+          "error message must include the unrecognized rule name")))
+
+  (testing "unknown-rule recovery hint names the --list-rules command"
+    (let ((err (make-condition 'errors:unknown-rule :value "no-such-rule")))
+      (ok (search "--list-rules" (format nil "~A" err))
+          "recovery hint must reference --list-rules so the hint actually works"))))
+
 (deftest error-reporting
   (testing "unknown-option has helpful message"
     (let ((err (make-condition 'errors:unknown-option :option "--foo")))

@@ -24,8 +24,72 @@
                  #:mallet/rules/stale-suppression
                  #:mallet/rules/asdf-reader-conditional
                  #:mallet/rules/forms/coalton)
-  (:export #:make-rule))
+  (:export #:*all-rule-names*
+           #:make-rule))
 (in-package #:mallet/rules)
+
+(defparameter *all-rule-names*
+  '(;; Text rules
+    :line-length
+    :trailing-whitespace
+    :no-tabs
+    :missing-final-newline
+    :consecutive-blank-lines
+    :closing-paren-on-own-line
+
+    ;; Token rules
+    :bare-float-literal
+    :double-colon-access
+
+    ;; Form rules
+    :missing-else
+    :progn-in-conditional
+    :redundant-progn
+    :missing-otherwise
+    :wrong-otherwise
+    :needless-let*
+    :unused-variables
+    :unused-loop-variables
+    :unused-local-functions
+    :defpackage-interned-symbol
+    :unused-local-nicknames
+    :unused-imported-symbols
+    :no-package-use
+    :one-package-per-file
+    :special-variable-naming
+    :constant-naming
+    :mixed-optional-and-key
+    :no-allow-other-keys
+    :asdf-component-strings
+    :asdf-redundant-package-prefix
+    :asdf-operate-in-perform
+    :asdf-secondary-system-name
+    :asdf-if-feature-keyword
+    :asdf-reader-conditional
+
+    ;; Safety rules
+    :no-eval
+    :runtime-intern
+    :runtime-unintern
+    :no-ignore-errors
+    :error-without-custom-condition
+    :missing-docstring
+    :missing-package-docstring
+    :missing-variable-docstring
+    :missing-struct-docstring
+
+    ;; Coalton rules
+    :coalton-missing-declare
+    :coalton-missing-to-boolean
+
+    ;; Suppression rules
+    :stale-suppression
+
+    ;; Metric rules
+    :function-length
+    :cyclomatic-complexity
+    :comment-ratio)
+  "All canonical rule names accepted by MAKE-RULE.")
 
 (defun make-rule (name &rest options)
   "Create a rule instance based on NAME and OPTIONS.

@@ -422,3 +422,25 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
       (ok (typep cfg 'mallet/config:config)
           "returns a valid config even with nil preset"))))
 
+;;; Tests for --list-rules flag in parse-args
+
+(deftest parse-args-list-rules-flag
+  (testing "--list-rules activates list-rules-mode"
+    ;; parse-args must set a list-rules-mode flag (12th return value) rather
+    ;; than calling uiop:quit directly, so callers can test this path without
+    ;; killing the test runner.
+    (multiple-value-bind (format config-path preset debug no-color fix-mode
+                          cli-rules fail-on init-mode force files list-rules-mode)
+        (parse-args '("--list-rules"))
+      (declare (ignore format config-path preset debug no-color fix-mode
+                        cli-rules fail-on init-mode force files))
+      (ok list-rules-mode "--list-rules must activate list-rules-mode")))
+
+  (testing "list-rules-mode is nil when --list-rules is absent"
+    (multiple-value-bind (format config-path preset debug no-color fix-mode
+                          cli-rules fail-on init-mode force files list-rules-mode)
+        (parse-args '("file.lisp"))
+      (declare (ignore format config-path preset debug no-color fix-mode
+                        cli-rules fail-on init-mode force files))
+      (ok (null list-rules-mode) "list-rules-mode must default to nil"))))
+

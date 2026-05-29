@@ -62,7 +62,8 @@
            ;; CLI helpers (exported for testing)
            #:should-fail-p
            #:expand-file-args
-           #:parse-args))
+           #:parse-args
+           #:print-list-rules))
 (in-package #:mallet)
 
 ;;; Special variables
@@ -199,7 +200,7 @@ Returns (rule-name . options-plist)."
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on init-mode force files).
+Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on init-mode force files list-rules-mode).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
@@ -210,6 +211,7 @@ Signals specific error conditions for invalid input."
         (fail-on :warning)
         (init-mode nil)
         (force nil)
+        (list-rules-mode nil)
         (enable-rules '())
         (disable-rules '())
         (files '()))
@@ -246,6 +248,8 @@ Signals specific error conditions for invalid input."
            (setf init-mode t))
           ((string= arg "--force")
            (setf force t))
+          ((string= arg "--list-rules")
+           (setf list-rules-mode t))
           ((string= arg "--enable")
            (let (rule-spec)
              (multiple-value-setq (rule-spec args)
@@ -269,7 +273,7 @@ Signals specific error conditions for invalid input."
     (let ((cli-rules (list :enable-rules (nreverse enable-rules)
                            :disable-rules (nreverse disable-rules))))
       (values format config-path preset debug no-color fix-mode cli-rules fail-on
-              init-mode force (nreverse files)))))
+              init-mode force (nreverse files) list-rules-mode))))
 
 
 (defun print-help ()
@@ -297,6 +301,7 @@ Options:
   --fix-dry-run       Show what would be fixed without writing files
   --no-color          Disable ANSI color codes in output
   --debug             Enable debug mode with detailed diagnostics
+  --list-rules        List all available rule names, one per line
   --help              Show this help message
   --version           Show version information
 
@@ -345,6 +350,11 @@ Examples:
   # Start with no rules and explicitly enable specific ones
   mallet --none --enable unused-variables --enable trailing-whitespace src/
 "))
+
+(defun print-list-rules ()
+  "Print all available rule names, one per line, to *standard-output*."
+  (dolist (rule-name *all-rule-names*)
+    (format t "~A~%" (string-downcase (symbol-name rule-name)))))
 
 (defun expand-file-args (file-args)
   "Expand FILE-ARGS into a list of Lisp file pathnames.
@@ -513,7 +523,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                  (uiop:quit 3))))
 
           (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on
-                               init-mode force file-args)
+                               init-mode force file-args list-rules-mode)
               (parse-args args)
 
             ;; Enable debug mode if requested
@@ -522,6 +532,11 @@ Lints files specified in ARGS and exits with appropriate status code."
             ;; Disable colors if requested
             (when no-color
               (setf formatter:*no-color* t))
+
+            ;; Handle --list-rules mode
+            (when list-rules-mode
+              (print-list-rules)
+              (uiop:quit 0))
 
             ;; Handle --init mode
             (when init-mode
