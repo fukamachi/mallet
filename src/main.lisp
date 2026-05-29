@@ -75,6 +75,74 @@
   #.(asdf:component-version (asdf:find-system :mallet))
   "Mallet version string, embedded at compile time from mallet.asd.")
 
+;;; Public library API
+
+(defun lint-file (file &key config)
+  "Lint FILE and return (values violations ignored-p).
+
+FILE must be a pathname naming an existing source file. CONFIG must be a
+mallet/config:config object, or NIL to discover a .mallet.lisp file relative
+to FILE and fall back to the built-in default config when none is found.
+
+The primary value is a list of violation objects. The second value is true
+when FILE is ignored by the effective config; in that case violations is NIL."
+  (check-type file pathname)
+  (when config
+    (check-type config config:config))
+  (engine:lint-file file :config config))
+
+(defun lint-files (files &key config)
+  "Lint FILES and return an alist of (file . violations) entries.
+
+FILES must be a list of pathnames. CONFIG must be a mallet/config:config
+object, or NIL to let each file discover a .mallet.lisp file relative to that
+file and fall back to the built-in default config when none is found.
+
+Ignored files are omitted from the returned alist. Each included cdr is the
+list of violation objects returned for that file."
+  (check-type files list)
+  (dolist (file files)
+    (check-type file pathname))
+  (when config
+    (check-type config config:config))
+  (engine:lint-files files :config config))
+
+(defun make-config (&key rules disabled-rules path-rules ignore root-dir set-severity-overrides)
+  "Return a config object built from explicit rule settings.
+
+RULES is a list of rule instances. DISABLED-RULES is a list of rule keyword
+names. PATH-RULES is a list of path-specific override objects. IGNORE is a
+list of glob patterns. ROOT-DIR is a pathname used to resolve config-relative
+paths, or NIL for built-in/in-memory configs. SET-SEVERITY-OVERRIDES is an
+alist of (category . severity) overrides. NIL list arguments mean no entries."
+  (check-type rules list)
+  (check-type disabled-rules list)
+  (check-type path-rules list)
+  (check-type ignore list)
+  (check-type root-dir (or null pathname))
+  (check-type set-severity-overrides list)
+  (config:make-config
+   :rules rules
+   :disabled-rules disabled-rules
+   :path-rules path-rules
+   :ignore ignore
+   :root-dir root-dir
+   :set-severity-overrides set-severity-overrides))
+
+(defun load-config (path &key preset-override)
+  "Load and return a config object from PATH.
+
+PATH must be a string or pathname naming a Mallet config file. PRESET-OVERRIDE
+is a preset keyword that replaces the config file's :extends choice when
+provided; NIL leaves the file's own preset selection in effect.
+
+Signals a Mallet config condition when PATH does not exist or cannot be parsed.
+The returned config has its root directory set to the directory containing
+PATH."
+  (check-type path (or string pathname))
+  (check-type preset-override (or null keyword))
+  (config:load-config path :preset-override preset-override))
+
 ;;; CLI Implementation
 
 ;;; CLI parsing helpers for rule options

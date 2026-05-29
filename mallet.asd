@@ -130,6 +130,7 @@
    (:file "engine-coalton-lisp-fixture-test")
    (:file "preset-integration-test")
    (:file "list-rules-test")
+   (:file "public-api-docstrings-test")
 
    (:module "parser"
     :pathname "parser"
