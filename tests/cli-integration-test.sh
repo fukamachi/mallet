@@ -556,6 +556,61 @@ rm -f "$TEMP_PRESET_FILE"
 
 # ---- End user-defined preset tests ----
 
+# ---- Non-UTF-8 / unreadable file resilience tests ----
+echo ""
+echo "Testing non-UTF-8 / unreadable file resilience..."
+echo ""
+
+NON_UTF8_DIR=$(mktemp -d)
+NON_UTF8_TMPOUT=$(mktemp)
+
+# a-bad-encoding.lisp: C0 80 = invalid UTF-8 overlong two-byte sequence
+printf '\xC0\x80' > "$NON_UTF8_DIR/a-bad-encoding.lisp"
+# b-valid-one.lisp and c-valid-two.lisp: valid Lisp with trailing whitespace so they
+# appear in the linter output (trailing-whitespace rule fires on them)
+printf '(defun foo () nil)   \n' > "$NON_UTF8_DIR/b-valid-one.lisp"
+printf '(defun bar () nil)   \n' > "$NON_UTF8_DIR/c-valid-two.lisp"
+
+# Run once; capture output and exit code without letting set -e abort the script
+NON_UTF8_EXIT=0
+"$CLI" --no-color --none --enable trailing-whitespace "$NON_UTF8_DIR" \
+    > "$NON_UTF8_TMPOUT" 2>&1 || NON_UTF8_EXIT=$?
+NON_UTF8_OUTPUT=$(cat "$NON_UTF8_TMPOUT")
+rm -f "$NON_UTF8_TMPOUT"
+
+test_start "Non-UTF-8 in directory: run completes without fatal abort (exit != 3)"
+if [ "$NON_UTF8_EXIT" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected run to complete; got exit $NON_UTF8_EXIT (fatal abort). Output: $NON_UTF8_OUTPUT"
+fi
+
+test_start "Non-UTF-8 in directory: both valid files are still processed and appear in output"
+if echo "$NON_UTF8_OUTPUT" | grep -q "b-valid-one" && \
+   echo "$NON_UTF8_OUTPUT" | grep -q "c-valid-two"; then
+    test_pass
+else
+    test_fail "Expected both valid files in output. Got: $NON_UTF8_OUTPUT"
+fi
+
+test_start "Non-UTF-8 in directory: error message contains no raw Lisp printer artifacts"
+if echo "$NON_UTF8_OUTPUT" | grep -qE '#P"|#<SB-'; then
+    test_fail "Output contains raw Lisp printer artifacts (#P\" or #<SB-). Got: $NON_UTF8_OUTPUT"
+else
+    test_pass
+fi
+
+test_start "Non-UTF-8 in directory: overall exit is non-zero (unreadable file surfaces as failure)"
+if [ "$NON_UTF8_EXIT" -ne 0 ]; then
+    test_pass
+else
+    test_fail "Expected non-zero exit when scan contains an unreadable file; got exit 0"
+fi
+
+rm -rf "$NON_UTF8_DIR"
+
+# ---- End non-UTF-8 resilience tests ----
+
 # Summary
 echo ""
 echo "========================================="

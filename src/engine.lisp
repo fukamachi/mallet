@@ -300,6 +300,26 @@ Returns updated violations list."
                     violations)))))))
   violations)
 
+(defun make-file-read-error-violation (file condition)
+  "Return a per-file violation for unreadable or undecodable FILE."
+  (declare (ignore condition))
+  (make-instance 'violation:violation
+                 :rule :file-read-error
+                 :file file
+                 :line 1
+                 :column 0
+                 :severity :error
+                 :message (format nil "Unable to read or decode file: ~A"
+                                  (namestring file))
+                 :fix nil))
+
+(defun read-lisp-file-string (file)
+  "Read FILE as text, returning (values text read-error)."
+  (handler-case
+      (values (uiop:read-file-string file) nil)
+    (error (condition)
+      (values nil condition))))
+
 
 (defun extract-lisp-bodies-from-coalton (expr position-map fallback-line fallback-column)
   "Walk EXPR (a coalton-toplevel form tree) and collect CL body expressions
@@ -357,7 +377,13 @@ If ignored-p is T, the file was ignored and violations will be NIL."
 
   ;; Get rules for this file
   (let* ((rules (config:get-rules-for-file config file))
-         (text (uiop:read-file-string file))
+         (text (multiple-value-bind (contents read-error)
+                   (read-lisp-file-string file)
+                 (when read-error
+                   (return-from lint-file
+                     (values (list (make-file-read-error-violation file read-error))
+                             nil)))
+                 contents))
          (violations '())
          (file-type (let ((type-string (pathname-type file)))
                       (when type-string
