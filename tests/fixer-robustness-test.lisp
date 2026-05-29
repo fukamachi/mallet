@@ -21,6 +21,24 @@
                        :line-number line
                        :replacement-content new-content)))
 
+(defun chmod-file-if-present (path mode)
+  "Set PATH permissions when possible, ignoring missing-file cleanup failures."
+  (handler-case
+      (sb-posix:chmod path mode)
+    (sb-posix:syscall-error () nil)))
+
+(defun delete-file-if-present (path)
+  "Delete PATH when present, ignoring cleanup failures."
+  (handler-case
+      (delete-file path)
+    (file-error () nil)))
+
+(defun remove-directory-if-present (path)
+  "Remove PATH when present, ignoring cleanup failures."
+  (handler-case
+      (sb-posix:rmdir path)
+    (sb-posix:syscall-error () nil)))
+
 ;;; === AC1: Basic correctness - trailing whitespace fix leaves other content intact ===
 ;;;
 ;;; This is a regression test: the atomic-write refactoring must not corrupt the
@@ -30,9 +48,9 @@
 (deftest fixer-basic-fix-leaves-other-content-unchanged-test
   (testing "Applying --fix removes only trailing whitespace; all other bytes unchanged"
     ;; One violation on line 1 only; lines 2-4 must survive bit-for-bit.
-    (let* ((test-file (merge-pathnames "mallet-basic-fix-ac1-test.lisp" (uiop:temporary-directory)))
-           (original (format nil "first line   ~%unchanged two~%unchanged three~%unchanged four~%"))
-           (expected (format nil "first line~%unchanged two~%unchanged three~%unchanged four~%")))
+    (let ((test-file (merge-pathnames "mallet-basic-fix-ac1-test.lisp" (uiop:temporary-directory)))
+          (original (format nil "first line   ~%unchanged two~%unchanged three~%unchanged four~%"))
+          (expected (format nil "first line~%unchanged two~%unchanged three~%unchanged four~%")))
       (unwind-protect
           (progn
             (with-open-file (s test-file :direction :output
@@ -43,7 +61,30 @@
              (list (make-replace-violation test-file 1 "first line")))
             (ok (string= (uiop:read-file-string test-file) expected)
                 "Trailing whitespace removed from line 1; lines 2-4 byte-identical"))
-        (ignore-errors (delete-file test-file))))))
+        (delete-file-if-present test-file)))))
+
+(deftest fixer-atomic-write-preserves-permissions-test
+  (testing "Atomic write preserves existing file permission bits"
+    (let ((test-file (merge-pathnames "mallet-permission-preserve-test.lisp"
+                                      (uiop:temporary-directory)))
+          (original "line with trailing   ")
+          (expected (format nil "line with trailing~%")))
+      (unwind-protect
+          (progn
+            (with-open-file (s test-file :direction :output
+                                         :if-exists :supersede
+                                         :if-does-not-exist :create)
+              (write-string original s))
+            (sb-posix:chmod test-file #o755)
+            (fixer:apply-fixes
+             (list (make-replace-violation test-file 1 "line with trailing")))
+            (ok (string= (uiop:read-file-string test-file) expected)
+                "File content was fixed")
+            (ok (= #o755 (logand (sb-posix:stat-mode (sb-posix:stat test-file))
+                                  #o7777))
+                "File permission bits were preserved after atomic rename"))
+        (chmod-file-if-present test-file #o644)
+        (delete-file-if-present test-file)))))
 
 ;;; === AC2: Atomic write - original intact on failure ===
 ;;;
@@ -64,9 +105,9 @@
       (unwind-protect
           (progn
             ;; Clean up any leftover state from prior run.
-            (ignore-errors (sb-posix:chmod test-dir #o755))
-            (ignore-errors (delete-file test-file))
-            (ignore-errors (sb-posix:rmdir test-dir))
+            (chmod-file-if-present test-dir #o755)
+            (delete-file-if-present test-file)
+            (remove-directory-if-present test-dir)
 
             (ensure-directories-exist test-dir)
             (with-open-file (s test-file :direction :output
@@ -92,9 +133,9 @@
             (ok (string= (uiop:read-file-string test-file) original)
                 "Original file content is fully intact after failed write"))
         ;; Cleanup
-        (ignore-errors (sb-posix:chmod test-dir #o755))
-        (ignore-errors (delete-file test-file))
-        (ignore-errors (sb-posix:rmdir test-dir))))))
+        (chmod-file-if-present test-dir #o755)
+        (delete-file-if-present test-file)
+        (remove-directory-if-present test-dir)))))
 
 ;;; === AC3: Multi-file --fix continues past a read-only file ===
 
@@ -106,7 +147,7 @@
       (unwind-protect
           (progn
             (dolist (p (list writable readonly))
-              (ignore-errors (sb-posix:chmod p #o644))
+              (chmod-file-if-present p #o644)
               (with-open-file (s p :direction :output :if-exists :supersede
                                    :if-does-not-exist :create)
                 (write-string original s)))
@@ -142,9 +183,9 @@
               ;; swallows the error and claims success would fail this check.
               (ok (plusp (length result-unfixed))
                   "Write-error violation recorded as unfixed, enabling non-zero exit")))
-        (ignore-errors (sb-posix:chmod readonly #o644))
-        (ignore-errors (delete-file writable))
-        (ignore-errors (delete-file readonly))))))
+        (chmod-file-if-present readonly #o644)
+        (delete-file-if-present writable)
+        (delete-file-if-present readonly)))))
 
 ;;; === AC3-EXIT: Write failure causes non-zero exit under default --fail-on ===
 ;;;
@@ -163,7 +204,7 @@
            (exit-nonzero nil))
       (unwind-protect
           (progn
-            (ignore-errors (sb-posix:chmod readonly #o644))
+            (chmod-file-if-present readonly #o644)
             (with-open-file (s readonly :direction :output :if-exists :supersede
                                          :if-does-not-exist :create)
               (write-string "content" s))
@@ -186,8 +227,8 @@
                     (setf exit-nonzero (or has-errors has-warnings)))
                 (error () nil))))
 
-        (ignore-errors (sb-posix:chmod readonly #o644))
-        (ignore-errors (delete-file readonly)))
+        (chmod-file-if-present readonly #o644)
+        (delete-file-if-present readonly))
 
       (ok exit-nonzero
           "Write failure causes non-zero exit under default --fail-on warning"))))
@@ -199,7 +240,7 @@
     (let ((readonly (merge-pathnames "mallet-test-errmsg-readonly.lisp" (uiop:temporary-directory))))
       (unwind-protect
           (progn
-            (ignore-errors (sb-posix:chmod readonly #o644))
+            (chmod-file-if-present readonly #o644)
             (with-open-file (s readonly :direction :output :if-exists :supersede
                                          :if-does-not-exist :create)
               (write-string "content" s))
@@ -218,8 +259,8 @@
               ;; Must NOT use SBCL internal stream-object notation.
               (ok (not (search "#<SB-" err-str))
                   "Error output does not contain #<SB- notation")))
-        (ignore-errors (sb-posix:chmod readonly #o644))
-        (ignore-errors (delete-file readonly))))))
+        (chmod-file-if-present readonly #o644)
+        (delete-file-if-present readonly)))))
 
 ;;; === AC5: Output is in pathname-sorted order and deterministic across runs ===
 ;;;
@@ -271,4 +312,4 @@
                 (ok (string= output1 output2)
                     "Two repeated runs produce byte-identical output ordering")))))
         (dolist (p files)
-          (ignore-errors (delete-file p))))))
+          (delete-file-if-present p)))))

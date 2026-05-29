@@ -166,7 +166,8 @@ Returns list of violations that were successfully fixed."
   "Write CONTENT to FILE by creating a temp file beside it then renaming."
   (check-type file pathname)
   (check-type content string)
-  (let ((temp-file (make-temp-pathname file)))
+  (let ((temp-file (make-temp-pathname file))
+        (mode (file-permission-mode file)))
     (unwind-protect
          (progn
            (ensure-file-writable file)
@@ -176,9 +177,16 @@ Returns list of violations that were successfully fixed."
                                 :if-does-not-exist :create)
              (write-string content out)
              (finish-output out))
+           (when mode
+             (sb-posix:chmod temp-file mode))
            (uiop:rename-file-overwriting-target temp-file file))
       (when (probe-file temp-file)
         (delete-file-if-present temp-file)))))
+
+(defun file-permission-mode (file)
+  "Return FILE's permission bits, or NIL when FILE does not exist."
+  (when (probe-file file)
+    (logand (sb-posix:stat-mode (sb-posix:stat file)) #o7777)))
 
 (defun delete-file-if-present (file)
   "Delete FILE when possible, ignoring only file-system cleanup failures."

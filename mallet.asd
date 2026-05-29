@@ -7,6 +7,7 @@
                "cl-interpol"
                "cl-ppcre"
                "eclector"
+               "sb-posix"
                "trivial-glob")
   :in-order-to ((test-op (test-op "mallet/tests"))
                 (program-op (program-op "mallet/executable")))

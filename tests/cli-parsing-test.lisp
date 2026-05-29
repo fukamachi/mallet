@@ -10,9 +10,12 @@
                 #:handle-preset-option
                 #:load-configuration
                 #:parse-args
-                #:print-help)
+                #:print-help
+                #:violation-rule)
   (:local-nicknames
-   (#:errors #:mallet/errors)))
+   (#:errors #:mallet/errors)
+   (#:engine #:mallet/engine)
+   (#:config #:mallet/config)))
 (in-package #:mallet/tests/cli-parsing)
 
 ;;; Tests for parse-option-value
@@ -92,6 +95,34 @@
     (let ((result (parse-rule-spec "cyclomatic-complexity:max=15,variant=modified")))
       (ok (eq :cyclomatic-complexity (car result)))
       (ok (equal '(:max 15 :variant :modified) (cdr result))))))
+
+(deftest parse-rule-spec-colon-prefixed-name
+  (testing "Colon-prefixed rule name resolves to the same result as the bare form"
+    (let ((result (parse-rule-spec ":trailing-whitespace")))
+      (ok (eq :trailing-whitespace (car result))
+          "Keyword matches rule")
+      (ok (null (cdr result))
+          "No options")))
+  (testing "Colon-prefixed and bare forms are equal"
+    (ok (equal (parse-rule-spec "trailing-whitespace")
+               (parse-rule-spec ":trailing-whitespace"))))
+  (testing "Colon-prefixed rule name with options parses like the bare form"
+    (ok (equal (parse-rule-spec "cyclomatic-complexity:max=15,variant=modified")
+               (parse-rule-spec ":cyclomatic-complexity:max=15,variant=modified")))))
+
+(deftest parse-rule-spec-unknown-rule-error-contains-token
+  (testing "Unknown colon-prefixed rule: error message is non-blank and contains the token"
+    (handler-case
+        (progn (parse-rule-spec ":no-such-rule") (ok nil "Should have signaled unknown-rule"))
+      (errors:unknown-rule (c)
+        (let ((msg (format nil "~A" c)))
+          (ok (plusp (length msg))
+              "Error message is non-blank")
+          (ok (search "Unknown rule:" msg)
+              "Error message contains required 'Unknown rule:' prefix")
+          (ok (or (search ":no-such-rule" msg)
+                  (search "no-such-rule" msg))
+              "Offending token appears in the error message"))))))
 
 ;;; Tests for should-fail-p
 
@@ -422,6 +453,47 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
       (ok (typep cfg 'mallet/config:config)
           "returns a valid config even with nil preset"))))
 
+;;; End-to-end: colon-prefixed rule names actually enable rules and produce violations
+
+(deftest colon-prefixed-enable-rule-lints-file
+  (testing "--none --enable :trailing-whitespace reports a trailing-whitespace warning"
+    (uiop:with-temporary-file (:stream out :pathname path :type "lisp" :keep t)
+      (format out "(defun foo ()  ~%  (+ 1 2))")
+      (finish-output out)
+      (multiple-value-bind (fmt cfg-path preset dbg no-color fix cli-rules fail-on init force parsed-files)
+          (parse-args (list "--none" "--enable" ":trailing-whitespace" (namestring path)))
+        (declare (ignore fmt dbg no-color fix fail-on init force parsed-files))
+        (let* ((base-config (load-configuration cfg-path preset nil))
+               (effective-config (config:apply-cli-overrides base-config cli-rules)))
+          (multiple-value-bind (violations ignored-p)
+              (engine:lint-file (truename path) :config effective-config)
+            (declare (ignore ignored-p))
+            (ok (some (lambda (v) (eq :trailing-whitespace (violation-rule v)))
+                      violations)
+                "trailing-whitespace violation reported under --none --enable :trailing-whitespace"))))))
+
+  (testing "--none --enable :trailing-whitespace and --none --enable trailing-whitespace produce identical violations"
+    (uiop:with-temporary-file (:stream out :pathname path :type "lisp" :keep t)
+      (format out "(defun foo ()  ~%  (+ 1 2))")
+      (finish-output out)
+      (flet ((violations-for-enable (spec)
+               (multiple-value-bind (fmt cfg-path preset dbg no-color fix cli-rules fail-on init force parsed-files)
+                   (parse-args (list "--none" "--enable" spec (namestring path)))
+                 (declare (ignore fmt dbg no-color fix fail-on init force parsed-files))
+                 (let* ((base-config (load-configuration cfg-path preset nil))
+                        (effective-config (config:apply-cli-overrides base-config cli-rules)))
+                   (multiple-value-bind (violations ignored-p)
+                       (engine:lint-file (truename path) :config effective-config)
+                     (declare (ignore ignored-p))
+                     violations)))))
+        (let ((bare-violations (violations-for-enable "trailing-whitespace"))
+              (colon-violations (violations-for-enable ":trailing-whitespace")))
+          (ok (= (length bare-violations) (length colon-violations))
+              "Same number of violations for bare and colon-prefixed forms")
+          (ok (equal (mapcar #'violation-rule bare-violations)
+                     (mapcar #'violation-rule colon-violations))
+              "Bare and colon-prefixed forms report the same rule violations"))))))
+
 ;;; Tests for --list-rules flag in parse-args
 
 (deftest parse-args-list-rules-flag
@@ -443,4 +515,3 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
       (declare (ignore format config-path preset debug no-color fix-mode
                         cli-rules fail-on init-mode force files))
       (ok (null list-rules-mode) "list-rules-mode must default to nil"))))
-

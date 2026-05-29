@@ -114,7 +114,11 @@
   "Parse rule name string to keyword. Validates it exists.
 Resolves deprecated rule name aliases to their canonical names."
   (check-type name-str string)
-  (let* ((raw-keyword (intern (string-upcase name-str) :keyword))
+  (let* ((normalized-name (if (and (plusp (length name-str))
+                                   (char= #\: (char name-str 0)))
+                              (subseq name-str 1)
+                              name-str))
+         (raw-keyword (intern (string-upcase normalized-name) :keyword))
          (keyword (utils:resolve-rule-alias raw-keyword)))
     ;; Validate rule exists (check against make-rule)
     (handler-case
@@ -125,10 +129,14 @@ Resolves deprecated rule name aliases to their canonical names."
         (error 'errors:unknown-rule :value name-str)))))
 
 (defun parse-rule-spec (spec)
-  "Parse rule spec like 'cyclomatic-complexity' or 'cyclomatic-complexity:max=15,variant=modified'.
+  "Parse rule spec like 'cyclomatic-complexity' or ':cyclomatic-complexity:max=15,variant=modified'.
 Returns (rule-name . options-plist)."
   (check-type spec string)
-  (let ((colon-pos (position #\: spec)))
+  (let ((colon-pos (position #\: spec
+                             :start (if (and (plusp (length spec))
+                                             (char= #\: (char spec 0)))
+                                        1
+                                        0))))
     (if colon-pos
         ;; Has options: split and parse
         (let* ((rule-name (parse-rule-name (subseq spec 0 colon-pos)))
