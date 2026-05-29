@@ -473,98 +473,106 @@ enabling accurate violation reporting."
     (setf (eclector.readtable:readtable-case eclector.readtable:*readtable*) :preserve)
 
     ;; Read all forms
-    (loop
-      (handler-case
-          (let ((result (let ((*read-eval* nil))
-                          (eclector.parse-result:read client stream nil :eof))))
-            (when (eq result :eof)
-              (return))
-
-            (let* ((expr (getf result :expr))
-                   (source (getf result :source))
-                   (start-pos (car source))
-                   (end-pos (cdr source)))
-
-              (multiple-value-bind (start-line start-column)
-                  (char-pos-to-line-column start-pos line-starts)
-                (multiple-value-bind (end-line end-column)
-                    (char-pos-to-line-column end-pos line-starts)
-
-                  ;; Build position map for this form
-                  (let ((position-map (build-position-map result line-starts)))
-
-                    ;; Track end position for EOF error reporting
-                    (setf last-end-pos end-pos)
-
-                    ;; Create form object
-                    (push (make-instance 'form
-                                         :expr expr
-                                         :file file
-                                         :line start-line
-                                         :column start-column
-                                         :end-line end-line
-                                         :end-column end-column
-                                         :source (extract-source text source)
-                                         :position-map position-map)
-                          forms))))))
-
-        (end-of-file ()
-          (handle-eof-error file stream last-end-pos text line-starts parse-errors)
-          (return))
-        ;; Unknown reader macros (e.g., #?"..." from cl-interpol)
-        ;; We can't parse the current top-level form, so skip it entirely
-        (eclector.readtable:unknown-macro-sub-character ()
-          (when (eq (try-skip-unknown-macro stream) :stop-parsing)
-            (return)))
-        ;; Quote without following object (from malformed reader macro)
-        (eclector.reader:object-must-follow-quote ()
-          ;; Skip and continue
-          nil)
-        ;; Unmatched closing paren
-        (eclector.reader:invalid-context-for-right-parenthesis ()
-          (handle-unmatched-closer file stream line-starts parse-errors)
-          nil)
-        ;; Other reader errors we can't handle - re-signal
-        (eclector.base:stream-position-reader-error ()
-          (let* ((pos (file-position stream))
-                 ;; Extract a snippet of text around the error position
-                 (snippet-start (max 0 (- pos 10)))
-                 (snippet-end (min (length text) (+ pos 20)))
-                 (snippet (subseq text snippet-start snippet-end))
-                 ;; Find where the error position is in the snippet
-                 (marker-pos (- pos snippet-start)))
-            (multiple-value-bind (line column)
-                (char-pos-to-line-column pos line-starts)
-              ;; Only show warning in debug mode
-              (when (utils:debug-mode-p)
-                (format *error-output* "~%Warning: Skipping form at ~A:~D:~D (unknown reader macro)~%"
-                        file line column)
-                (format *error-output* "  Near: ~S~%" snippet)
-                (format *error-output* "        ~v@T^--- here~%"  marker-pos))))
-          ;; Try to skip the entire top-level form using standard reader
-          ;; This preserves context (like backquote) better than skipping to whitespace
+    (handler-case
+        (loop
           (handler-case
-              (let ((*read-eval* nil))
-                (cl:read stream nil :eof))
+              (let ((result (let ((*read-eval* nil))
+                              (eclector.parse-result:read client stream nil :eof))))
+                (when (eq result :eof)
+                  (return))
+
+                (let* ((expr (getf result :expr))
+                       (source (getf result :source))
+                       (start-pos (car source))
+                       (end-pos (cdr source)))
+
+                  (multiple-value-bind (start-line start-column)
+                      (char-pos-to-line-column start-pos line-starts)
+                    (multiple-value-bind (end-line end-column)
+                        (char-pos-to-line-column end-pos line-starts)
+
+                      ;; Build position map for this form
+                      (let ((position-map (build-position-map result line-starts)))
+
+                        ;; Track end position for EOF error reporting
+                        (setf last-end-pos end-pos)
+
+                        ;; Create form object
+                        (push (make-instance 'form
+                                             :expr expr
+                                             :file file
+                                             :line start-line
+                                             :column start-column
+                                             :end-line end-line
+                                             :end-column end-column
+                                             :source (extract-source text source)
+                                             :position-map position-map)
+                              forms))))))
+
             (end-of-file ()
+              (handle-eof-error file stream last-end-pos text line-starts parse-errors)
               (return))
-            ;; If standard reader also fails, skip to next whitespace as fallback
-            (error ()
-              (skip-to-next-whitespace stream))))
-        (error (e)
-          ;; Other parse errors (e.g., reader errors, syntax errors)
-          (let ((pos (file-position stream)))
-            (multiple-value-bind (line column)
-                (char-pos-to-line-column pos line-starts)
-              (let ((message (if (utils:debug-mode-p)
-                                 (format nil "Parse error: ~A" e)
-                                 "Parse error (use --debug for details)")))
-                (push (make-instance 'parse-error-info
-                                     :message message
-                                     :file file
-                                     :line line
-                                     :column column)
-                      parse-errors)))
-            (return)))))
+            ;; Unknown reader macros (e.g., #?"..." from cl-interpol)
+            ;; We can't parse the current top-level form, so skip it entirely
+            (eclector.readtable:unknown-macro-sub-character ()
+              (when (eq (try-skip-unknown-macro stream) :stop-parsing)
+                (return)))
+            ;; Quote without following object (from malformed reader macro)
+            (eclector.reader:object-must-follow-quote ()
+              ;; Skip and continue
+              nil)
+            ;; Unmatched closing paren
+            (eclector.reader:invalid-context-for-right-parenthesis ()
+              (handle-unmatched-closer file stream line-starts parse-errors)
+              nil)
+            ;; Other reader errors we can't handle - re-signal
+            (eclector.base:stream-position-reader-error ()
+              (let* ((pos (file-position stream))
+                     ;; Extract a snippet of text around the error position
+                     (snippet-start (max 0 (- pos 10)))
+                     (snippet-end (min (length text) (+ pos 20)))
+                     (snippet (subseq text snippet-start snippet-end))
+                     ;; Find where the error position is in the snippet
+                     (marker-pos (- pos snippet-start)))
+                (multiple-value-bind (line column)
+                    (char-pos-to-line-column pos line-starts)
+                  ;; Only show warning in debug mode
+                  (when (utils:debug-mode-p)
+                    (format *error-output* "~%Warning: Skipping form at ~A:~D:~D (unknown reader macro)~%"
+                            file line column)
+                    (format *error-output* "  Near: ~S~%" snippet)
+                    (format *error-output* "        ~v@T^--- here~%"  marker-pos))))
+              ;; Try to skip the entire top-level form using standard reader
+              ;; This preserves context (like backquote) better than skipping to whitespace
+              (handler-case
+                  (let ((*read-eval* nil))
+                    (cl:read stream nil :eof))
+                (end-of-file ()
+                  (return))
+                ;; If standard reader also fails, skip to next whitespace as fallback
+                (error ()
+                  (skip-to-next-whitespace stream))))
+            (error (e)
+              ;; Other parse errors (e.g., reader errors, syntax errors)
+              (let ((pos (file-position stream)))
+                (multiple-value-bind (line column)
+                    (char-pos-to-line-column pos line-starts)
+                  (let ((message (if (utils:debug-mode-p)
+                                     (format nil "Parse error: ~A" e)
+                                     "Parse error (use --debug for details)")))
+                    (push (make-instance 'parse-error-info
+                                         :message message
+                                         :file file
+                                         :line line
+                                         :column column)
+                          parse-errors)))
+                (return)))))
+      (storage-condition ()
+        (push (make-instance 'parse-error-info
+                             :message "Expression too deeply nested"
+                             :file file
+                             :line 1
+                             :column 0)
+              parse-errors)))
 
     (values (nreverse forms) (nreverse parse-errors))))

@@ -135,7 +135,8 @@
      (:file "reader-test")
      (:file "loop-test")
      (:file "unknown-reader-macros")
-     (:file "read-eval-security")))
+     (:file "read-eval-security")
+     (:file "deep-nesting-test")))
 
    (:module "rules"
     :pathname "rules"
