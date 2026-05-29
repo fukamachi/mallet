@@ -38,7 +38,9 @@
            #:duplicate-preset-name-name
            #:multiple-config-forms
            #:unknown-config-form
-           #:unknown-config-form-form))
+           #:unknown-config-form-form
+           #:unknown-config-directive
+           #:unknown-config-directive-directive))
 (in-package #:mallet/errors)
 
 ;;; Base error conditions
@@ -216,3 +218,11 @@
              (format stream "Unknown config form: ~A"
                      (unknown-config-form-form condition))))
   (:documentation "Signaled when an unrecognized keyword appears at the config top level."))
+
+(define-condition unknown-config-directive (cli-error)
+  ((directive :initarg :directive
+              :reader unknown-config-directive-directive))
+  (:report (lambda (condition stream)
+             (format stream "Unknown config directive: ~S"
+                     (unknown-config-directive-directive condition))))
+  (:documentation "Signaled when an unrecognized directive appears inside :mallet-config."))

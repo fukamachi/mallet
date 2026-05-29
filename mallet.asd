@@ -109,6 +109,7 @@
   ((:file "errors-test")
    (:file "utils-test")
    (:file "config-test")
+   (:file "config-directives-test")
    (:file "config-ignore-test")
    (:file "cli-parsing-test")
    (:file "fixer-test")

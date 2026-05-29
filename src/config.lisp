@@ -387,7 +387,10 @@ falling back to built-in presets."
                                  :patterns patterns
                                  :rules override-rules
                                  :disabled-rules override-disabled)
-                                path-rules))))))))
+                                path-rules)))))
+                   (otherwise
+                    (error 'errors:unknown-config-directive
+                           :directive key)))))
 
     ;; If preset-override is provided but no :extends clause was found, use preset-override
     (when (and preset-override (not extends))
@@ -468,6 +471,16 @@ Binds *read-eval* to nil for safety. Signals:
 
 ;;; Config file loading
 
+(defun config-parse-failure-cause (condition)
+  "Return a stable, user-facing parse failure message for CONDITION."
+  (typecase condition
+    (end-of-file
+     "Unexpected end of file while reading config")
+    (reader-error
+     "Reader error while reading config")
+    (otherwise
+     (format nil "~A" condition))))
+
 (defun load-config (path &key preset-override)
   "Load configuration from file at PATH.
 Sets root-dir to the directory containing the config file.
@@ -483,25 +496,42 @@ preset is resolved and returned."
     (unless (probe-file pathname)
       (error 'errors:config-not-found :path pathname))
 
-    (multiple-value-bind (preset-forms config-sexp)
-        (read-mallet-forms pathname)
-      (let* ((preset-defs (mapcar #'parse-preset-definition preset-forms))
-             (registry (build-preset-registry preset-defs))
-             (config
-               (cond
-                 (config-sexp
-                  (parse-config config-sexp
-                                :preset-override preset-override
-                                :preset-registry registry))
-                 ((and (not preset-override)
-                       (gethash :default registry))
-                  (resolve-preset :default registry))
-                 (preset-override
-                  (resolve-preset preset-override registry))
-                 (t
-                  (get-built-in-config :default)))))
-        (setf (config-root-dir config) root-dir)
-        config))))
+    ;; Normalize reader failures and unknown directives so callers can report
+    ;; the config path without exposing implementation-specific reader details.
+    ;; Other CLI conditions keep their native type and accessors; for example,
+    ;; unknown-preset callers may need the requested preset name.
+    (handler-case
+        (multiple-value-bind (preset-forms config-sexp)
+            (read-mallet-forms pathname)
+          (let* ((preset-defs (mapcar #'parse-preset-definition preset-forms))
+                 (registry (build-preset-registry preset-defs))
+                 (config
+                  (cond
+                    (config-sexp
+                     (parse-config config-sexp
+                                   :preset-override preset-override
+                                   :preset-registry registry))
+                    ((and (not preset-override)
+                          (gethash :default registry))
+                     (resolve-preset :default registry))
+                    (preset-override
+                     (resolve-preset preset-override registry))
+                    (t
+                     (get-built-in-config :default)))))
+            (setf (config-root-dir config) root-dir)
+            config))
+      (end-of-file (e)
+        (error 'errors:config-parse-failed
+               :path pathname
+               :cause (config-parse-failure-cause e)))
+      (reader-error (e)
+        (error 'errors:config-parse-failed
+               :path pathname
+               :cause (config-parse-failure-cause e)))
+      (errors:unknown-config-directive (e)
+        (error 'errors:config-parse-failed
+               :path pathname
+               :cause (config-parse-failure-cause e))))))
 
 ;;; Rule selection
 
