@@ -433,13 +433,22 @@ string contains no interpolations (caller treats NIL as :unknown-reader-macro)."
 ;;; Main parsing function
 
 
+(defun skip-to-next-whitespace (stream)
+  (loop for char = (read-char stream nil :eof)
+        until (or (eq char :eof)
+                  (member char '(#\Space #\Tab #\Newline #\Return)))
+        finally (unless (eq char :eof)
+                  (unread-char char stream))))
+
 (defun try-skip-unknown-macro (stream)
   "Try to skip unknown macro using standard reader."
   (handler-case
-      (cl:read stream nil :eof)
+      (let ((*read-eval* nil))
+        (cl:read stream nil :eof))
     (end-of-file ()
       :stop-parsing)
     (error ()
+      (skip-to-next-whitespace stream)
       nil)))
 
 (defun parse-forms (text file)
@@ -466,7 +475,8 @@ enabling accurate violation reporting."
     ;; Read all forms
     (loop
       (handler-case
-          (let ((result (eclector.parse-result:read client stream nil :eof)))
+          (let ((result (let ((*read-eval* nil))
+                          (eclector.parse-result:read client stream nil :eof))))
             (when (eq result :eof)
               (return))
 
@@ -534,16 +544,13 @@ enabling accurate violation reporting."
           ;; Try to skip the entire top-level form using standard reader
           ;; This preserves context (like backquote) better than skipping to whitespace
           (handler-case
-              (cl:read stream nil :eof)
+              (let ((*read-eval* nil))
+                (cl:read stream nil :eof))
             (end-of-file ()
               (return))
             ;; If standard reader also fails, skip to next whitespace as fallback
             (error ()
-              (loop for char = (read-char stream nil :eof)
-                    until (or (eq char :eof)
-                              (member char '(#\Space #\Tab #\Newline #\Return)))
-                    finally (when (not (eq char :eof))
-                              (unread-char char stream))))))
+              (skip-to-next-whitespace stream))))
         (error (e)
           ;; Other parse errors (e.g., reader errors, syntax errors)
           (let ((pos (file-position stream)))

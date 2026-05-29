@@ -132,7 +132,8 @@
     ((:file "tokenizer-test")
      (:file "reader-test")
      (:file "loop-test")
-     (:file "unknown-reader-macros")))
+     (:file "unknown-reader-macros")
+     (:file "read-eval-security")))
 
    (:module "rules"
     :pathname "rules"
