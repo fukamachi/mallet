@@ -112,6 +112,7 @@
    (:file "config-ignore-test")
    (:file "cli-parsing-test")
    (:file "fixer-test")
+   (:file "fixer-robustness-test")
    (:file "formatter-test")
    (:file "suppression")
    (:file "suppression-declarations")

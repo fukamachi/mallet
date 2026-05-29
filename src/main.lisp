@@ -380,7 +380,11 @@ Handles wildcards and directories, excluding common non-source directories."
              (push (probe-file path) files))
             (t
              (error 'errors:file-not-found :path arg))))))
-    (nreverse files)))
+    (sort-pathnames files)))
+
+(defun sort-pathnames (pathnames)
+  "Return PATHNAMES sorted by namestring."
+  (sort (copy-list pathnames) #'string< :key #'namestring))
 
 (defun load-configuration (config-path preset start-directory)
   "Load configuration from file or use built-in preset.
@@ -447,13 +451,13 @@ Returns (values has-errors-p has-warnings-p has-any-p)."
         (dolist (v (append fixed-violations unfixed-violations))
           (push v (gethash (violation-file v) by-file)))
 
-        ;; Output each file's violations
-        (maphash (lambda (file file-violations)
-                   (formatter:format-text-file
-                    file
-                    (nreverse file-violations)
-                    :fixed-violations fixed-violations))
-                 by-file))
+        ;; Output each file's violations in deterministic pathname order.
+        (dolist (file (sort-pathnames
+                       (loop for key being the hash-keys of by-file collect key)))
+          (formatter:format-text-file
+           file
+           (sort-violations (gethash file by-file))
+           :fixed-violations fixed-violations)))
 
       ;; Print fix summary
       (cond
@@ -471,6 +475,20 @@ Returns (values has-errors-p has-warnings-p has-any-p)."
 
     ;; Return updated exit code tracking based on unfixed violations
     (track-violation-severity unfixed-violations)))
+
+(defun sort-violations (violations)
+  "Return VIOLATIONS sorted by file, line, and column."
+  (sort (copy-list violations)
+        (lambda (left right)
+          (let ((left-file (namestring (violation-file left)))
+                (right-file (namestring (violation-file right))))
+            (cond
+              ((string< left-file right-file) t)
+              ((string< right-file left-file) nil)
+              ((< (violation-line left) (violation-line right)) t)
+              ((< (violation-line right) (violation-line left)) nil)
+              (t
+               (< (violation-column left) (violation-column right))))))))
 
 (defun main ()
   "Main entry point for the Mallet CLI.
@@ -617,5 +635,3 @@ Lints files specified in ARGS and exits with appropriate status code."
        #-sbcl error ()
         (format *error-output* "~&Interrupted.~%")
         (uiop:quit 130)))))
-
-

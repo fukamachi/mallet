@@ -32,15 +32,21 @@ Returns (values fixed-count fixed-violations unfixed-violations)
             (push v (gethash file by-file))
             (push v unfixed-violations))))
 
-    ;; Apply fixes file by file
-    (maphash (lambda (file file-violations)
-               (let ((fixed (apply-fixes-to-file file file-violations :dry-run dry-run)))
-                 (setf fixed-violations (nconc fixed-violations fixed))))
-             by-file)
+    ;; Apply fixes file by file in deterministic pathname order.
+    (dolist (file (sorted-hash-keys by-file))
+      (let ((file-violations (gethash file by-file)))
+        (handler-case
+            (let ((fixed (apply-fixes-to-file file file-violations :dry-run dry-run)))
+              (setf fixed-violations (nconc fixed-violations fixed)))
+          (error (e)
+            (report-write-error file e)
+            (setf unfixed-violations
+                  (nconc (write-error-violations file-violations e)
+                         unfixed-violations))))))
 
     (values (length fixed-violations)
-            (nreverse fixed-violations)
-            (nreverse unfixed-violations))))
+            (sort-violations-for-output fixed-violations)
+            (sort-violations-for-output unfixed-violations))))
 
 (defun apply-fixes-to-file (file violations &key dry-run)
   "Apply fixes from VIOLATIONS to FILE.
@@ -75,16 +81,130 @@ Returns list of violations that were successfully fixed."
         (dolist (fix (nreverse unique-fixes))
           (setf text (apply-fix text fix))))
 
-      ;; Write fixed content back to file (unless dry-run)
+      ;; Write fixed content back to file atomically (unless dry-run)
       (unless dry-run
-        (with-open-file (out file
-                             :direction :output
-                             :if-exists :supersede
-                             :if-does-not-exist :create)
-          (write-string text out)))
+        (atomic-write-file file text))
 
       ;; Return list of fixed violations
       (remove-if-not #'violation:violation-fix violations))))
+
+(defun sorted-hash-keys (hash-table)
+  "Return HASH-TABLE keys sorted by pathname namestring."
+  (sort (loop for key being the hash-keys of hash-table collect key)
+        #'string<
+        :key #'namestring))
+
+(defun sort-violations-for-output (violations)
+  "Return VIOLATIONS sorted by pathname, line, and column."
+  (sort (copy-list violations)
+        (lambda (left right)
+          (let ((left-file (namestring (violation:violation-file left)))
+                (right-file (namestring (violation:violation-file right))))
+            (cond
+              ((string< left-file right-file) t)
+              ((string< right-file left-file) nil)
+              ((< (violation:violation-line left)
+                  (violation:violation-line right)) t)
+              ((< (violation:violation-line right)
+                  (violation:violation-line left)) nil)
+              (t
+               (< (violation:violation-column left)
+                  (violation:violation-column right))))))))
+
+(defun write-error-violations (violations condition)
+  "Return warning violations that represent failed writes for VIOLATIONS."
+  (let ((message (format nil "Could not write fixed file: ~A"
+                         (condition-message condition))))
+    (loop for v in violations
+          when (violation:violation-fix v)
+          collect (make-instance 'violation:violation
+                                 :rule (violation:violation-rule v)
+                                 :file (violation:violation-file v)
+                                 :line (violation:violation-line v)
+                                 :column (violation:violation-column v)
+                                 :severity :warning
+                                 :message message
+                                 :category (violation:violation-category v)))))
+
+(defun report-write-error (file condition)
+  "Report a per-file write failure without exposing implementation objects."
+  (format *error-output* "Error: Could not write ~A: ~A.~%"
+          (namestring file)
+          (condition-message condition)))
+
+(defun condition-message (condition)
+  "Return CONDITION as a user-facing diagnostic string."
+  (let ((message (princ-to-string condition)))
+    (when (typep condition 'file-error)
+      (let ((path (file-error-pathname condition)))
+        (when path
+          (setf message
+                (replace-substring message
+                                   (write-to-string path :escape t)
+                                   (namestring path))))))
+    message))
+
+(defun replace-substring (string old new)
+  "Return STRING with every occurrence of OLD replaced by NEW."
+  (check-type string string)
+  (check-type old string)
+  (check-type new string)
+  (with-output-to-string (out)
+    (loop with old-length = (length old)
+          for start = 0 then (+ position old-length)
+          for position = (and (< start (length string))
+                              (search old string :start2 start))
+          do (cond
+               (position
+                (write-string string out :start start :end position)
+                (write-string new out))
+               (t
+                (write-string string out :start start)
+                (return))))))
+
+(defun atomic-write-file (file content)
+  "Write CONTENT to FILE by creating a temp file beside it then renaming."
+  (check-type file pathname)
+  (check-type content string)
+  (let ((temp-file (make-temp-pathname file)))
+    (unwind-protect
+         (progn
+           (ensure-file-writable file)
+           (with-open-file (out temp-file
+                                :direction :output
+                                :if-exists :error
+                                :if-does-not-exist :create)
+             (write-string content out)
+             (finish-output out))
+           (uiop:rename-file-overwriting-target temp-file file))
+      (when (probe-file temp-file)
+        (delete-file-if-present temp-file)))))
+
+(defun delete-file-if-present (file)
+  "Delete FILE when possible, ignoring only file-system cleanup failures."
+  (handler-case
+      (delete-file file)
+    (file-error () nil)))
+
+(defun ensure-file-writable (file)
+  "Signal a file error if FILE exists but cannot be opened for writing."
+  (when (probe-file file)
+    (with-open-file (stream file
+                            :direction :output
+                            :if-exists :append
+                            :if-does-not-exist nil)
+      stream)))
+
+(defun make-temp-pathname (file)
+  "Return a unique temporary pathname in FILE's directory."
+  (let ((directory (uiop:pathname-directory-pathname file)))
+    (loop for name = (format nil ".~A.mallet-tmp-~D-~D"
+                             (file-namestring file)
+                             (get-universal-time)
+                             (random most-positive-fixnum))
+          for temp = (merge-pathnames name directory)
+          unless (probe-file temp)
+          return temp)))
 
 (defun fix-key (fix)
   "Generate a unique key for a fix for deduplication purposes.
