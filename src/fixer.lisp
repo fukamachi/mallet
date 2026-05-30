@@ -223,10 +223,13 @@ Returns list of violations that were successfully fixed."
   "Generate a unique key for a fix for deduplication purposes.
 Two fixes with the same key are considered identical and only one should be applied."
   (list (violation:violation-fix-type fix)
+        (violation:violation-fix-line-number fix)
+        (violation:violation-fix-replacement-content fix)
         (violation:violation-fix-start-line fix)
         (violation:violation-fix-end-line fix)
         (violation:violation-fix-start-column fix)
-        (violation:violation-fix-end-column fix)))
+        (violation:violation-fix-end-column fix)
+        (violation:violation-fix-appended-content fix)))
 
 (defun apply-fix (text fix)
   "Apply a single FIX to TEXT, returning modified TEXT.
