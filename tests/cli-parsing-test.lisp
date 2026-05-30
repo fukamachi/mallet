@@ -453,6 +453,63 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
       (ok (typep cfg 'mallet/config:config)
           "returns a valid config even with nil preset"))))
 
+;;; Tests for mutually exclusive flag detection (F3 / F4)
+
+(deftest parse-args-fix-and-fix-dry-run-are-exclusive
+  (testing "--fix followed by --fix-dry-run signals a cli-error"
+    (ok (signals (parse-args '("--fix" "--fix-dry-run" "src/"))
+                 'errors:cli-error)
+        "--fix and --fix-dry-run together must not silently resolve by argument order"))
+
+  (testing "error message for --fix/--fix-dry-run says 'mutually exclusive' and names both flags"
+    (ok (handler-case
+             (progn (parse-args '("--fix" "--fix-dry-run" "src/")) nil)
+           (errors:cli-error (c)
+             (let ((msg (format nil "~A" c)))
+               (and (search "--fix" msg)
+                    (search "--fix-dry-run" msg)
+                    (search "mutually exclusive" (string-downcase msg))))))
+         "error message must say 'mutually exclusive' and name both --fix and --fix-dry-run"))
+
+  (testing "--fix-dry-run followed by --fix also signals a cli-error"
+    (ok (signals (parse-args '("--fix-dry-run" "--fix" "src/"))
+                 'errors:cli-error)
+        "reversed flag order must also be rejected")))
+
+(deftest parse-args-all-and-none-are-exclusive
+  (testing "--all followed by --none signals a cli-error"
+    (ok (signals (parse-args '("--all" "--none" "src/"))
+                 'errors:cli-error)
+        "--all and --none together must not silently resolve by argument order"))
+
+  (testing "error message for --all/--none names both flags"
+    (ok (handler-case
+             (progn (parse-args '("--all" "--none" "src/")) nil)
+           (errors:cli-error (c)
+             (let ((msg (format nil "~A" c)))
+               (and (search "--all" msg) (search "--none" msg)))))
+         "error message must name both --all and --none"))
+
+  (testing "--none followed by --all also signals a cli-error"
+    (ok (signals (parse-args '("--none" "--all" "src/"))
+                 'errors:cli-error)
+        "reversed flag order must also be rejected")))
+
+(deftest parse-args-fix-mode-single-flags
+  (testing "--fix alone sets fix-mode to :fix"
+    (multiple-value-bind (format config-path preset debug no-color fix-mode)
+        (parse-args '("--fix" "src/"))
+      (declare (ignore format config-path preset debug no-color))
+      (ok (eq :fix fix-mode)
+          "--fix alone must not be rejected")))
+
+  (testing "--fix-dry-run alone sets fix-mode to :fix-dry-run"
+    (multiple-value-bind (format config-path preset debug no-color fix-mode)
+        (parse-args '("--fix-dry-run" "src/"))
+      (declare (ignore format config-path preset debug no-color))
+      (ok (eq :fix-dry-run fix-mode)
+          "--fix-dry-run alone must not be rejected"))))
+
 ;;; End-to-end: colon-prefixed rule names actually enable rules and produce violations
 
 (deftest colon-prefixed-enable-rule-lints-file

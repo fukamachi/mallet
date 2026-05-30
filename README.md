@@ -85,8 +85,11 @@ mallet --enable line-length:max=80 --enable cyclomatic-complexity:max=10 src/
 # Disable specific rules (override config/preset)
 mallet --disable unused-variables tests/
 
-# Fail on warnings and above (the default)
+# Fail on warnings and above (the default, except --all)
 mallet --fail-on warning src/
+
+# Use every built-in rule and fail on any severity unless --fail-on is set
+mallet --all src/
 
 # Use the strict preset (adds opinionated best-practice rules)
 mallet --strict src/

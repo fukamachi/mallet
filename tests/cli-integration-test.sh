@@ -667,6 +667,140 @@ rm -rf "$NON_UTF8_DIR"
 
 # ---- End non-UTF-8 resilience tests ----
 
+# ---- Mutually exclusive flag tests ----
+echo ""
+echo "Testing mutually exclusive flags..."
+echo ""
+
+# F4: --fix and --fix-dry-run together must exit 3 with 'mutually exclusive' in stderr.
+test_start "--fix --fix-dry-run exits 3 with message naming both flags"
+EXCL_STDERR_FILE=$(mktemp)
+EXCL_EXIT=0
+"$CLI" --fix --fix-dry-run "$VIOLATIONS_DIR/line-length.lisp" >"$EXCL_STDERR_FILE.stdout" 2>"$EXCL_STDERR_FILE" || EXCL_EXIT=$?
+EXCL_STDERR=$(cat "$EXCL_STDERR_FILE")
+rm -f "$EXCL_STDERR_FILE" "$EXCL_STDERR_FILE.stdout"
+if [ "$EXCL_EXIT" -eq 3 ] && \
+   echo "$EXCL_STDERR" | grep -q -- "--fix" && \
+   echo "$EXCL_STDERR" | grep -q -- "--fix-dry-run" && \
+   echo "$EXCL_STDERR" | grep -qi "mutually exclusive"; then
+    test_pass
+else
+    test_fail "Expected exit 3 and stderr naming both --fix and --fix-dry-run with phrase 'mutually exclusive'; got exit $EXCL_EXIT, stderr: $EXCL_STDERR"
+fi
+
+# F4b: --fix --fix-dry-run on a non-existent path must STILL exit 3 with 'mutually exclusive'
+# in stderr, proving conflict detection precedes path validation. A violating implementation
+# that validates paths first will emit a path-not-found error instead.
+test_start "--fix --fix-dry-run on non-existent path still exits 3 with 'mutually exclusive'"
+EXCL_NOPATH_STDERR_FILE=$(mktemp)
+EXCL_NOPATH_EXIT=0
+"$CLI" --fix --fix-dry-run "/tmp/mallet-does-not-exist-$$-xyzzy.lisp" \
+    >"$EXCL_NOPATH_STDERR_FILE.stdout" 2>"$EXCL_NOPATH_STDERR_FILE" || EXCL_NOPATH_EXIT=$?
+EXCL_NOPATH_STDERR=$(cat "$EXCL_NOPATH_STDERR_FILE")
+rm -f "$EXCL_NOPATH_STDERR_FILE" "$EXCL_NOPATH_STDERR_FILE.stdout"
+if [ "$EXCL_NOPATH_EXIT" -eq 3 ] && \
+   echo "$EXCL_NOPATH_STDERR" | grep -qi "mutually exclusive"; then
+    test_pass
+else
+    test_fail "Expected exit 3 and 'mutually exclusive' in stderr even for non-existent path; got exit $EXCL_NOPATH_EXIT, stderr: $EXCL_NOPATH_STDERR"
+fi
+
+# --fix alone must still work (no regression from the exclusivity check).
+test_start "--fix alone (single flag) behaves normally"
+FIX_TMPFILE=$(mktemp)
+printf '(defun foo () nil)   \n' > "$FIX_TMPFILE"
+FIX_EXIT=0
+"$CLI" --fix "$FIX_TMPFILE" > /dev/null 2>&1 || FIX_EXIT=$?
+rm -f "$FIX_TMPFILE"
+if [ "$FIX_EXIT" -ne 3 ]; then
+    test_pass
+else
+    test_fail "Expected --fix alone to work without fatal error; got exit $FIX_EXIT"
+fi
+
+# --all alone must still lint normally and detect violations (no regression).
+test_start "--all alone (single flag) detects violations as before"
+ALL_EXIT=0
+"$CLI" --all "$VIOLATIONS_DIR/line-length.lisp" > /dev/null 2>&1 || ALL_EXIT=$?
+if [ "$ALL_EXIT" -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected --all alone to detect violations and exit 1; got exit $ALL_EXIT"
+fi
+
+# --fix <dir> must still fix files in the directory (no regression from exclusivity check).
+# This also verifies the file was actually modified — exit code alone does not prove fixing ran.
+test_start "--fix alone with a directory performs fix behavior"
+FIX_DIR_TMPDIR=$(mktemp -d)
+printf '(defun foo () nil)   \n' > "$FIX_DIR_TMPDIR/test.lisp"
+FIX_DIR_EXIT=0
+"$CLI" --fix "$FIX_DIR_TMPDIR" > /dev/null 2>&1 || FIX_DIR_EXIT=$?
+FIX_DIR_CONTENT=$(cat "$FIX_DIR_TMPDIR/test.lisp" 2>/dev/null || echo "")
+rm -rf "$FIX_DIR_TMPDIR"
+if [ "$FIX_DIR_EXIT" -ne 3 ] && \
+   ! echo "$FIX_DIR_CONTENT" | grep -q "   $"; then
+    test_pass
+else
+    test_fail "Expected --fix <dir> to fix trailing whitespace in the file; got exit $FIX_DIR_EXIT, content: $FIX_DIR_CONTENT"
+fi
+
+# --all <dir> must still detect violations in directory (no regression from exclusivity check).
+test_start "--all alone with a directory detects violations as before"
+ALL_DIR_EXIT=0
+"$CLI" --all "$VIOLATIONS_DIR" > /dev/null 2>&1 || ALL_DIR_EXIT=$?
+if [ "$ALL_DIR_EXIT" -eq 1 ]; then
+    test_pass
+else
+    test_fail "Expected --all <dir> to detect violations (exit 1); got exit $ALL_DIR_EXIT"
+fi
+
+# F3: --all and --none together must surface the conflict at the process level.
+# This asserts the bin/mallet process boundary — not just the parse-args unit level —
+# so a violating implementation that adds rejection only to parse-args while leaving
+# the process path with last-wins silent behavior is caught here.
+test_start "--all --none exits 3 with message naming both flags"
+ALL_NONE_OUTPUT=""
+ALL_NONE_EXIT=0
+ALL_NONE_OUTPUT=$("$CLI" --all --none "$VIOLATIONS_DIR/line-length.lisp" 2>&1) || ALL_NONE_EXIT=$?
+if [ "$ALL_NONE_EXIT" -eq 3 ] && \
+   echo "$ALL_NONE_OUTPUT" | grep -q -- "--all" && \
+   echo "$ALL_NONE_OUTPUT" | grep -q -- "--none"; then
+    test_pass
+else
+    test_fail "Expected exit 3 and message naming both --all and --none; got exit $ALL_NONE_EXIT, output: $ALL_NONE_OUTPUT"
+fi
+
+# --none --all (reversed order) must also surface the conflict.
+test_start "--none --all (reversed order) also exits 3 naming both flags"
+NONE_ALL_OUTPUT=""
+NONE_ALL_EXIT=0
+NONE_ALL_OUTPUT=$("$CLI" --none --all "$VIOLATIONS_DIR/line-length.lisp" 2>&1) || NONE_ALL_EXIT=$?
+if [ "$NONE_ALL_EXIT" -eq 3 ] && \
+   echo "$NONE_ALL_OUTPUT" | grep -q -- "--all" && \
+   echo "$NONE_ALL_OUTPUT" | grep -q -- "--none"; then
+    test_pass
+else
+    test_fail "Expected exit 3 and message naming both --all and --none for reversed order; got exit $NONE_ALL_EXIT, output: $NONE_ALL_OUTPUT"
+fi
+
+# F3c: --all --none on an actual DIRECTORY must also surface the conflict.
+# A violating implementation may route directory args through a separate scan path
+# that applies last-wins preset selection before conflict validation, so directory
+# invocations silently succeed while single-file invocations correctly exit 3.
+test_start "--all --none on a directory exits 3 naming both flags"
+ALL_NONE_DIR_OUTPUT=""
+ALL_NONE_DIR_EXIT=0
+ALL_NONE_DIR_OUTPUT=$("$CLI" --all --none "$VIOLATIONS_DIR" 2>&1) || ALL_NONE_DIR_EXIT=$?
+if [ "$ALL_NONE_DIR_EXIT" -eq 3 ] && \
+   echo "$ALL_NONE_DIR_OUTPUT" | grep -q -- "--all" && \
+   echo "$ALL_NONE_DIR_OUTPUT" | grep -q -- "--none"; then
+    test_pass
+else
+    test_fail "Expected exit 3 and message naming both --all and --none when invoked on a directory; got exit $ALL_NONE_DIR_EXIT, output: $ALL_NONE_DIR_OUTPUT"
+fi
+
+# ---- End mutually exclusive flag tests ----
+
 # Summary
 echo ""
 echo "========================================="

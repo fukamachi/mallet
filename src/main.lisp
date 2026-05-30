@@ -274,9 +274,35 @@ Returns (rule-name . options-plist)."
                  :expected "error, warning, or info")))
      args)))
 
+(defun signal-mutually-exclusive-options (first-option second-option)
+  "Signal a CLI error for mutually exclusive options."
+  (check-type first-option string)
+  (check-type second-option string)
+  (error 'errors:invalid-option-value
+         :option first-option
+         :value second-option
+         :expected (format nil "~A and ~A are mutually exclusive; choose one."
+                           first-option
+                           second-option)))
+
+(defun signal-option-conflict-if-needed (seen-option seen-key option key exclusive-keys)
+  "Signal when OPTION conflicts with SEEN-OPTION within EXCLUSIVE-KEYS."
+  (check-type option string)
+  (when (and seen-option
+             (not (eq seen-key key))
+             (member seen-key exclusive-keys)
+             (member key exclusive-keys))
+    (signal-mutually-exclusive-options seen-option option)))
+
+(defun apply-all-preset-defaults (fail-on fail-on-option-seen)
+  "Return FAIL-ON adjusted for --all unless --fail-on was explicit."
+  (if fail-on-option-seen
+      fail-on
+      :info))
+
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
-Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on init-mode force files list-rules-mode).
+Returns (values format config-path preset debug no-color fix-mode cli-rules fail-on init-mode force files list-rules-mode fail-on-option-seen).
 Signals specific error conditions for invalid input."
   (let ((format :text)
         (config-path nil)
@@ -288,6 +314,11 @@ Signals specific error conditions for invalid input."
         (init-mode nil)
         (force nil)
         (list-rules-mode nil)
+        (preset-option nil)
+        (preset-option-key nil)
+        (fail-on-option-seen nil)
+        (fix-option nil)
+        (fix-option-key nil)
         (enable-rules '())
         (disable-rules '())
         (files '()))
@@ -302,22 +333,44 @@ Signals specific error conditions for invalid input."
              (handle-config-option args)))
           ((string= arg "--preset")
            (multiple-value-setq (preset args)
-             (handle-preset-option args)))
+             (handle-preset-option args))
+           (signal-option-conflict-if-needed preset-option preset-option-key
+                                            arg preset '(:all :none))
+           (when (member preset '(:all :none))
+             (setf preset-option-key preset)
+             (setf preset-option arg)))
           ((or (string= arg "--all") (string= arg "-a"))
+           (signal-option-conflict-if-needed preset-option preset-option-key
+                                            arg :all '(:all :none))
+           (setf preset-option arg)
+           (setf preset-option-key :all)
            (setf preset :all))
           ((string= arg "--none")
+           (signal-option-conflict-if-needed preset-option preset-option-key
+                                            arg :none '(:all :none))
+           (setf preset-option arg)
+           (setf preset-option-key :none)
            (setf preset :none))
           ((string= arg "--debug")
            (setf debug t))
           ((string= arg "--no-color")
            (setf no-color t))
           ((string= arg "--fix")
+           (signal-option-conflict-if-needed fix-option fix-option-key
+                                            arg :fix '(:fix :fix-dry-run))
+           (setf fix-option arg)
+           (setf fix-option-key :fix)
            (setf fix-mode :fix))
           ((string= arg "--fix-dry-run")
+           (signal-option-conflict-if-needed fix-option fix-option-key
+                                            arg :fix-dry-run '(:fix :fix-dry-run))
+           (setf fix-option arg)
+           (setf fix-option-key :fix-dry-run)
            (setf fix-mode :fix-dry-run))
           ((string= arg "--fail-on")
            (multiple-value-setq (fail-on args)
-             (handle-fail-on-option args)))
+             (handle-fail-on-option args))
+           (setf fail-on-option-seen t))
           ((string= arg "--strict")
            (setf preset :strict))
           ((string= arg "--init")
@@ -349,7 +402,7 @@ Signals specific error conditions for invalid input."
     (let ((cli-rules (list :enable-rules (nreverse enable-rules)
                            :disable-rules (nreverse disable-rules))))
       (values format config-path preset debug no-color fix-mode cli-rules fail-on
-              init-mode force (nreverse files) list-rules-mode))))
+              init-mode force (nreverse files) list-rules-mode fail-on-option-seen))))
 
 
 (defun print-help ()
@@ -363,7 +416,7 @@ Options:
   --format <format>   Output format (text, line, or json; default: text)
   --config <path>     Path to config file (default: auto-discover .mallet.lisp)
   --preset <name>     Use preset: built-in (default, strict, all, none) or user-defined from .mallet.lisp
-  --all, -a           Alias for --preset all
+  --all, -a           Alias for --preset all; fails on info unless --fail-on is set
   --none              Alias for --preset none
 
   --enable <rule>     Enable specific rule (e.g., --enable cyclomatic-complexity)
@@ -606,7 +659,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                  (uiop:quit 3))))
 
           (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on
-                               init-mode force file-args list-rules-mode)
+                               init-mode force file-args list-rules-mode fail-on-option-seen)
               (parse-args args)
 
             ;; Enable debug mode if requested
@@ -615,6 +668,10 @@ Lints files specified in ARGS and exits with appropriate status code."
             ;; Disable colors if requested
             (when no-color
               (setf formatter:*no-color* t))
+
+            (setf fail-on (if (eq preset :all)
+                              (apply-all-preset-defaults fail-on fail-on-option-seen)
+                              fail-on))
 
             ;; Handle --list-rules mode
             (when list-rules-mode
