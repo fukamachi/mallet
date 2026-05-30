@@ -103,6 +103,7 @@ mallet --strict src/
 **Exit codes:**
 - `0` - No violations at or above the `--fail-on` threshold
 - `1` - One or more violations at or above the threshold
+- `2` - Runtime failure (unhandled error or I/O failure, for example permission denied during `--fix`)
 - `3` - CLI usage error (unknown flag, missing argument, invalid file)
 
 ### Auto-Fix

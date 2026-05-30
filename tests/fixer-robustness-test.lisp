@@ -157,12 +157,14 @@
                     (list (make-replace-violation writable 1 "line with trailing")
                           (make-replace-violation readonly 1 "line with trailing")))
                   (error-raised nil)
-                  (result-unfixed nil))
+                  (result-unfixed nil)
+                  (result-write-error-p nil))
               (handler-case
-                  (multiple-value-bind (fixed-count fixed-violations unfixed-violations)
+                  (multiple-value-bind (fixed-count fixed-violations unfixed-violations write-error-p)
                       (fixer:apply-fixes violations)
                     (declare (ignore fixed-count fixed-violations))
-                    (setf result-unfixed unfixed-violations))
+                    (setf result-unfixed unfixed-violations
+                          result-write-error-p write-error-p))
                 (error () (setf error-raised t)))
 
               ;; Must not propagate an unhandled error.
@@ -182,12 +184,17 @@
               ;; caller can set a non-zero exit code.  A stub that silently
               ;; swallows the error and claims success would fail this check.
               (ok (plusp (length result-unfixed))
-                  "Write-error violation recorded as unfixed, enabling non-zero exit")))
+                  "Write-error violation recorded as unfixed, enabling non-zero exit")
+
+              ;; write-error-p must be T so callers can distinguish write
+              ;; failures from clean runs without inspecting unfixed-violations.
+              (ok result-write-error-p
+                  "write-error-p is T when a file write fails")))
         (chmod-file-if-present readonly #o644)
         (delete-file-if-present writable)
         (delete-file-if-present readonly)))))
 
-;;; === AC3-EXIT: Write failure causes non-zero exit under default --fail-on ===
+;;; === AC3-EXIT: Write failure causes exit 2 (not exit 1) ===
 ;;;
 ;;; AC3 requires "finishes with a non-zero exit."  The default --fail-on is
 ;;; :warning, so `should-fail-p :warning has-errors has-warnings _` fires only
@@ -196,12 +203,19 @@
 ;;; "unfixed non-empty" gate in fixer-continues-past-write-error-test but still
 ;;; exits 0 under the default threshold.  This test closes that gap by calling
 ;;; process-fix-mode directly and checking (or has-errors has-warnings).
+;;;
+;;; However, the exit-code contract requires exit 2 for I/O failures, distinct
+;;; from exit 1 (plain violations).  A stub that surfaces write errors only as
+;;; ordinary :warning violations passes the non-zero check but exits 1, not 2.
+;;; The io-error-p assertion below checks the 4th return value that
+;;; process-fix-mode must return so main can select exit 2 instead of exit 1.
 
 (deftest fixer-write-error-exits-nonzero-test
   (testing "Write failure causes process-fix-mode to return non-zero exit indication"
     (let* ((readonly (merge-pathnames "mallet-test-exit-nonzero-readonly.lisp" (uiop:temporary-directory)))
            (violations (list (make-replace-violation readonly 1 "fixed")))
-           (exit-nonzero nil))
+           (exit-nonzero nil)
+           (io-error-p nil))
       (unwind-protect
           (progn
             (chmod-file-if-present readonly #o644)
@@ -216,22 +230,58 @@
             ;; With implemented error handling, process-fix-mode returns values
             ;; that reflect the write failure with :error or :warning severity,
             ;; making should-fail-p :warning return t → exit-nonzero t → PASSES.
+            ;; The 4th return value (io-error-p) must also be true so that main
+            ;; can exit 2 instead of exit 1 when an I/O failure occurs.
             (with-output-to-string (*standard-output*)
               (handler-case
-                  (multiple-value-bind (has-errors has-warnings has-any)
+                  (multiple-value-bind (has-errors has-warnings has-any io-error)
                       (mallet::process-fix-mode violations :fix :text)
                     (declare (ignore has-any))
                     ;; Default --fail-on is :warning: non-zero exit fires only
                     ;; when has-errors or has-warnings is true.  :info-severity
                     ;; violations alone are NOT enough.
-                    (setf exit-nonzero (or has-errors has-warnings)))
+                    (setf exit-nonzero (or has-errors has-warnings))
+                    (setf io-error-p io-error))
                 (error () nil))))
 
         (chmod-file-if-present readonly #o644)
         (delete-file-if-present readonly))
 
       (ok exit-nonzero
-          "Write failure causes non-zero exit under default --fail-on warning"))))
+          "Write failure causes non-zero exit under default --fail-on warning")
+      ;; Stronger assertion: process-fix-mode must set io-error-p so main can
+      ;; exit 2 (I/O failure) rather than 1 (plain violations).  A stub that
+      ;; only surfaces write errors as :warning violations passes the non-zero
+      ;; check but still exits 1 — this assertion closes that gap.
+      (ok io-error-p
+          "process-fix-mode returns io-error-p=t so main exits 2 (I/O failure), not 1 (violations)")))
+
+  ;; Companion: io-error-p must be NIL when the write succeeds.
+  ;; Without this check a stub that always returns io-error=T in :fix mode
+  ;; satisfies the failure-case assertion above while bypassing real error
+  ;; detection.  Both the failure path (io-error=T) and the success path
+  ;; (io-error=NIL) must hold before the gate is closed.
+  (testing "Successful write causes process-fix-mode to return io-error-p=nil"
+    (let* ((writable (merge-pathnames "mallet-test-exit-nonzero-writable.lisp"
+                                      (uiop:temporary-directory)))
+           (violations (list (make-replace-violation writable 1 "fixed")))
+           (success-io-error-p :unset))
+      (unwind-protect
+          (progn
+            (ignore-errors (sb-posix:chmod writable #o644))
+            (with-open-file (s writable :direction :output :if-exists :supersede
+                                         :if-does-not-exist :create)
+              (write-string "content" s))
+            (with-output-to-string (*standard-output*)
+              (handler-case
+                  (multiple-value-bind (has-errors has-warnings has-any io-error)
+                      (mallet::process-fix-mode violations :fix :text)
+                    (declare (ignore has-errors has-warnings has-any))
+                    (setf success-io-error-p io-error))
+                (error () (setf success-io-error-p :error)))))
+        (ignore-errors (delete-file writable)))
+      (ok (not success-io-error-p)
+          "Successful write returns io-error-p=nil; a stub that always returns T fails here"))))
 
 ;;; === AC4: Error message uses plain pathname, not #P or #<SB- ===
 

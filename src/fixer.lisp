@@ -4,7 +4,8 @@
    (#:errors #:mallet/errors)
    (#:violation #:mallet/violation))
   (:export #:apply-fixes
-           #:apply-fixes-to-file))
+           #:apply-fixes-to-file
+           #:sort-violations-for-output))
 (in-package #:mallet/fixer)
 
 (defun apply-fixes (violations &key dry-run)
@@ -13,16 +14,18 @@
 VIOLATIONS - List of violation objects (may include unfixable violations)
 DRY-RUN - If T, don't write files, just return what would be fixed
 
-Returns (values fixed-count fixed-violations unfixed-violations)
+Returns (values fixed-count fixed-violations unfixed-violations write-error-p)
   - fixed-count: Number of violations that were fixed
   - fixed-violations: List of violations that were fixed
-  - unfixed-violations: List of violations that couldn't be fixed"
+  - unfixed-violations: List of violations that couldn't be fixed
+  - write-error-p: T when any file write failed"
   (check-type violations list)
 
   ;; Group violations by file
   (let ((by-file (make-hash-table :test 'equal))
         (fixed-violations '())
-        (unfixed-violations '()))
+        (unfixed-violations '())
+        (write-error-p nil))
 
     ;; Group violations by file pathname
     (dolist (v violations)
@@ -39,6 +42,7 @@ Returns (values fixed-count fixed-violations unfixed-violations)
             (let ((fixed (apply-fixes-to-file file file-violations :dry-run dry-run)))
               (setf fixed-violations (nconc fixed-violations fixed)))
           (error (e)
+            (setf write-error-p t)
             (report-write-error file e)
             (setf unfixed-violations
                   (nconc (write-error-violations file-violations e)
@@ -46,7 +50,8 @@ Returns (values fixed-count fixed-violations unfixed-violations)
 
     (values (length fixed-violations)
             (sort-violations-for-output fixed-violations)
-            (sort-violations-for-output unfixed-violations))))
+            (sort-violations-for-output unfixed-violations)
+            write-error-p)))
 
 (defun apply-fixes-to-file (file violations &key dry-run)
   "Apply fixes from VIOLATIONS to FILE.
@@ -305,7 +310,7 @@ Returns modified text."
 
   (when (< end-line start-line)
     (error 'errors:mallet-simple-error :format-control "end-line (~A) must be >= start-line (~A)"
-                                       :format-arguments (list end-line start-line)))
+           :format-arguments (list end-line start-line)))
 
   (with-output-to-string (out)
     (with-input-from-string (in text)
@@ -388,7 +393,7 @@ the next line from being concatenated."
 
   (when (< end-line start-line)
     (error 'errors:mallet-simple-error :format-control "end-line (~A) must be >= start-line (~A)"
-                                       :format-arguments (list end-line start-line)))
+           :format-arguments (list end-line start-line)))
 
   (with-output-to-string (out)
     (with-input-from-string (in text)

@@ -549,9 +549,9 @@ Returns the final config with CLI preset override applied."
                    :value (string-downcase (symbol-name preset))
                    :expected (format nil "Not a built-in preset and no .mallet.lisp was found.~%~
                                          Define preset :~A in .mallet.lisp or use a built-in preset: ~{~A~^, ~}"
-                                    (string-downcase (symbol-name preset))
-                                    (mapcar (lambda (n) (string-downcase (symbol-name n)))
-                                            config:*built-in-preset-names*)))))))
+                                     (string-downcase (symbol-name preset))
+                                     (mapcar (lambda (n) (string-downcase (symbol-name n)))
+                                             config:*built-in-preset-names*)))))))
 
 (defun has-cli-rules-p (cli-rules)
   "Check if cli-rules has any actual overrides."
@@ -586,8 +586,8 @@ Severity ordering: error > warning > info."
 
 (defun process-fix-mode (all-violations fix-mode format)
   "Apply fixes to violations and output results.
-Returns (values has-errors-p has-warnings-p has-any-p)."
-  (multiple-value-bind (fixed-count fixed-violations unfixed-violations)
+Returns (values has-errors-p has-warnings-p has-any-p write-error-p)."
+  (multiple-value-bind (fixed-count fixed-violations unfixed-violations write-error-p)
       (fixer:apply-fixes all-violations :dry-run (eq fix-mode :fix-dry-run))
 
     ;; Output results (only text format supported for --fix for now)
@@ -602,7 +602,7 @@ Returns (values has-errors-p has-warnings-p has-any-p)."
                        (loop for key being the hash-keys of by-file collect key)))
           (formatter:format-text-file
            file
-           (sort-violations (gethash file by-file))
+           (fixer:sort-violations-for-output (gethash file by-file))
            :fixed-violations fixed-violations)))
 
       ;; Print fix summary
@@ -620,21 +620,9 @@ Returns (values has-errors-p has-warnings-p has-any-p)."
                 (length unfixed-violations))))
 
     ;; Return updated exit code tracking based on unfixed violations
-    (track-violation-severity unfixed-violations)))
-
-(defun sort-violations (violations)
-  "Return VIOLATIONS sorted by file, line, and column."
-  (sort (copy-list violations)
-        (lambda (left right)
-          (let ((left-file (namestring (violation-file left)))
-                (right-file (namestring (violation-file right))))
-            (cond
-              ((string< left-file right-file) t)
-              ((string< right-file left-file) nil)
-              ((< (violation-line left) (violation-line right)) t)
-              ((< (violation-line right) (violation-line left)) nil)
-              (t
-               (< (violation-column left) (violation-column right))))))))
+    (multiple-value-bind (has-errors-p has-warnings-p has-any-p)
+        (track-violation-severity unfixed-violations)
+      (values has-errors-p has-warnings-p has-any-p write-error-p))))
 
 (defun main ()
   "Main entry point for the Mallet CLI.
@@ -647,16 +635,16 @@ Lints files specified in ARGS and exits with appropriate status code."
         (handler-bind
             ;; Handle CLI errors with nice messages, no stacktrace
             ((errors:cli-error
-               (lambda (e)
-                 (format *error-output* "Error: ~A~%" e)
-                 (uiop:quit 3)))
+              (lambda (e)
+                (format *error-output* "Error: ~A~%" e)
+                (uiop:quit 3)))
              ;; Handle unexpected errors with stacktrace
              (error
-               (lambda (e)
-                 (format *error-output* "Fatal error: ~A~%" e)
-                 (when *debug-mode*
-                   (uiop:print-condition-backtrace e))
-                 (uiop:quit 3))))
+              (lambda (e)
+                (format *error-output* "Fatal error: ~A~%" e)
+                (when *debug-mode*
+                  (uiop:print-condition-backtrace e))
+                (uiop:quit 2))))
 
           (multiple-value-bind (format config-path preset debug no-color fix-mode cli-rules fail-on
                                init-mode force file-args list-rules-mode fail-on-option-seen)
@@ -702,7 +690,7 @@ Lints files specified in ARGS and exits with appropriate status code."
             ;; Validate we have files to lint
             (when (null file-args)
               (print-help)
-              (uiop:quit 1))
+              (uiop:quit 0))
 
             (let* ((files (expand-file-args file-args))
                    ;; Discover config from first file's directory
@@ -717,6 +705,7 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (has-errors nil)
                    (has-warnings nil)
                    (has-any-violations nil)
+                   (runtime-io-error-p nil)
                    (first-file-with-violations t)
                    (all-violations '()))
 
@@ -769,11 +758,12 @@ Lints files specified in ARGS and exits with appropriate status code."
 
               ;; Apply fixes if in fix mode
               (when fix-mode
-                (multiple-value-bind (errors warnings any)
+                (multiple-value-bind (errors warnings any write-error)
                     (process-fix-mode all-violations fix-mode format)
                   (setf has-errors errors)
                   (setf has-warnings warnings)
-                  (setf has-any-violations any)))
+                  (setf has-any-violations any)
+                  (setf runtime-io-error-p write-error)))
 
               ;; Print summary/closing (only for normal mode)
               (unless fix-mode
@@ -788,12 +778,16 @@ Lints files specified in ARGS and exits with appropriate status code."
                    (formatter:format-text-summary severity-counts
                                                   :stream *error-output*))))
 
-              ;; Exit with appropriate status (0 or 1 only)
-              (if (should-fail-p fail-on has-errors has-warnings has-any-violations)
-                  (uiop:quit 1)
-                  (uiop:quit 0)))))
+              ;; Exit with appropriate status.
+              (cond
+                (runtime-io-error-p
+                 (uiop:quit 2))
+                ((should-fail-p fail-on has-errors has-warnings has-any-violations)
+                 (uiop:quit 1))
+                (t
+                 (uiop:quit 0))))))
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt
-       #-sbcl error ()
+        #-sbcl error ()
         (format *error-output* "~&Interrupted.~%")
         (uiop:quit 130)))))

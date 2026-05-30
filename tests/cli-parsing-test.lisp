@@ -551,6 +551,34 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
                      (mapcar #'violation-rule colon-violations))
               "Bare and colon-prefixed forms report the same rule violations"))))))
 
+;;; === Exit-code contract: no-arg help path (AC: no args → help → exit 0) ===
+
+(deftest parse-args-no-args-returns-nil-files
+  (testing "No arguments returns nil file-args (triggers no-arg help path in main)"
+    ;; main checks (null file-args) and calls (print-help) then (uiop:quit 0).
+    ;; This unit test verifies parse-args returns nil for files when called with
+    ;; no arguments, which is the mechanism that activates that branch.
+    (multiple-value-bind (fmt cfg preset dbg nc fix cli-rules fail-on init-mode force files list-rules-mode)
+        (parse-args '())
+      (declare (ignore fmt cfg preset dbg nc fix cli-rules fail-on init-mode force list-rules-mode))
+      (ok (null files)
+          "parse-args with empty arg list returns nil file-args"))))
+
+;;; === Exit-code contract: unknown flag → cli-error → exit 3 ===
+
+(deftest parse-args-unknown-flag-signals-cli-error
+  (testing "Unknown flag signals cli-error so main exits 3 (usage error)"
+    ;; main catches cli-error and calls (uiop:quit 3).  This test verifies the
+    ;; signaling mechanism, which is what distinguishes exit 3 from exit 2.
+    (ok (handler-case
+            (progn (parse-args '("--bogus-flag" "file.lisp")) nil)
+          (errors:cli-error () t))
+        "--bogus-flag signals cli-error")
+    (ok (handler-case
+            (progn (parse-args '("--bogus-flag" "file.lisp")) nil)
+          (errors:unknown-option () t))
+        "--bogus-flag signals specifically unknown-option (a cli-error subtype)")))
+
 ;;; Tests for --list-rules flag in parse-args
 
 (deftest parse-args-list-rules-flag

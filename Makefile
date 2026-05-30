@@ -41,6 +41,7 @@ test-cli:
 	@echo ""
 	@echo "Running CLI integration tests..."
 	@./tests/cli-integration-test.sh
+	@./tests/cli-exit-code-test.sh
 
 bundle:
 	@qlot bundle --exclude mallet/tests
