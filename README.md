@@ -124,6 +124,22 @@ mallet -a --fix src/              # Fix with all rules enabled
 - `:unused-local-nicknames` - Remove unused package nicknames from `defpackage`
 - `:unused-imported-symbols` - Remove unused imports from `defpackage`
 
+## Adopting Mallet on an Existing Project
+
+For an existing project, start by generating a configuration file that captures the current violations as suppressions:
+
+```bash
+mallet --init src/
+```
+
+The command generates a `.mallet.lisp` in the project root so you can begin linting new changes without fixing the whole codebase at once. Review the generated config, remove suppressions as you clean up the code, and commit the file with the project.
+
+If a config already exists, pass `--force` to overwrite the existing `.mallet.lisp` config:
+
+```bash
+mallet --init --force src/
+```
+
 ## Configuration
 
 Create `.mallet.lisp` in your project root:

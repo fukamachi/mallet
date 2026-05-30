@@ -1005,7 +1005,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
-           "Chained init forms should all be recognized as uses"))))
+           "Chained init forms should all be recognized as uses")))))
 
 (deftest loop-variables-in-subsequent-clauses
   (testing "Bug: LOOP variable used in subsequent FOR clause (Coalton package.lisp case)"
@@ -1154,7 +1154,7 @@
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
-          "All variables in triple-nested loops should be recognized as used")))))
+          "All variables in triple-nested loops should be recognized as used"))))
 
 (deftest loop-nested-with-hash-value-bug
   (testing "Bug: LET variable used in nested LOOP with :being :the :hash-value"
