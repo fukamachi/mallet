@@ -103,6 +103,7 @@
 
 (defsystem "mallet/tests"
   :depends-on ("mallet"
+               "cl-json"
                "cl-ppcre"
                "rove")
   :pathname "tests"
@@ -130,6 +131,7 @@
    (:file "engine-coalton-lisp-fixture-test")
    (:file "preset-integration-test")
    (:file "list-rules-test")
+   (:file "format-stream-separation-test")
    (:file "public-api-docstrings-test")
 
    (:module "parser"

@@ -515,6 +515,13 @@ only counted in has-any-p (used when fail-on is :info)."
    (some (lambda (v) (eq (violation-severity v) :warning)) violations)
    (not (null violations))))
 
+(defun accumulate-severity-counts (severity-counts violations)
+  "Add VIOLATIONS severities to SEVERITY-COUNTS plist and return it."
+  (dolist (violation violations severity-counts)
+    (let ((severity (violation-severity violation)))
+      (setf (getf severity-counts severity 0)
+            (1+ (getf severity-counts severity 0))))))
+
 (defun should-fail-p (fail-on has-errors has-warnings has-any-violations)
   "Return T if the process should exit 1 given FAIL-ON threshold and violation presence.
 FAIL-ON is one of :error, :warning, :info.
@@ -689,6 +696,8 @@ Lints files specified in ARGS and exits with appropriate status code."
                                            (+ (getf severity-counts severity 0) count)))))
                          (:json
                           ;; Output JSON for this file
+                          (setf severity-counts
+                                (accumulate-severity-counts severity-counts violations))
                           (when (formatter:format-json-file file violations
                                                             first-file-with-violations)
                             (setf first-file-with-violations nil))))))
@@ -712,10 +721,15 @@ Lints files specified in ARGS and exits with appropriate status code."
               ;; Print summary/closing (only for normal mode)
               (unless fix-mode
                 (ecase format
-                  ((:text :line)
+                  (:text
                    (formatter:format-text-summary severity-counts))
+                  (:line
+                   (formatter:format-text-summary severity-counts
+                                                  :stream *error-output*))
                   (:json
-                   (formatter:format-json-end))))
+                   (formatter:format-json-end)
+                   (formatter:format-text-summary severity-counts
+                                                  :stream *error-output*))))
 
               ;; Exit with appropriate status (0 or 1 only)
               (if (should-fail-p fail-on has-errors has-warnings has-any-violations)
