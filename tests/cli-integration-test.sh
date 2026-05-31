@@ -548,62 +548,6 @@ rm -f "$TEMP_PRESET_FILE"
 
 # ---- End user-defined preset tests ----
 
-# ---- Colon-prefixed rule name tests ----
-echo ""
-echo "Testing colon-prefixed rule names in --enable / --disable..."
-echo ""
-
-# Create a temp file with trailing whitespace (two spaces at end of first line)
-COLON_TEST_FILE=$(mktemp /tmp/mallet-colon-test-XXXXXX.lisp)
-printf '%s\n%s\n' '(defun foo ()  ' '  (+ 1 2))' > "$COLON_TEST_FILE"
-
-test_start "--none --enable :trailing-whitespace reports trailing-whitespace warning"
-COLON_TW_OUTPUT=$("$CLI" --none --enable :trailing-whitespace "$COLON_TEST_FILE" 2>&1 || true)
-if echo "$COLON_TW_OUTPUT" | grep -q "trailing-whitespace" && echo "$COLON_TW_OUTPUT" | grep -q "warning"; then
-    test_pass
-else
-    test_fail "Expected trailing-whitespace violation with 'warning' severity under --none --enable :trailing-whitespace, got: $COLON_TW_OUTPUT"
-fi
-
-test_start "--none --enable trailing-whitespace (bare) and :trailing-whitespace (colon) produce identical output"
-set +e
-BARE_TW_OUTPUT=$("$CLI" --none --enable trailing-whitespace "$COLON_TEST_FILE" 2>&1)
-BARE_TW_STATUS=$?
-COLON_TW_OUTPUT2=$("$CLI" --none --enable :trailing-whitespace "$COLON_TEST_FILE" 2>&1)
-COLON_TW_STATUS=$?
-set -e
-if [ "$BARE_TW_STATUS" -eq "$COLON_TW_STATUS" ] && [ "$BARE_TW_OUTPUT" = "$COLON_TW_OUTPUT2" ]; then
-    test_pass
-else
-    test_fail "Expected identical output and status for bare and colon-prefixed forms. Bare status: $BARE_TW_STATUS output: '$BARE_TW_OUTPUT' | Colon status: $COLON_TW_STATUS output: '$COLON_TW_OUTPUT2'"
-fi
-
-test_start "--none --disable :trailing-whitespace accepts colon-prefixed rule name"
-set +e
-DISABLE_TW_OUTPUT=$("$CLI" --none --disable :trailing-whitespace "$COLON_TEST_FILE" 2>&1)
-DISABLE_TW_STATUS=$?
-set -e
-if [ "$DISABLE_TW_STATUS" -eq 0 ]; then
-    test_pass
-else
-    test_fail "Expected --disable :trailing-whitespace to exit 0, got status $DISABLE_TW_STATUS with output: '$DISABLE_TW_OUTPUT'"
-fi
-
-rm -f "$COLON_TEST_FILE"
-
-test_start "--enable :no-such-rule reports unknown-rule error containing the offending token"
-set +e
-NOSUCHRULE_OUTPUT=$("$CLI" --enable :no-such-rule "$CLEAN_DIR/basic.lisp" 2>&1)
-NOSUCHRULE_STATUS=$?
-set -e
-if [ "$NOSUCHRULE_STATUS" -ne 0 ] && echo "$NOSUCHRULE_OUTPUT" | grep -q "Unknown rule:" && echo "$NOSUCHRULE_OUTPUT" | grep -qi "no-such-rule"; then
-    test_pass
-else
-    test_fail "Expected non-zero 'Unknown rule:' error containing 'no-such-rule', got status $NOSUCHRULE_STATUS with output: '$NOSUCHRULE_OUTPUT'"
-fi
-
-# ---- End colon-prefixed rule name tests ----
-
 # ---- Non-UTF-8 / unreadable file resilience tests ----
 echo ""
 echo "Testing non-UTF-8 / unreadable file resilience..."

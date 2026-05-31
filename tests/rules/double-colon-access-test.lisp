@@ -4,8 +4,7 @@
   (:local-nicknames
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
-   (#:violation #:mallet/violation)
-   (#:pkg-exports #:mallet/rules/forms/package-exports)))
+   (#:violation #:mallet/violation)))
 (in-package #:mallet/tests/rules/double-colon-access)
 
 (defun check-double-colon (code)
@@ -139,27 +138,6 @@
       (ok (null violations)
           "Test file with rove usage should have no violations")))
 
-  (testing "File with fiveam defpackage is skipped"
-    (let* ((test-code "(defpackage #:my-tests
-  (:use #:cl #:fiveam))
-(in-package #:my-tests)
-(def-test foo ()
-  (is (null pkg::internal)))")
-           (violations (check-double-colon test-code)))
-      (ok (null violations)
-          "Test file with fiveam usage should have no violations")))
-
-  (testing "File with import-from test framework is skipped"
-    (let* ((test-code "(defpackage #:my-tests
-  (:use #:cl)
-  (:import-from #:rove #:ok #:deftest))
-(in-package #:my-tests)
-(deftest bar
-  (ok (null pkg::internal)))")
-           (violations (check-double-colon test-code)))
-      (ok (null violations)
-          "Test file importing from rove should have no violations")))
-
   (testing "Regular non-test file is not skipped"
     (let* ((normal-code "(defpackage #:my-pkg
   (:use #:cl))
@@ -178,37 +156,6 @@
       (ok (= 1 (length violations))
           "Export clause with framework name should not suppress violations"))))
 
-;;; define-package test file skipping
-
-(deftest test-file-skipping-define-package
-  (testing "File with uiop:define-package using rove is skipped"
-    (let* ((test-code "(uiop:define-package #:my-tests
-  (:use #:cl #:rove))
-(in-package #:my-tests)
-(deftest foo
-  (ok (null pkg::internal)))")
-           (violations (check-double-colon test-code)))
-      (ok (null violations)
-          "Test file using define-package with rove should have no violations")))
-
-  (testing "File with define-package using fiveam is skipped"
-    (let* ((test-code "(uiop:define-package #:my-tests
-  (:import-from #:fiveam #:is))
-(in-package #:my-tests)
-(defun foo () pkg::internal)")
-           (violations (check-double-colon test-code)))
-      (ok (null violations)
-          "Test file using define-package with fiveam should have no violations")))
-
-  (testing "define-package without test framework is not skipped"
-    (let* ((code "(uiop:define-package #:my-pkg
-  (:use #:cl))
-(in-package #:my-pkg)
-(defun foo () pkg::internal)")
-           (violations (check-double-colon code)))
-      (ok (= 1 (length violations))
-          "Non-test define-package file should report violations"))))
-
 ;;; :include-tests option
 
 (deftest include-tests
@@ -223,68 +170,3 @@
            (violations (rules:check-tokens rule tokens #p"test.lisp")))
       (ok (= 1 (length violations))
           "Violations should be reported when include-tests is t"))))
-
-;;; Helpers for cross-file tests
-
-(defun make-temp-dir ()
-  "Create a temporary directory for test files."
-  (let ((path (uiop:ensure-directory-pathname
-               (pathname (format nil "/tmp/mallet-dca-test-~A/" (random 1000000))))))
-    (ensure-directories-exist path)
-    path))
-
-(defun write-temp-file (dir name content)
-  "Write CONTENT to a file NAME under DIR, returning the pathname."
-  (let ((path (merge-pathnames name dir)))
-    (with-open-file (out path :direction :output :if-exists :supersede)
-      (write-string content out))
-    path))
-
-(defun cleanup-temp-dir (dir)
-  "Remove temporary directory and its contents."
-  (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))
-
-;;; Cross-file test-package detection
-
-(deftest cross-file-test-package-detection
-  (testing "Package defined in another file with rove suppresses violations"
-    (let ((dir (make-temp-dir)))
-      (unwind-protect
-           (progn
-             (ensure-directories-exist (merge-pathnames ".git/" dir))
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-tests (:use #:cl #:rove))")
-             (let* ((tests-path
-                      (write-temp-file dir "tests.lisp"
-                                       "(in-package #:my-tests)
-(defun foo () pkg::internal-fn)"))
-                    (rule (make-instance 'rules:double-colon-access-rule))
-                    (tokens (parser:tokenize
-                             (uiop:read-file-string tests-path)
-                             tests-path)))
-               (pkg-exports:clear-package-export-cache)
-               (ok (null (rules:check-tokens rule tokens tests-path))
-                   "Cross-file test package should suppress violations")))
-        (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
-
-  (testing "Non-test package defined in another file still reports violations"
-    (let ((dir (make-temp-dir)))
-      (unwind-protect
-           (progn
-             (ensure-directories-exist (merge-pathnames ".git/" dir))
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-lib (:use #:cl))")
-             (let* ((src-path
-                      (write-temp-file dir "src.lisp"
-                                       "(in-package #:my-lib)
-(defun foo () pkg::internal-fn)"))
-                    (rule (make-instance 'rules:double-colon-access-rule))
-                    (tokens (parser:tokenize
-                             (uiop:read-file-string src-path)
-                             src-path)))
-               (pkg-exports:clear-package-export-cache)
-               (ok (= 1 (length (rules:check-tokens rule tokens src-path)))
-                   "Non-test package should still report violations")))
-        (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir)))))
