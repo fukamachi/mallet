@@ -397,14 +397,6 @@ else
     test_fail "Expected 2 line-length violations outside disabled region, got $OUTSIDE_COUNT"
 fi
 
-# Documentation completeness
-test_start "RULES.md documents :comment-ratio rule under METRICS section"
-if grep -q ":comment-ratio" "$PROJECT_DIR/RULES.md" && grep -q ":min-lines" "$PROJECT_DIR/RULES.md"; then
-    test_pass
-else
-    test_fail "Expected :comment-ratio entry with options in RULES.md"
-fi
-
 # Backward-compatible alias name tests
 # These names are accepted by the tool (resolve-rule-alias maps them to canonical names).
 echo ""

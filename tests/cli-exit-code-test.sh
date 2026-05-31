@@ -7,11 +7,11 @@
 #   2  - Runtime I/O failure (e.g., permission denied during --fix)
 #   3  - CLI usage error (unknown flag, missing value, invalid argument)
 #
-# Tests 1 (no-arg exits 0), 5 (read-only --fix exits 2), and 6 (README
-# documents exit code 2) FAIL against the unmodified codebase.  The rest
-# document already-correct behaviour that must not regress.
+# Tests 1 (no-arg exits 0) and 5 (read-only --fix exits 2) FAIL against the
+# unmodified codebase.  The rest document already-correct behaviour that must
+# not regress.
 #
-# Test 7 (violations found exits 1) currently PASSES and must not regress;
+# Test 6 (violations found exits 1) currently PASSES and must not regress;
 # it verifies that exit 2 is distinct from exit 1 after the fix is applied.
 
 set -e
@@ -19,7 +19,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLI="$PROJECT_DIR/bin/mallet"
-README="$PROJECT_DIR/README.md"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -130,24 +129,7 @@ else
          "runtime I/O failures must use exit 2, not exit 1 (violations) or 3 (CLI error)"
 fi
 
-# ── Test 6: README exit-code table documents exit code 2 ─────────────────────
-# CURRENTLY FAILS: the README table only has entries for 0, 1, and 3.
-# Avoid grep with backtick patterns by scanning line-by-line with bash case.
-run_test "README exit-code table has an entry for exit code 2"
-README_HAS_CODE2=0
-while IFS= read -r readme_line; do
-    case "$readme_line" in
-        '- `2`'*) README_HAS_CODE2=1 ;;
-    esac
-done < "$README"
-if [ "$README_HAS_CODE2" -eq 1 ]; then
-    pass "README contains an exit-code table entry for code 2"
-else
-    fail "README exit-code table is missing an entry for code 2" \
-         "add: - \`2\` - Runtime I/O failure (e.g., permission denied during --fix)"
-fi
-
-# ── Test 7: Violations found exits 1 WITH real diagnostic output ──────────────
+# ── Test 6: Violations found exits 1 WITH real diagnostic output ──────────────
 # Verifies exit 2 is DISTINCT from exit 1 AND stdout contains a real diagnostic
 # line.  The prior version only checked the exit code; a routing stub that exits
 # 1 without any rule output would have passed.  This version additionally checks

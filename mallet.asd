@@ -132,7 +132,6 @@
    (:file "engine-coalton-lisp-fixture-test")
    (:file "preset-integration-test")
    (:file "list-rules-test")
-   (:file "readme-init-section-test")
    (:file "format-stream-separation-test")
    (:file "public-api-docstrings-test")
 

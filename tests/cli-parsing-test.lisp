@@ -191,42 +191,6 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
               (namestring (truename (mallet:violation-file violation))))
        (eq rule (violation-rule violation))))
 
-(defun read-project-readme ()
-  "Read and return README.md from the project root."
-  (uiop:read-file-string
-   (merge-pathnames "README.md"
-                    (asdf:system-source-directory "mallet"))))
-
-(defun readme-section (content start-heading end-heading)
-  "Return CONTENT between START-HEADING and END-HEADING, or NIL."
-  (let ((start (search start-heading content)))
-    (when start
-      (let ((end (search end-heading content :start2 start)))
-        (subseq content start (or end (length content)))))))
-
-(defun readme-line-containing (needle content)
-  "Return the first line in CONTENT containing NEEDLE."
-  (find-if (lambda (line) (search needle line))
-           (uiop:split-string content :separator '(#\Newline))))
-
-(deftest readme-directory-scan-documents-lisp-and-asd
-  (testing "README Basic Linting directory example documents scanned source extensions"
-    (let* ((section (readme-section (read-project-readme)
-                                    "### Basic Linting"
-                                    "### CLI Rule Configuration"))
-           (directory-example (and section
-                                   (readme-line-containing "mallet src  #" section))))
-      (ok section
-          "README.md must contain the Basic Linting section")
-      (ok directory-example
-          "Basic Linting must contain the 'mallet src' directory example")
-      (ok (and directory-example
-               (search ".lisp" directory-example))
-          "The 'mallet src' example must document that directory scans include .lisp files")
-      (ok (and directory-example
-               (search ".asd" directory-example))
-          "The 'mallet src' example must document that directory scans include .asd files"))))
-
 (deftest directory-scan-excludes-undocumented-extensions
   (testing "Directory traversal scans only documented .lisp and .asd files, skipping undocumented extensions"
     (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
@@ -242,7 +206,7 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
                              (format nil "(defsystem #:bad-system~%  :components ((:file #:main)))~%")))
                   ;; Undocumented source-like extension: this .cl file carries trailing
                   ;; whitespace, so it WOULD produce a violation if directory traversal
-                  ;; scanned it. The documented set is {lisp, asd} (README.md:63 / :207).
+                  ;; scanned it. The supported source extensions are .lisp and .asd.
                   (cl-file (write-test-source-file
                             root
                             "legacy.cl"

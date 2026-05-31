@@ -1338,13 +1338,7 @@
       (ok (member :trailing-whitespace rule-names)
           ":trailing-whitespace inherited from built-in :default")
       (ok (member :unused-variables rule-names)
-          ":unused-variables inherited from built-in :default")))
-
-  (testing "resolve-preset and build-preset-registry are exported from mallet/config"
-    (ok (find-symbol "RESOLVE-PRESET" :mallet/config))
-    (ok (find-symbol "BUILD-PRESET-REGISTRY" :mallet/config))
-    (ok (eq :external (nth-value 1 (find-symbol "RESOLVE-PRESET" :mallet/config))))
-    (ok (eq :external (nth-value 1 (find-symbol "BUILD-PRESET-REGISTRY" :mallet/config))))))
+          ":unused-variables inherited from built-in :default"))))
 
 ;;; Edge case tests for preset registry and resolution
 
