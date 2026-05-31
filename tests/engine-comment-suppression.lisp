@@ -20,6 +20,71 @@
 (defun no-violations-fixture (filename)
   (fixture-path "no-violations" filename))
 
+(defun project-path (relative-path)
+  (merge-pathnames relative-path
+                   (asdf:system-source-directory :mallet)))
+
+(defun source-lines (&rest lines)
+  (with-output-to-string (out)
+    (dolist (line lines)
+      (write-line line out))))
+
+(defun temporary-source-path ()
+  (let ((directory (merge-pathnames ".cache/test-sources/"
+                                    (asdf:system-source-directory :mallet))))
+    (ensure-directories-exist directory)
+    (merge-pathnames (format nil "~(~A~).lisp"
+                             (gensym "engine-comment-suppression-"))
+                     directory)))
+
+(defmacro with-lint-source ((file-var violations-var source config) &body body)
+  `(let ((,file-var (temporary-source-path)))
+     (unwind-protect
+          (progn
+            (with-open-file (out ,file-var
+                                 :direction :output
+                                 :if-exists :supersede
+                                 :if-does-not-exist :create)
+              (write-string ,source out))
+            (let ((,violations-var (engine:lint-file ,file-var :config ,config)))
+              ,@body))
+       (when (probe-file ,file-var)
+         (delete-file ,file-var)))))
+
+(defun defun-name-from-line (line)
+  (let ((start (search "(defun" line :test #'char-equal)))
+    (when start
+      (let* ((name-start (loop for index from (+ start (length "(defun")) below (length line)
+                               while (member (char line index) '(#\Space #\Tab))
+                               finally (return index)))
+             (name-end (or (position-if (lambda (char)
+                                           (member char '(#\Space #\Tab #\()))
+                                         line
+                                         :start name-start)
+                           (length line))))
+        (when (< name-start name-end)
+          (intern (string-upcase (subseq line name-start name-end))))))))
+
+(defun file-lines (file)
+  (with-open-file (in file)
+    (loop for line = (read-line in nil nil)
+          while line
+          collect line)))
+
+(defun nearest-defun-name-before-line (file line-number)
+  (let* ((lines (coerce (file-lines file) 'vector))
+         (last-index (min (1- line-number) (1- (length lines)))))
+    (loop for index from last-index downto 0
+          for name = (defun-name-from-line (aref lines index))
+          when name
+            return name)))
+
+(defun violation-defun-names (file violations)
+  (mapcar (lambda (violation)
+            (nearest-defun-name-before-line file
+                                            (violation:violation-line violation)))
+          (sort (copy-list violations) #'< :key #'violation:violation-line)))
+
 (defun make-needless-let*-config ()
   (config:make-config
    :rules (list (rules:make-rule :needless-let*))))
@@ -51,6 +116,80 @@
   (config:make-config
    :rules (list (rules:make-rule :double-colon-access)
                 (rules:make-rule :stale-suppression))))
+
+(defun legacy-engine-integration-name ()
+  (concatenate 'string "engine-" "integration-test"))
+
+(defun obsolete-suppression-fixture-names ()
+  (list (concatenate 'string "comment-" "suppress.lisp")
+        (concatenate 'string "comment-" "disable.lisp")
+        (concatenate 'string "comment-" "stale.lisp")
+        (concatenate 'string "declaim-" "stale.lisp")))
+
+(defun relevant-repository-file-p (file)
+  (member (string-downcase (or (pathname-type file) ""))
+          '("asd" "lisp" "sh")
+          :test #'string=))
+
+(defun skipped-repository-directory-p (directory)
+  (let ((name (car (last (pathname-directory directory)))))
+    (member name '(".cache" ".foundry" ".git" ".qlot")
+            :test #'string=)))
+
+(defun repository-files ()
+  (labels ((walk (directory)
+             (append (remove-if-not #'relevant-repository-file-p
+                                    (uiop:directory-files directory))
+                     (loop for subdir in (uiop:subdirectories directory)
+                           unless (skipped-repository-directory-p subdir)
+                             append (walk subdir)))))
+    (walk (asdf:system-source-directory :mallet))))
+
+(defun file-contains-string-p (file needle)
+  (search needle
+          (uiop:read-file-string file)
+          :test #'char=))
+
+(defun files-containing-string (needle)
+  (loop for file in (repository-files)
+        when (file-contains-string-p file needle)
+          collect file))
+
+;;; Repository-shape regression tests for the merge itself
+
+(deftest legacy-engine-suite-file-removed
+  (testing "The legacy engine integration test file is absent"
+    (let* ((legacy-name (legacy-engine-integration-name))
+           (legacy-file (project-path (format nil "tests/~A.lisp" legacy-name))))
+      (ng (probe-file legacy-file)
+          "The redundant legacy engine integration test file is not present")))
+
+  (testing "The legacy engine integration test component is absent from mallet.asd"
+    (let* ((legacy-name (legacy-engine-integration-name))
+           (component-reference (format nil "(:file ~S)" legacy-name))
+           (asd-text (uiop:read-file-string (project-path "mallet.asd"))))
+      (ng (search component-reference asd-text :test #'char=)
+          "mallet.asd no longer registers the redundant legacy test component")
+      (ok (null (files-containing-string legacy-name))
+          "The redundant legacy test name has no source references"))))
+
+(deftest obsolete-suppression-fixtures-removed
+  (testing "Obsolete suppression fixture files are absent"
+    (dolist (fixture-name (obsolete-suppression-fixture-names))
+      (let ((matching-files (loop for directory in '("tests/fixtures/violations/"
+                                                     "tests/fixtures/no-violations/"
+                                                     "tests/fixtures/clean/")
+                                  for file = (project-path (concatenate 'string directory fixture-name))
+                                  when (probe-file file)
+                                    collect file)))
+        (ok (null matching-files)
+            (format nil "Obsolete fixture file ~A is not present" fixture-name)))))
+
+  (testing "Obsolete suppression fixture names have no repository references"
+    (dolist (fixture-name (obsolete-suppression-fixture-names))
+      (let ((references (files-containing-string fixture-name)))
+        (ok (null references)
+            (format nil "Obsolete fixture name ~A has no source references" fixture-name))))))
 
 ;;; Test 1: Stale suppression — comment with no matching violation
 
@@ -122,6 +261,37 @@
         (ok (>= (length let*-violations) 1)
             "At least 1 needless-let* violation in unsuppressed file")))))
 
+;;; Test 2b: Inline :suppress for missing-else leaves the next form unsuppressed
+
+(deftest comment-suppress-missing-else-inline
+  (testing "; mallet:suppress suppresses missing-else for the annotated form only"
+    (let ((config (make-if-without-else-and-stale-config))
+          (source (source-lines
+                   "(defpackage #:test-comment-suppress-missing-else"
+                   "  (:use #:cl))"
+                   "(in-package #:test-comment-suppress-missing-else)"
+                   ""
+                   "; mallet:suppress :missing-else"
+                   "(defun suppressed-foo (x)"
+                   "  (if x"
+                   "      (print \"yes\")))"
+                   ""
+                   "(defun unsuppressed-bar (x)"
+                   "  (if x"
+                   "      (print \"also yes\")))")))
+      (with-lint-source (file violations source config)
+        (let ((iwe-violations (remove-if-not
+                               (lambda (v) (eq :missing-else (violation:violation-rule v)))
+                               violations))
+              (stale-violations (remove-if-not
+                                 (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                 violations)))
+          (ok (equal '(unsuppressed-bar)
+                     (violation-defun-names file iwe-violations))
+              "Only unsuppressed-bar keeps its missing-else violation")
+          (ok (null stale-violations)
+              "The suppress for suppressed-foo was used and is not stale"))))))
+
 ;;; Test 3: Trailing same-line suppression — comment on the same line as the form
 
 (deftest comment-suppress-trailing-no-output
@@ -181,7 +351,10 @@
         ;; before-disable and after-enable should both be flagged
         ;; during-disable should be suppressed
         (ok (= 2 (length iwe-violations))
-            "Exactly 2 if-without-else violations: before-disable and after-enable"))))
+            "Exactly 2 if-without-else violations: before-disable and after-enable")
+        (ok (equal '(before-disable after-enable)
+                   (violation-defun-names file iwe-violations))
+            "before-disable and after-enable keep violations; during-disable is suppressed"))))
 
   (testing "Violations before disable region are reported normally"
     (let* ((file (violations-fixture "comment-disable-enable.lisp"))
@@ -194,7 +367,6 @@
                                violations)
                               #'< :key #'violation:violation-line)))
         (when (= 2 (length iwe-violations))
-          ;; before-disable is on line ~11, after-enable is on line ~22
           (ok (< (violation:violation-line (first iwe-violations))
                  (violation:violation-line (second iwe-violations)))
               "First violation precedes second violation in source order"))))))
@@ -288,6 +460,42 @@
                                 violations)))
         (ok (null stale-violations)
             "No stale-suppression violation when inner suppress-next declaim was consumed")))))
+
+;;; Test: top-level #+mallet suppress-next reports stale only when unused
+
+(deftest declaim-suppress-next-stale-when-unused
+  (testing "Unused suppress-next is stale while a used suppress-next suppresses its form"
+    (let ((config (make-needless-let*-and-stale-config))
+          (source (source-lines
+                   "(defpackage #:test-declaim-stale"
+                   "  (:use #:cl))"
+                   "(in-package #:test-declaim-stale)"
+                   ""
+                   "#+mallet"
+                   "(declaim (mallet:suppress-next :needless-let*))"
+                   "(defun clean-function (x)"
+                   "  (let* ((a (+ x 1))"
+                   "         (b (* a 2)))"
+                   "    (+ a b)))"
+                   ""
+                   "#+mallet"
+                   "(declaim (mallet:suppress-next :needless-let*))"
+                   "(defun suppressed-function ()"
+                   "  (let* ((a 1)"
+                   "         (b 2))"
+                   "    (+ a b)))")))
+      (with-lint-source (file violations source config)
+        (declare (ignore file))
+        (let ((stale-violations (remove-if-not
+                                 (lambda (v) (eq :stale-suppression (violation:violation-rule v)))
+                                 violations))
+              (needless-violations (remove-if-not
+                                    (lambda (v) (eq :needless-let* (violation:violation-rule v)))
+                                    violations)))
+          (ok (= 1 (length stale-violations))
+              "Only clean-function's unused suppress-next produces stale-suppression")
+          (ok (null needless-violations)
+              "suppressed-function's needless-let* violation is consumed by suppress-next"))))))
 
 ;;; Test: stale inner-form suppress generates a stale-suppression violation
 
