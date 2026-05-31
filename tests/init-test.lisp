@@ -10,7 +10,7 @@
 (defun make-test-dir ()
   "Create a unique temporary directory and return its pathname."
   (let* ((name (format nil "mallet-init-test-~A" (random 1000000)))
-         (tmp (or (uiop:getenv "TMPDIR") "/tmp/claude-1000/"))
+         (tmp (uiop:temporary-directory))
          (dir (uiop:ensure-directory-pathname
                (merge-pathnames name
                                 (uiop:ensure-directory-pathname tmp)))))
@@ -39,6 +39,37 @@
     (dolist (f (uiop:directory-files dir "*.lisp"))
       (push f result))
     (nreverse result)))
+
+(deftest make-test-dir-uses-configured-temporary-directory
+  (testing "make-test-dir creates directories below UIOP's temporary directory"
+    (let ((dir (make-test-dir)))
+      (unwind-protect
+           (progn
+             (ok (probe-file dir) "Temporary test directory exists")
+             (ok (uiop:subpathp dir (uiop:temporary-directory))
+                 "Temporary test directory is below UIOP's temporary directory"))
+        (cleanup-dir dir))))
+  (testing "make-test-dir derives its base from uiop:temporary-directory"
+    (let* ((original-temporary-directory (symbol-function 'uiop:temporary-directory))
+           (base (uiop:ensure-directory-pathname
+                  (merge-pathnames
+                   (format nil ".cache/mallet-init-temp-base-probe-~A/"
+                           (random 1000000))
+                   (uiop:getcwd))))
+           dir)
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'uiop:temporary-directory)
+                   (lambda () base))
+             (setf dir (make-test-dir))
+             (ok (probe-file dir) "Temporary test directory exists")
+             (ok (uiop:subpathp dir base)
+                 "Temporary test directory is below the configured UIOP base"))
+        (setf (symbol-function 'uiop:temporary-directory)
+              original-temporary-directory)
+        (when dir
+          (cleanup-dir dir))
+        (cleanup-dir base)))))
 
 (defun make-test-violation (rule-name)
   "Create a test violation for RULE-NAME."

@@ -213,8 +213,8 @@ echo "Mallet CLI --format / --fix Option Handling Tests"
 echo "==================================================="
 echo ""
 
-assert_conflict_error "fix-json-conflict" --fix --fix --format json
-assert_conflict_error "fix-dry-run-line-conflict" --fix-dry-run --fix-dry-run --format line
+assert_conflict_error "fix-json-conflict" "--fix" --fix --format json
+assert_conflict_error "fix-dry-run-line-conflict" "--fix-dry-run" --fix-dry-run --format line
 assert_fix_text_still_works
 assert_invalid_format_lists_all_values
 assert_bad_rule_option_is_usage_error

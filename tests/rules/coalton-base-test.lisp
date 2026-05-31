@@ -27,6 +27,32 @@
 
 (defmethod base:coalton-aware-p ((rule aware-test-rule)) t)
 
+(defclass coalton-form-aware-test-rule (base:rule)
+  ((called-p :initform nil :accessor called-p))
+  (:default-initargs :name :coalton-form-aware-test
+                     :description "coalton form aware"
+                     :severity :warning))
+
+(defmethod base:coalton-aware-p ((rule coalton-form-aware-test-rule)) t)
+
+(defmethod base:check-form ((rule coalton-form-aware-test-rule) form file)
+  (declare (ignore form file))
+  (setf (called-p rule) t)
+  nil)
+
+(defclass non-coalton-form-aware-test-rule (base:rule)
+  ((called-p :initform nil :accessor called-p))
+  (:default-initargs :name :non-coalton-form-aware-test
+                     :description "non-coalton form aware"
+                     :severity :warning))
+
+(defmethod base:coalton-aware-p ((rule non-coalton-form-aware-test-rule)) t)
+
+(defmethod base:check-form ((rule non-coalton-form-aware-test-rule) form file)
+  (declare (ignore form file))
+  (setf (called-p rule) t)
+  nil)
+
 ;;; coalton-aware-p tests
 
 (deftest coalton-aware-p-default-nil
@@ -52,26 +78,23 @@
       (ok (null results))))
 
   (testing "coalton-aware rule is passed coalton-toplevel forms (not skipped)"
-    ;; We verify this by checking that check-form is actually called on the form.
-    ;; We do this by adding a primary method that signals a condition or returns a marker.
-    (let ((called nil))
-      (defmethod base:check-form ((rule aware-test-rule) form file)
-        (setf called t)
-        nil)
-      (let ((rule (make-instance 'aware-test-rule))
-            (forms (parser:parse-forms "(coalton-toplevel (define x 1))" #p"test.lisp")))
+    (let ((rule (make-instance 'coalton-form-aware-test-rule)))
+      (let ((forms (parser:parse-forms "(coalton-toplevel (define x 1))" #p"test.lisp")))
         (mapcan (lambda (f) (base:check-form rule f #p"test.lisp")) forms))
-      (ok called)))
+      (ok (called-p rule))))
 
   (testing "coalton-aware rule also receives non-coalton forms (not filtered out)"
-    (let ((called nil))
-      (defmethod base:check-form ((rule aware-test-rule) form file)
-        (setf called t)
-        nil)
-      (let ((rule (make-instance 'aware-test-rule))
-            (forms (parser:parse-forms "(defun foo () nil)" #p"test.lisp")))
+    (let ((rule (make-instance 'non-coalton-form-aware-test-rule)))
+      (let ((forms (parser:parse-forms "(defun foo () nil)" #p"test.lisp")))
         (mapcan (lambda (f) (base:check-form rule f #p"test.lisp")) forms))
-      (ok called "coalton-aware-p only affects coalton skip; non-coalton forms still pass through"))))
+      (ok (called-p rule)
+          "coalton-aware-p only affects coalton skip; non-coalton forms still pass through")))
+
+  (testing "coalton and non-coalton cases use distinct throwaway rule classes"
+    (let ((coalton-rule (make-instance 'coalton-form-aware-test-rule))
+          (non-coalton-rule (make-instance 'non-coalton-form-aware-test-rule)))
+      (ok (not (eq (class-of coalton-rule) (class-of non-coalton-rule)))
+          "Each case must use its own rule class so method state cannot leak"))))
 
 ;;; coalton-define-p tests
 
