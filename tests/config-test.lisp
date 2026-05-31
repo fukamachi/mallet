@@ -789,7 +789,7 @@
     (let ((sexp '(:mallet-config
                   (:enable :unused-variables)
                   (:set-severity :cleanliness :foo))))
-      (ok (signals (config:parse-config sexp) 'simple-error)
+      (ok (signals (config:parse-config sexp) 'errors:cli-error)
           ":set-severity with invalid severity should signal an error")))
 
   (testing "Valid severities are accepted without error"

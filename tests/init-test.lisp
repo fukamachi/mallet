@@ -15,6 +15,11 @@
                (merge-pathnames name
                                 (uiop:ensure-directory-pathname tmp)))))
     (ensure-directories-exist dir)
+    ;; Anchor project-root detection at this temp dir. Without a marker,
+    ;; find-project-root walks up past TMPDIR and may latch onto a stray
+    ;; marker in /tmp (e.g. /tmp/.git), writing the config outside the temp
+    ;; dir and leaking it past cleanup.
+    (ensure-directories-exist (merge-pathnames ".git/" dir))
     dir))
 
 (defun cleanup-dir (dir)

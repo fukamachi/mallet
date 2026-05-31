@@ -1013,13 +1013,14 @@
                         :for data :being :the :hash-values :of result
                         :for real-time := (cdar data)
                         :for value := (coerce (cdr real-time) 'double-float)
-                        :collect value)")
+                        :collect (cons name value))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; 'data' is used in (cdar data), 'real-time' is used in (cdr real-time)
-      ;; Bug: parse-loop-clauses was only searching body clauses after DO/COLLECT
-      ;; But variables can be used in subsequent FOR/WITH clauses
+      ;; (uses in subsequent FOR clauses); 'name' and 'value' are used in the
+      ;; COLLECT body. Guards against the old bug where parse-loop-clauses
+      ;; searched only body clauses after DO/COLLECT, missing later FOR/WITH.
       (ok (null violations)
           "Variables used in subsequent FOR clauses should not be flagged as unused")))
 
@@ -1028,7 +1029,7 @@
                         for y = (* x 2)
                         collect y)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Variable 'x' used in subsequent FOR clause should not be unused")))
@@ -1038,7 +1039,7 @@
                         for y = 42
                         collect y)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; 'x' is truly unused
       (ok (= (length violations) 1))
@@ -1052,7 +1053,7 @@
                         for doubled = (* i multiplier)
                         collect doubled)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "WITH variable used in FOR clause should not be unused"))))
@@ -1066,7 +1067,7 @@
                                                   :summing (* (aref a (+ (* i 4) k))
                                                               (aref b (+ (* k 4) j)))))))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; 'k' is used in the SUMMING expression
       ;; Bug: parse-loop-clauses was only searching body after DO/COLLECT keywords
@@ -1078,7 +1079,7 @@
     (let* ((code "(loop for x from 1 to 10
                         collecting (* x 2))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Variable used in COLLECTING expression should not be unused")))
@@ -1087,7 +1088,7 @@
     (let* ((code "(loop for x in '((1 2) (3 4))
                         append x)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Variable used in APPEND should not be unused")))
@@ -1096,7 +1097,7 @@
     (let* ((code "(loop for x in list
                         count (evenp x))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Variable used in COUNT should not be unused")))
@@ -1106,7 +1107,7 @@
                         for value = (compute-value item)
                         maximize value)")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Variable used in MAXIMIZE should not be unused"))))
@@ -1117,7 +1118,7 @@
                         collect (loop for j from 1 to 3
                                       collect (* i j)))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Nested loop variables should have proper scoping")))
@@ -1127,7 +1128,7 @@
                         collect (loop for i from 1 to limit
                                       collect i))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "Outer loop variable used in inner loop should not be unused")))
@@ -1137,7 +1138,7 @@
                         collect (loop for i from 1 to 3
                                       collect i))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; Outer 'i' is shadowed by inner loop and never used
       (ok (= (length violations) 1))
@@ -1151,7 +1152,7 @@
                                  do (loop for k from 0 below 4
                                           summing (* i j k))))")
            (forms (parser:parse-forms code #p"test.lisp"))
-           (rule (make-instance 'rules:unused-variables-rule))
+           (rule (make-instance 'rules:unused-loop-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (null violations)
           "All variables in triple-nested loops should be recognized as used"))))
