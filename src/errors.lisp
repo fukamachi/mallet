@@ -120,8 +120,9 @@
   ()
   (:report (lambda (condition stream)
              (format stream "Invalid format: ~A~%~
-                            Expected: text or json"
-                     (invalid-option-value-value condition))))
+                            Expected: ~A"
+                     (invalid-option-value-value condition)
+                     (invalid-option-value-expected condition))))
   (:documentation "Signaled when an invalid output format is specified."))
 
 (define-condition invalid-preset (invalid-option-value)

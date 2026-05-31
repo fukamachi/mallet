@@ -43,6 +43,7 @@ test-cli:
 	@./tests/cli-integration-test.sh
 	@./tests/cli-exit-code-test.sh
 	@./tests/cli-config-validation-errors-test.sh
+	@./tests/cli-format-fix-option-handling-test.sh
 	@$(MAKE) --no-print-directory test-cli-config-for-paths-validation
 
 test-cli-config-for-paths-validation:

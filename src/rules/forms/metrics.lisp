@@ -23,7 +23,8 @@
   ((max-lines
     :initarg :max
     :initform 50
-    :accessor max-lines)
+    :accessor max-lines
+    :type (integer 1))
    (source-lines
     :initform nil
     :accessor rule-source-lines
@@ -559,15 +560,18 @@ VARIANT can be :standard (count per match clause) or :modified (match as +1 tota
   ((max-ratio
     :initarg :max
     :initform 0.5d0
-    :accessor max-ratio)
+    :accessor max-ratio
+    :type real)
    (min-lines
     :initarg :min-lines
     :initform 5
-    :accessor rule-min-lines)
+    :accessor rule-min-lines
+    :type (integer 1))
    (include-docstrings
     :initarg :include-docstrings
     :initform nil
-    :accessor rule-include-docstrings)
+    :accessor rule-include-docstrings
+    :type boolean)
    (source-lines
     :initform nil
     :accessor rule-source-lines-for-ratio
@@ -817,11 +821,13 @@ suggesting code may be over-commented or poorly expressed."))
   ((max
     :initarg :max
     :initform 15
-    :accessor max-complexity)
+    :accessor max-complexity
+    :type (integer 1))
    (variant
     :initarg :variant
     :initform :modified
     :accessor complexity-variant
+    :type (member :standard :modified)
     :documentation "Variant: :standard (count per clause) or :modified (case as +1 total)"))
   (:default-initargs
    :name :cyclomatic-complexity

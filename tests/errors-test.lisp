@@ -54,9 +54,10 @@
     (let ((err (make-condition 'errors:invalid-format
                                :option "--format"
                                :value "xml"
-                               :expected "text or json")))
+                               :expected "text, line, or json")))
       (ok (search "Invalid format: xml" (format nil "~A" err)))
-      (ok (search "text or json" (format nil "~A" err)))))
+      (ok (search "Expected: text, line, or json" (format nil "~A" err))
+          "accepted formats must be listed as structured expected values")))
 
   (testing "invalid-preset has specific message"
     (let ((err (make-condition 'errors:invalid-preset

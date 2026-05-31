@@ -196,6 +196,50 @@ Resolves deprecated rule name aliases to their canonical names."
       (error ()
         (error 'errors:unknown-rule :value name-str)))))
 
+(defun rule-slot-type-mismatch (rule)
+  "Return mismatched slot value/type for RULE, if any."
+  #+sbcl
+  (let ((class (class-of rule)))
+    (sb-mop:finalize-inheritance class)
+    (dolist (slot (sb-mop:class-slots class))
+      (let ((slot-name (sb-mop:slot-definition-name slot))
+            (slot-type (sb-mop:slot-definition-type slot)))
+        (when (and (not (eq slot-type t))
+                   (slot-boundp rule slot-name)
+                   (not (typep (slot-value rule slot-name) slot-type)))
+          (return (values (slot-value rule slot-name) slot-type t))))))
+  #-sbcl
+  (progn
+    (declare (ignore rule))
+    nil))
+
+(defun validate-cli-rule-options (rule-name options spec)
+  "Validate CLI OPTIONS by constructing RULE-NAME as a usage-level error."
+  (check-type rule-name keyword)
+  (check-type options list)
+  (check-type spec string)
+  (handler-case
+      (let ((rule (apply #'make-rule rule-name options)))
+        (multiple-value-bind (value expected-type mismatch-p)
+            (rule-slot-type-mismatch rule)
+          (when mismatch-p
+            (error 'errors:invalid-option-value
+                   :option "--enable"
+                   :value spec
+                   :expected (format nil "valid options for ~A (value ~S is not of type ~S)"
+                                     (string-downcase (symbol-name rule-name))
+                                     value
+                                     expected-type)))))
+    (errors:cli-error (e)
+      (error e))
+    (error (e)
+      (error 'errors:invalid-option-value
+             :option "--enable"
+             :value spec
+             :expected (format nil "valid options for ~A (~A)"
+                               (string-downcase (symbol-name rule-name))
+                               e)))))
+
 (defun parse-rule-spec (spec)
   "Parse rule spec like 'cyclomatic-complexity' or ':cyclomatic-complexity:max=15,variant=modified'.
 Returns (rule-name . options-plist)."
@@ -210,6 +254,7 @@ Returns (rule-name . options-plist)."
         (let* ((rule-name (parse-rule-name (subseq spec 0 colon-pos)))
                (options-str (subseq spec (1+ colon-pos)))
                (options (parse-rule-options options-str)))
+          (validate-cli-rule-options rule-name options spec)
           (cons rule-name options))
         ;; No options: just rule name
         (cons (parse-rule-name spec) '()))))
@@ -299,6 +344,16 @@ Returns (rule-name . options-plist)."
   (if fail-on-option-seen
       fail-on
       :info))
+
+(defun signal-fix-format-conflict-if-needed (fix-option format)
+  "Signal when FIX-OPTION is combined with a non-text output FORMAT."
+  (when (and fix-option (not (eq format :text)))
+    (error 'errors:invalid-option-value
+           :option "--format"
+           :value fix-option
+           :expected (format nil "~A cannot be combined with --format ~A; use --format text."
+                             fix-option
+                             (string-downcase (symbol-name format))))))
 
 (defun parse-args (args)
   "Parse command-line ARGS into options and files.
@@ -401,6 +456,7 @@ Signals specific error conditions for invalid input."
            (push arg files)))))
     (let ((cli-rules (list :enable-rules (nreverse enable-rules)
                            :disable-rules (nreverse disable-rules))))
+      (signal-fix-format-conflict-if-needed fix-option format)
       (values format config-path preset debug no-color fix-mode cli-rules fail-on
               init-mode force (nreverse files) list-rules-mode fail-on-option-seen))))
 
