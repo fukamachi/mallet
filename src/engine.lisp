@@ -313,12 +313,27 @@ Returns updated violations list."
                                   (namestring file))
                  :fix nil))
 
-(defun read-lisp-file-string (file)
-  "Read FILE as text, returning (values text read-error)."
+(defun regular-file-p (file)
+  "Return (values regular-p error-condition) for FILE without opening it."
   (handler-case
-      (values (uiop:read-file-string file) nil)
+      (values (sb-posix:s-isreg (sb-posix:stat-mode (sb-posix:stat file))) nil)
     (error (condition)
       (values nil condition))))
+
+(defun read-lisp-file-string (file)
+  "Read regular FILE as text, returning (values text read-error)."
+  (multiple-value-bind (regular-p stat-error)
+      (regular-file-p file)
+    (cond
+      (stat-error
+       (values nil stat-error))
+      ((not regular-p)
+       (values nil :non-regular-file))
+      (t
+       (handler-case
+           (values (uiop:read-file-string file) nil)
+         (error (condition)
+           (values nil condition)))))))
 
 
 (defun extract-lisp-bodies-from-coalton (expr position-map fallback-line fallback-column)

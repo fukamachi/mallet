@@ -1,8 +1,10 @@
 (defpackage #:mallet/tests/engine-unreadable-file
   (:use #:cl #:rove)
   (:local-nicknames
+   (#:mallet #:mallet)
    (#:engine #:mallet/engine)
    (#:violation #:mallet/violation)
+   (#:rules #:mallet/rules)
    (#:config #:mallet/config)))
 (in-package #:mallet/tests/engine-unreadable-file)
 
@@ -36,6 +38,38 @@
                        :if-exists :supersede
                        :if-does-not-exist :create)
     (write-string text out)))
+
+(defun call-with-wall-clock-limit (seconds thunk)
+  "Run THUNK in a worker thread, returning (values completed-p values condition)."
+  (let ((done-p nil)
+        (result-values nil)
+        (captured-condition nil)
+        (thread nil))
+    (setf thread
+          (sb-thread:make-thread
+           (lambda ()
+             (handler-case
+                 (setf result-values (multiple-value-list (funcall thunk)))
+               (condition (c)
+                 (setf captured-condition c)))
+             (setf done-p t))))
+    (loop repeat (ceiling seconds 0.05d0)
+          until done-p
+          do (sleep 0.05d0))
+    (unless done-p
+      (sb-thread:terminate-thread thread))
+    (values done-p result-values captured-condition)))
+
+(defun find-result-for-file (file results)
+  "Find FILE's entry in lint-files RESULTS using namestring equality."
+  (find (namestring file) results
+        :key (lambda (entry) (namestring (car entry)))
+        :test #'string=))
+
+(defun violations-for-rule (rule violations)
+  "Return violations whose rule is RULE."
+  (remove-if-not (lambda (v) (eq rule (violation:violation-rule v)))
+                 violations))
 
 ;;; --- tests ---
 
@@ -122,4 +156,41 @@
                   "b-good.lisp is in results despite a-bad.lisp being unreadable")
               (ok (find good2 results :key #'car :test #'equal)
                   "c-good.lisp is in results despite a-bad.lisp being unreadable")))
+        (cleanup-dir dir)))))
+
+(deftest directory-scan-fifo-lisp-file-does-not-block
+  (testing "directory scans report .lisp FIFOs as read errors and still lint regular siblings"
+    (let* ((dir (make-test-dir))
+           (fifo (merge-pathnames "a-fifo.lisp" dir))
+           (regular (merge-pathnames "z-regular.lisp" dir))
+           (cfg (config:make-config
+                 :rules (list (rules:make-rule :missing-else)))))
+      (unwind-protect
+          (progn
+            (sb-posix:mkfifo (namestring fifo) #o600)
+            (write-text-to-file regular "(defun sibling (x) (if x 1))")
+            (multiple-value-bind (completed-p value-list condition)
+                (call-with-wall-clock-limit
+                 2.0d0
+                 (lambda ()
+                   (let ((files (mallet:expand-file-args (list (namestring dir)))))
+                     (engine:lint-files files :config cfg))))
+              (ok completed-p
+                  "Directory scan over a .lisp FIFO must return instead of blocking")
+              (ng condition
+                  "Directory scan should not signal while handling the FIFO")
+              (when (and completed-p (null condition))
+                (let* ((results (first value-list))
+                       (fifo-entry (find-result-for-file fifo results))
+                       (regular-entry (find-result-for-file regular results)))
+                  (ok fifo-entry
+                      "The non-regular .lisp file appears in lint results")
+                  (when fifo-entry
+                    (ok (violations-for-rule :file-read-error (cdr fifo-entry))
+                        "The non-regular .lisp file is reported as :file-read-error"))
+                  (ok regular-entry
+                      "The regular sibling .lisp file appears in lint results")
+                  (when regular-entry
+                    (ok (violations-for-rule :missing-else (cdr regular-entry))
+                        "The regular sibling is still linted and reports its violation"))))))
         (cleanup-dir dir)))))
