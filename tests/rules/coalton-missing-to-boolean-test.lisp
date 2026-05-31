@@ -275,19 +275,6 @@
       (ok (and (integerp (violation:violation-line (first violations)))
                (>= (violation:violation-line (first violations)) 1))))))
 
-;;; Stub guard — ensures a no-op implementation would NOT pass
-
-(deftest coalton-missing-to-boolean-stub-guard
-  (testing "A stub returning empty violations must fail on known-bad input"
-    ;; This test guards against a degenerate implementation that always returns nil.
-    ;; If check-code returns violations for known-bad input, the rule is real.
-    (let ((violations (check-code
-                       "(coalton-toplevel
-                          (define (foo x)
-                            (lisp Boolean (x) (null x))))")))
-      (ok (not (null violations))
-          "Rule must detect missing to-boolean — a stub returning nil is broken"))))
-
 ;;; Rule class metadata
 
 (deftest coalton-missing-to-boolean-rule-metadata

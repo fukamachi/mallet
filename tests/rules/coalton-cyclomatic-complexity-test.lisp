@@ -444,29 +444,3 @@
                             (match x ((A) 1) ((B) 2))))"
                        :max 1)))
       (ok (<= 0 (violation:violation-column (first violations)))))))
-
-;;; Stub guard — ensures a no-op implementation would NOT pass
-
-(deftest cyclomatic-complexity-coalton-stub-guard
-  (testing "Rule detects high-complexity Coalton define — stub returning nil would fail this"
-    (let ((violations (check-code
-                       "(coalton-toplevel
-                          (define (foo x)
-                            (match x
-                              ((A) 1)
-                              ((B) 2)
-                              ((C) 3))))"
-                       :max 1)))
-      (ok (not (null violations))
-          "Rule must detect match-driven complexity in Coalton defines")))
-
-  (testing "Stub returning always-0 complexity would fail: complexity must be > 1 for branching code"
-    (let ((violations (check-code
-                       "(coalton-toplevel
-                          (define (foo x)
-                            (if (> x 0) x 0)))"
-                       :max 1)))
-      (ok (not (null violations))
-          "if inside Coalton define must produce complexity > 1")
-      (ok (search "complexity of 2"
-                  (violation:violation-message (first violations)))))))

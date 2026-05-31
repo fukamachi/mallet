@@ -133,6 +133,7 @@
    (:file "list-rules-test")
    (:file "format-stream-separation-test")
    (:file "public-api-docstrings-test")
+   (:file "redundant-stub-guard-test")
 
    (:module "parser"
     :pathname "parser"
