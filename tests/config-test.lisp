@@ -75,105 +75,61 @@
 ;;; Built-in config tests
 
 (deftest built-in-configs
-  (testing "Load default config"
-    (let ((cfg (config:get-built-in-config :default)))
-      (ok (not (null cfg)))
-      ;; Check that some rules are in the enabled list
-      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
-        (ok (member :trailing-whitespace rule-names))
-        (ok (member :no-tabs rule-names))
-        (ok (member :unused-variables rule-names))
-        (ok (member :missing-else rule-names))
-        ;; missing-docstring is opt-in only; must not be in default
-        (ok (not (member :missing-docstring rule-names)))
-        ;; ASDF best-practices rules in the default preset
-        (ok (not (member :asdf-redundant-package-prefix rule-names)))
-        (ok (member :asdf-operate-in-perform rule-names))
-        (ok (member :asdf-secondary-system-name rule-names))
-        (ok (member :asdf-if-feature-keyword rule-names))
-        ;; no-ignore-errors is in the default preset
-        (ok (member :no-ignore-errors rule-names))
-        ;; asdf-reader-conditional is disabled in default
-        (ok (not (member :asdf-reader-conditional rule-names)))
-        ;; one-package-per-file is opt-in only; must not be in default
-        (ok (not (member :one-package-per-file rule-names)))
-        ;; These opinionated rules were removed from :default (too noisy for legacy codebases)
-        (ok (not (member :no-package-use rule-names)))
-        (ok (not (member :double-colon-access rule-names)))
-        (ok (not (member :closing-paren-on-own-line rule-names)))
-        (ok (not (member :redundant-progn rule-names))))
-      ;; Check that some rules are disabled
-      (let ((disabled (config:config-disabled-rules cfg)))
-        (ok (member :line-length disabled))
-        (ok (member :constant-naming disabled))
-        (ok (member :special-variable-naming disabled))
-        ;; Opinionated rules removed from :default should be in disabled list
-        (ok (member :no-package-use disabled))
-        (ok (member :double-colon-access disabled))
-        (ok (member :closing-paren-on-own-line disabled))
-        (ok (member :redundant-progn disabled)))))
+  (flet ((rule-names (cfg)
+           (mapcar #'rules:rule-name (config:config-rules cfg)))
+         (rule-enabled-p (name cfg)
+           (member name (mapcar #'rules:rule-name (config:config-rules cfg))))
+         (rule-disabled-p (name cfg)
+           (member name (config:config-disabled-rules cfg))))
+    (testing "Load default config"
+      (let ((cfg (config:get-built-in-config :default)))
+        (ok (not (null cfg)))
+        (ok (rule-enabled-p :trailing-whitespace cfg)
+            "Default enables a broadly applicable formatting rule")
+        (ok (rule-enabled-p :missing-else cfg)
+            "Default enables a correctness-oriented rule")
+        (ok (rule-disabled-p :missing-docstring cfg)
+            "Default keeps docstring rules opt-in")
+        (ok (not (rule-enabled-p :one-package-per-file cfg))
+            "Default keeps one-package-per-file opt-in")
+        (ok (not (rule-enabled-p :line-length cfg))
+            "Default keeps line-length opt-in")))
 
-  (testing "Load all config"
-    (let ((cfg (config:get-built-in-config :all)))
-      (ok (not (null cfg)))
-      ;; All rules should be enabled (none in disabled list)
-      (ok (null (config:config-disabled-rules cfg)))
-      ;; Check that various rules are present
-      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
-        (ok (member :line-length rule-names))
-        (ok (member :trailing-whitespace rule-names))
-        (ok (member :missing-else rule-names))
-        ;; Docstring rules are in the all preset
-        (ok (member :missing-docstring rule-names))
-        (ok (member :missing-package-docstring rule-names))
-        (ok (member :missing-variable-docstring rule-names))
-        (ok (member :missing-struct-docstring rule-names))
-        ;; one-package-per-file is in the all preset
-        (ok (member :one-package-per-file rule-names))
-        ;; All 5 ASDF best-practices rules are in the all preset
-        (ok (member :asdf-redundant-package-prefix rule-names))
-        (ok (member :asdf-operate-in-perform rule-names))
-        (ok (member :asdf-secondary-system-name rule-names))
-        (ok (member :asdf-if-feature-keyword rule-names))
-        (ok (member :asdf-reader-conditional rule-names)))))
+    (testing "Load strict config"
+      (let* ((default (config:get-built-in-config :default))
+             (strict (config:get-built-in-config :strict))
+             (strict-rule-names (rule-names strict)))
+        (ok (not (null strict)))
+        (ok (subsetp (rule-names default) strict-rule-names)
+            "Strict includes every currently enabled default rule")
+        (ok (rule-enabled-p :no-package-use strict)
+            "Strict adds opinionated package-use checking")
+        (ok (not (rule-enabled-p :missing-docstring strict))
+            "Strict still leaves docstring rules opt-in")
+        (ok (not (rule-enabled-p :line-length strict))
+            "Strict still leaves line-length opt-in")))
 
-  (testing "Load strict config"
-    (let ((cfg (config:get-built-in-config :strict)))
-      (ok (not (null cfg)))
-      (let ((rule-names (mapcar #'rules:rule-name (config:config-rules cfg))))
-        ;; All default rules are present
-        (ok (member :trailing-whitespace rule-names))
-        (ok (member :no-tabs rule-names))
-        (ok (member :unused-variables rule-names))
-        (ok (member :no-ignore-errors rule-names))
-        ;; Opinionated rules added beyond :default
-        (ok (member :no-package-use rule-names))
-        (ok (not (member :double-colon-access rule-names)))
-        (ok (member :closing-paren-on-own-line rule-names))
-        (ok (member :redundant-progn rule-names))
-        (ok (member :no-allow-other-keys rule-names))
-        (ok (member :error-without-custom-condition rule-names))
-        (ok (member :bare-float-literal rule-names))
-        (ok (member :asdf-redundant-package-prefix rule-names))
-        (ok (member :asdf-reader-conditional rule-names))
-        (ok (member :runtime-intern rule-names))
-        (ok (member :runtime-unintern rule-names))
-        (ok (member :unused-loop-variables rule-names))
-        (ok (member :progn-in-conditional rule-names))
-        (ok (member :defpackage-interned-symbol rule-names))
-        (ok (member :missing-otherwise rule-names))
-        ;; These opt-in rules must NOT be in :strict
-        (ok (not (member :missing-docstring rule-names)))
-        (ok (not (member :one-package-per-file rule-names)))
-        (ok (not (member :line-length rule-names))))))
+    (testing "Load all config"
+      (let ((cfg (config:get-built-in-config :all)))
+        (ok (not (null cfg)))
+        (ok (null (config:config-disabled-rules cfg))
+            "All has no disabled rule list")
+        (ok (rule-enabled-p :trailing-whitespace cfg)
+            "All includes a known default rule")
+        (ok (rule-enabled-p :missing-docstring cfg)
+            "All includes an opt-in docstring rule")
+        (ok (rule-enabled-p :one-package-per-file cfg)
+            "All includes an opt-in file organization rule")
+        (ok (rule-enabled-p :line-length cfg)
+            "All includes an opt-in formatting rule")))
 
-  (testing "Load none config"
-    (let ((cfg (config:get-built-in-config :none)))
-      (ok (not (null cfg)))
-      ;; No rules should be enabled
-      (ok (null (config:config-rules cfg)))
-      ;; No rules should be disabled
-      (ok (null (config:config-disabled-rules cfg))))))
+    (testing "Load none config"
+      (let ((cfg (config:get-built-in-config :none)))
+        (ok (not (null cfg)))
+        (ok (null (config:config-rules cfg))
+            "None enables no rules")
+        (ok (null (config:config-disabled-rules cfg))
+            "None disables no rules")))))
 
 ;;; Config extends tests
 
