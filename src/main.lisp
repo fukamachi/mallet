@@ -545,31 +545,32 @@ Examples:
     (format t "~A~%" (string-downcase (symbol-name rule-name)))))
 
 (defun expand-file-args (file-args)
-  "Expand FILE-ARGS into a list of Lisp file pathnames.
+  "Expand FILE-ARGS into a list of Lisp source file pathnames.
 Handles wildcards and directories, excluding common non-source directories."
   (let ((files '())
+        (source-patterns '("*.lisp" "*.asd"))
         ;; NOTE: A parallel list exists as *EXCLUDED-DIRS* in
         ;; src/rules/forms/package-exports.lisp. Keep both in sync.
         (excluded-dirs '(".qlot" ".bundle-libs" ".git" ".svn" ".hg" "node_modules" "_build" ".claude" ".cache" ".zig-cache")))
-    (labels ((collect-lisp-files (dir)
-               "Recursively collect .lisp files under DIR, skipping excluded subdirectories."
+    (labels ((collect-source-files (dir)
+               "Recursively collect supported source files under DIR, skipping excluded subdirectories."
                (let ((result '()))
-                 ;; Collect .lisp files directly in this directory
-                 (dolist (f (uiop:directory-files dir "*.lisp"))
-                   (push f result))
+                 (dolist (pattern source-patterns)
+                   (dolist (f (uiop:directory-files dir pattern))
+                     (push f result)))
                  ;; Recurse into subdirectories, skipping excluded ones
                  (dolist (subdir (uiop:subdirectories dir))
                    (let ((dirname (car (last (pathname-directory subdir)))))
                      (unless (member dirname excluded-dirs :test #'string=)
-                       (setf result (nconc result (collect-lisp-files subdir))))))
+                       (setf result (nconc result (collect-source-files subdir))))))
                  result)))
       (dolist (arg file-args)
         (let ((path (uiop:parse-native-namestring arg)))
           (cond
-            ;; Directory - recursively find .lisp files, excluding common directories
+            ;; Directory - recursively find source files, excluding common directories
             ((uiop:directory-exists-p path)
              (let ((dir-path (uiop:ensure-directory-pathname (truename path))))
-               (setf files (nconc files (collect-lisp-files dir-path)))))
+               (setf files (nconc files (collect-source-files dir-path)))))
             ;; Wildcard pattern - expand using directory
             ((or (find #\* arg) (find #\? arg))
              (setf files (nconc files (directory path))))

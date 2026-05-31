@@ -165,6 +165,13 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
       (write-string ";; test\n" out))
     (truename path)))
 
+(defun write-test-source-file (dir name content)
+  "Create source file NAME under DIR with CONTENT, returning its truename pathname."
+  (let ((path (merge-pathnames name dir)))
+    (with-open-file (out path :direction :output :if-exists :supersede)
+      (write-string content out))
+    (truename path)))
+
 (defun cleanup-test-dir (dir)
   "Remove DIR and all its contents."
   (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))
@@ -172,6 +179,103 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
 (defun path-names (pathnames)
   "Return a sorted list of file namestrings for comparison."
   (sort (mapcar #'namestring pathnames) #'string<))
+
+(defun result-violations (results)
+  "Return all violations from lint-files RESULTS."
+  (loop for (_ . violations) in results
+        append violations))
+
+(defun violation-for-file-and-rule-p (violation file rule)
+  "Return true when VIOLATION belongs to FILE and RULE."
+  (and (equal (namestring (truename file))
+              (namestring (truename (mallet:violation-file violation))))
+       (eq rule (violation-rule violation))))
+
+(defun read-project-readme ()
+  "Read and return README.md from the project root."
+  (uiop:read-file-string
+   (merge-pathnames "README.md"
+                    (asdf:system-source-directory "mallet"))))
+
+(defun readme-section (content start-heading end-heading)
+  "Return CONTENT between START-HEADING and END-HEADING, or NIL."
+  (let ((start (search start-heading content)))
+    (when start
+      (let ((end (search end-heading content :start2 start)))
+        (subseq content start (or end (length content)))))))
+
+(defun readme-line-containing (needle content)
+  "Return the first line in CONTENT containing NEEDLE."
+  (find-if (lambda (line) (search needle line))
+           (uiop:split-string content :separator '(#\Newline))))
+
+(deftest readme-directory-scan-documents-lisp-and-asd
+  (testing "README Basic Linting directory example documents scanned source extensions"
+    (let* ((section (readme-section (read-project-readme)
+                                    "### Basic Linting"
+                                    "### CLI Rule Configuration"))
+           (directory-example (and section
+                                   (readme-line-containing "mallet src  #" section))))
+      (ok section
+          "README.md must contain the Basic Linting section")
+      (ok directory-example
+          "Basic Linting must contain the 'mallet src' directory example")
+      (ok (and directory-example
+               (search ".lisp" directory-example))
+          "The 'mallet src' example must document that directory scans include .lisp files")
+      (ok (and directory-example
+               (search ".asd" directory-example))
+          "The 'mallet src' example must document that directory scans include .asd files"))))
+
+(deftest directory-scan-excludes-undocumented-extensions
+  (testing "Directory traversal scans only documented .lisp and .asd files, skipping undocumented extensions"
+    (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
+           (root (make-test-dir base)))
+      (unwind-protect
+           (let* ((lisp-file (write-test-source-file
+                              root
+                              "main.lisp"
+                              (format nil "(defun bad () nil)  ~%")))
+                  (asd-file (write-test-source-file
+                             root
+                             "system.asd"
+                             (format nil "(defsystem #:bad-system~%  :components ((:file #:main)))~%")))
+                  ;; Undocumented source-like extension: this .cl file carries trailing
+                  ;; whitespace, so it WOULD produce a violation if directory traversal
+                  ;; scanned it. The documented set is {lisp, asd} (README.md:63 / :207).
+                  (cl-file (write-test-source-file
+                            root
+                            "legacy.cl"
+                            (format nil "(defun legacy () nil)  ~%")))
+                  (config (mallet:make-config
+                           :rules (list (mallet:make-rule :trailing-whitespace)
+                                        (mallet:make-rule :asdf-component-strings))))
+                  (files (expand-file-args (list (namestring root))))
+                  (paths (path-names files))
+                  (violations (result-violations
+                               (mallet:lint-files files :config config))))
+             (ok (member (namestring lisp-file) paths :test #'string=)
+                 "documented .lisp file is included in directory traversal")
+             (ok (member (namestring asd-file) paths :test #'string=)
+                 "documented .asd file is included in directory traversal")
+             (ok (not (member (namestring cl-file) paths :test #'string=))
+                 "undocumented .cl file is excluded from directory traversal")
+             (ok (some (lambda (violation)
+                         (violation-for-file-and-rule-p
+                          violation lisp-file :trailing-whitespace))
+                       violations)
+                 "trailing-whitespace violation from documented .lisp file is reported")
+             (ok (some (lambda (violation)
+                         (violation-for-file-and-rule-p
+                          violation asd-file :asdf-component-strings))
+                       violations)
+                 "asdf-component-strings violation from documented .asd file is reported")
+             (ok (notany (lambda (violation)
+                           (equal (namestring (truename cl-file))
+                                  (namestring (truename (mallet:violation-file violation)))))
+                         violations)
+                 "no violation is reported for the undocumented .cl file (it was skipped)"))
+        (cleanup-test-dir root)))))
 
 (deftest expand-file-args-basic-directory
   (testing "Scanning a plain directory returns all .lisp files"
@@ -186,6 +290,60 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
                    "top-level file is included")
                (ok (member (namestring f2) (path-names result) :test #'string=)
                    "file in src/ subdirectory is included")))
+        (cleanup-test-dir root)))))
+
+(deftest directory-scan-lints-asd-files
+  (testing "Directory traversal includes .asd files and reports ASDF violations"
+    (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
+           (root (make-test-dir base)))
+      (unwind-protect
+           (let* ((asd-file (write-test-source-file
+                             root
+                             "system.asd"
+                             (format nil "(defsystem #:bad-system~%  :components ((:file #:main)))~%")))
+                  (lisp-file (write-test-source-file
+                              root
+                              "main.lisp"
+                              (format nil "(defpackage #:bad-system/main)~%(in-package #:bad-system/main)~%")))
+                  (config (mallet:make-config
+                           :rules (list (mallet:make-rule :asdf-component-strings))))
+                  (files (expand-file-args (list (namestring root))))
+                  (violations (result-violations
+                               (mallet:lint-files files :config config))))
+             (ok (member (namestring lisp-file) (path-names files) :test #'string=)
+                 "sibling .lisp file is included in directory traversal")
+             (ok (some (lambda (violation)
+                         (violation-for-file-and-rule-p
+                          violation asd-file :asdf-component-strings))
+                       violations)
+                 "ASDF component string violation from .asd file is reported"))
+        (cleanup-test-dir root)))))
+
+(deftest directory-scan-still-lints-lisp-files
+  (testing "Directory traversal still reports violations from sibling .lisp files"
+    (let* ((base (format nil "/tmp/mallet-test-~A/" (random 1000000)))
+           (root (make-test-dir base)))
+      (unwind-protect
+           (let* ((asd-file (write-test-source-file
+                             root
+                             "system.asd"
+                             (format nil "(defsystem #:bad-system~%  :components ((:file #:main)))~%")))
+                  (lisp-file (write-test-source-file
+                              root
+                              "main.lisp"
+                              (format nil "(defun bad () nil)  ~%")))
+                  (config (mallet:make-config
+                           :rules (list (mallet:make-rule :trailing-whitespace))))
+                  (files (expand-file-args (list (namestring root))))
+                  (violations (result-violations
+                               (mallet:lint-files files :config config))))
+             (ok (member (namestring asd-file) (path-names files) :test #'string=)
+                 "sibling .asd file is included in the mixed directory traversal")
+             (ok (some (lambda (violation)
+                         (violation-for-file-and-rule-p
+                          violation lisp-file :trailing-whitespace))
+                       violations)
+                 "trailing-whitespace violation from .lisp file is reported even with a sibling .asd file"))
         (cleanup-test-dir root)))))
 
 (deftest expand-file-args-excludes-dot-claude-when-scanning-parent
