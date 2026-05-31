@@ -133,6 +133,7 @@
    (:file "preset-integration-test")
    (:file "list-rules-test")
    (:file "readme-init-section-test")
+   (:file "readme-known-limitations-test")
    (:file "format-stream-separation-test")
    (:file "public-api-docstrings-test")
 

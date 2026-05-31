@@ -140,6 +140,11 @@ If a config already exists, pass `--force` to overwrite the existing `.mallet.li
 mallet --init --force src/
 ```
 
+## Known limitations
+
+- Very deeply nested input can make SBCL write a `Control stack guard` banner to stderr before Mallet handles the condition. The per-file `Expression too deeply nested` violation is still reported.
+- An unmatched opening parenthesis stops analysis of the rest of the file because the reader cannot know where the missing closing parenthesis belongs. A stray closing parenthesis does not stop later analysis; Mallet recovers and continues checking later top-level forms.
+
 ## Configuration
 
 Create `.mallet.lisp` in your project root:
