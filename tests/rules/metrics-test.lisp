@@ -188,206 +188,109 @@
          (violations (base:check-form rule form #P"test.lisp")))
     (ok (null violations))))
 
-(deftest complexity-base
-  (testing "Empty function has complexity 1"
-    (test-complexity "(defun empty () nil)" 1)))
-
-(deftest complexity-if
-  (testing "IF adds 1 to complexity"
-    (test-complexity "(defun foo (x) (if (> x 0) 1 2))" 2)))
-
-(deftest complexity-when
-  (testing "WHEN adds 1 to complexity"
-    (test-complexity "(defun foo (x) (when (> x 0) 1))" 2)))
-
-(deftest complexity-unless
-  (testing "UNLESS adds 1 to complexity"
-    (test-complexity "(defun foo (x) (unless (> x 0) 1))" 2)))
-
-(deftest complexity-multiple-ifs
-  (testing "Multiple IFs add to complexity"
-    (test-complexity
-     "(defun foo (x y)
+(defparameter *complexity-construct-cases*
+  `((:base :standard "(defun empty () nil)" 1)
+    (:if :standard "(defun foo (x) (if (> x 0) 1 2))" 2)
+    (:when :standard "(defun foo (x) (when (> x 0) 1))" 2)
+    (:unless :standard "(defun foo (x) (unless (> x 0) 1))" 2)
+    (:multiple-ifs :standard "(defun foo (x y)
         (if (> x 0) 1 2)
-        (if (> y 0) 3 4))" 3)))
-
-(deftest complexity-cond
-  (testing "COND with 3 clauses (2 conditionals + 1 else) adds 2"
-    (test-complexity
-     "(defun foo (x)
+        (if (> y 0) 3 4))" 3)
+    (:cond :standard "(defun foo (x)
         (cond
           ((< x 0) -1)
           ((> x 0) 1)
-          (t 0)))" 3)))
-
-(deftest complexity-cond-no-else
-  (testing "COND with 3 clauses (all conditionals) adds 3"
-    (test-complexity
-     "(defun foo (x)
+          (t 0)))" 3)
+    (:cond-no-else :standard "(defun foo (x)
         (cond
           ((< x 0) -1)
           ((= x 0) 0)
-          ((> x 0) 1)))" 4)))
-
-(deftest complexity-cond-otherwise
-  (testing "COND with otherwise instead of t also excludes it"
-    (test-complexity
-     "(defun foo (x)
+          ((> x 0) 1)))" 4)
+    (:cond-otherwise :standard "(defun foo (x)
         (cond
           ((< x 0) -1)
           ((> x 0) 1)
-          (otherwise 0)))" 3)))
-
-(deftest complexity-case
-  (testing "CASE with 3 cases + otherwise adds 3"
-    (test-complexity
-     "(defun foo (x)
+          (otherwise 0)))" 3)
+    (:case :standard "(defun foo (x)
         (case x
           (a 1)
           (b 2)
           (c 3)
-          (otherwise 4)))" 4)))
-
-(deftest complexity-case-no-otherwise
-  (testing "CASE with 4 cases (no otherwise) adds 4"
-    (test-complexity
-     "(defun foo (x)
+          (otherwise 4)))" 4)
+    (:case :modified "(defun foo (x)
         (case x
           (a 1)
           (b 2)
           (c 3)
-          (d 4)))" 5)))
-
-(deftest complexity-typecase
-  (testing "TYPECASE with 2 types + otherwise adds 2"
-    (test-complexity
-     "(defun foo (x)
+          (otherwise 4)))" 2)
+    (:case-no-otherwise :standard "(defun foo (x)
+        (case x
+          (a 1)
+          (b 2)
+          (c 3)
+          (d 4)))" 5)
+    (:typecase :standard "(defun foo (x)
         (typecase x
           (integer 1)
           (string 2)
-          (otherwise 3)))" 3)))
-
-(deftest complexity-ecase
-  (testing "ECASE with 3 cases adds 3 (no otherwise needed)"
-    (test-complexity
-     "(defun foo (x)
+          (otherwise 3)))" 3)
+    (:typecase :modified "(defun foo (x)
+        (typecase x
+          (integer 1)
+          (string 2)
+          (otherwise 3)))" 2)
+    (:ecase :standard "(defun foo (x)
         (ecase x
           (a 1)
           (b 2)
-          (c 3)))" 4)))
-
-(deftest complexity-etypecase
-  (testing "ETYPECASE with 2 types adds 2 (no otherwise needed)"
-    (test-complexity
-     "(defun foo (x)
+          (c 3)))" 4)
+    (:etypecase :standard "(defun foo (x)
         (etypecase x
           (integer 1)
-          (string 2)))" 3)))
-
-;; Phase 3B: Loops
-
-(deftest complexity-dotimes
-  (testing "DOTIMES adds 0 (simple iteration)"
-    (test-no-complexity-violation
-     "(defun foo (n)
+          (string 2)))" 3)
+    (:dotimes :standard "(defun foo (n)
         (dotimes (i n)
-          (print i)))" 10)))
-
-(deftest complexity-dolist
-  (testing "DOLIST adds 0 (simple iteration)"
-    (test-no-complexity-violation
-     "(defun foo (list)
+          (print i)))" 1)
+    (:dolist :standard "(defun foo (list)
         (dolist (x list)
-          (print x)))" 10)))
-
-(deftest complexity-do
-  (testing "DO adds 1 (has end-test condition)"
-    (test-complexity
-     "(defun foo (n)
+          (print x)))" 1)
+    (:do :standard "(defun foo (n)
         (do ((i 0 (1+ i)))
             ((>= i n))
-          (print i)))" 2)))
-
-(deftest complexity-do-star
-  (testing "DO* adds 1 (has end-test condition)"
-    (test-complexity
-     "(defun foo (n)
+          (print i)))" 2)
+    (:do-star :standard "(defun foo (n)
         (do* ((i 0 (1+ i)))
              ((>= i n))
-          (print i)))" 2)))
-
-(deftest complexity-loop-simple
-  (testing "Simple LOOP adds 0 (no conditionals)"
-    (test-no-complexity-violation
-     "(defun foo (list)
-        (loop for x in list collect x))" 10)))
-
-(deftest complexity-loop-when
-  (testing "LOOP with WHEN adds 1"
-    (test-complexity
-     "(defun foo (list)
+          (print i)))" 2)
+    (:loop-simple :standard "(defun foo (list)
+        (loop for x in list collect x))" 1)
+    (:loop-when :standard "(defun foo (list)
         (loop for x in list
               when (evenp x)
-                collect x))" 2)))
-
-(deftest complexity-loop-multiple-conditionals
-  (testing "LOOP with multiple conditionals"
-    (test-complexity
-     "(defun foo (list)
+                collect x))" 2)
+    (:loop-multiple-conditionals :standard "(defun foo (list)
         (loop for x in list
               when (evenp x)
                 collect x
               unless (zerop x)
-                sum x))" 3)))
-
-;; Phase 3C: Advanced forms
-
-(deftest complexity-and
-  (testing "AND adds 1 (regardless of argument count)"
-    (test-complexity
-     "(defun foo (a b)
-        (and a b))" 2)))
-
-(deftest complexity-and-many-args
-  (testing "AND with 4 arguments still adds 1"
-    (test-complexity
-     "(defun validate (a b c d)
-        (and a b c d))" 2)))
-
-(deftest complexity-or
-  (testing "OR adds 1 (regardless of argument count)"
-    (test-complexity
-     "(defun foo (a b c)
-        (or a b c))" 2)))
-
-(deftest complexity-nested-and-or
-  (testing "Nested AND/OR each adds 1"
-    (test-complexity
-     "(defun foo (x y z)
-        (and x (or y z)))" 3)))
-
-(deftest complexity-ignore-errors
-  (testing "IGNORE-ERRORS adds 1"
-    (test-complexity
-     "(defun foo ()
+                sum x))" 3)
+    (:and :standard "(defun foo (a b)
+        (and a b))" 2)
+    (:and-many-args :standard "(defun validate (a b c d)
+        (and a b c d))" 2)
+    (:or :standard "(defun foo (a b c)
+        (or a b c))" 2)
+    (:nested-and-or :standard "(defun foo (x y z)
+        (and x (or y z)))" 3)
+    (:ignore-errors :standard "(defun foo ()
         (ignore-errors
-          (risky-operation)))" 2)))
-
-(deftest complexity-handler-case-two
-  (testing "HANDLER-CASE with 2 handlers adds 2"
-    (test-complexity
-     "(defun foo ()
+          (risky-operation)))" 2)
+    (:handler-case :standard "(defun foo ()
         (handler-case
             (risky-operation)
           (error (e) (log-error e))
-          (warning (w) (log-warning w))))" 3)))
-
-;; Complex example
-
-(deftest complexity-violation-example
-  (testing "Violation example (9 conditions + 1 else = 9 added, total 10)"
-    (test-complexity
-     "(defun handle-command (cmd args)
+          (warning (w) (log-warning w))))" 3)
+    (:violation-example :standard "(defun handle-command (cmd args)
         (cond
           ((string= cmd \"start\") (start-server))
           ((string= cmd \"stop\") (stop-server))
@@ -398,240 +301,224 @@
           ((string= cmd \"destroy\") (destroy))
           ((string= cmd \"pause\") (pause-server))
           ((string= cmd \"resume\") (resume-server))
-          (t (error \"Unknown command\"))))" 10)))
-
-;; Modified variant tests
-
-(deftest complexity-case-modified-variant
-  (testing "CASE with modified variant counts as +1 total"
-    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                                :max 1
-                                :variant :modified))
-           (code "(defun foo (x)
-                    (case x
-                      (a 1)
-                      (b 2)
-                      (c 3)
-                      (otherwise 4)))")
-           (forms (parser:parse-forms code #P"test.lisp"))
-           (form (first forms))
-           (violations (base:check-form rule form #P"test.lisp")))
-      ;; Complexity = 1 (base) + 1 (case) = 2 with modified variant
-      (ok (= 1 (length violations)))
-      (ok (message-contains-metric-p
-           (violation:violation-message (first violations))
-           2)))))
-
-(deftest complexity-case-standard-variant
-  (testing "CASE with standard variant counts per clause"
-    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                                :max 1
-                                :variant :standard))
-           (code "(defun foo (x)
-                    (case x
-                      (a 1)
-                      (b 2)
-                      (c 3)
-                      (otherwise 4)))")
-           (forms (parser:parse-forms code #P"test.lisp"))
-           (form (first forms))
-           (violations (base:check-form rule form #P"test.lisp")))
-      ;; Complexity = 1 (base) + 3 (case clauses) = 4 with standard variant
-      (ok (= 1 (length violations)))
-      (ok (message-contains-metric-p
-           (violation:violation-message (first violations))
-           4)))))
-
-(deftest complexity-typecase-modified-variant
-  (testing "TYPECASE with modified variant counts as +1 total"
-    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                                :max 1
-                                :variant :modified))
-           (code "(defun foo (x)
-                    (typecase x
-                      (integer 1)
-                      (string 2)
-                      (otherwise 3)))")
-           (forms (parser:parse-forms code #P"test.lisp"))
-           (form (first forms))
-           (violations (base:check-form rule form #P"test.lisp")))
-      ;; Complexity = 1 (base) + 1 (typecase) = 2 with modified variant
-      (ok (= 1 (length violations)))
-      (ok (message-contains-metric-p
-           (violation:violation-message (first violations))
-           2)))))
-
-;; Third-party macros: Alexandria
-
-(deftest complexity-alexandria-if-let
-  (testing "Alexandria IF-LET adds 1"
-    (test-complexity
-     "(defun foo (x)
+          (t (error \"Unknown command\"))))" 10)
+    (:alexandria-if-let :standard "(defun foo (x)
         (if-let ((y (find x list)))
           (process y)
-          (error \"not found\")))" 2)))
-
-(deftest complexity-alexandria-when-let
-  (testing "Alexandria WHEN-LET adds 1"
-    (test-complexity
-     "(defun foo (x)
+          (error \"not found\")))" 2)
+    (:alexandria-when-let :standard "(defun foo (x)
         (when-let ((y (find x list)))
-          (process y)))" 2)))
-
-(deftest complexity-alexandria-when-let-star
-  (testing "Alexandria WHEN-LET* adds 1"
-    (test-complexity
-     "(defun foo (x)
+          (process y)))" 2)
+    (:alexandria-when-let-star :standard "(defun foo (x)
         (when-let* ((y (find x list))
                     (z (lookup y)))
-          (process z)))" 2)))
-
-(deftest complexity-alexandria-xor
-  (testing "Alexandria XOR adds 1 (like OR)"
-    (test-complexity
-     "(defun foo (a b)
-        (xor a b))" 2)))
-
-(deftest complexity-alexandria-destructuring-case-standard
-  (testing "Alexandria DESTRUCTURING-CASE with standard variant counts per clause"
-    (test-complexity
-     "(defun foo (cmd)
+          (process z)))" 2)
+    (:alexandria-xor :standard "(defun foo (a b)
+        (xor a b))" 2)
+    (:alexandria-destructuring-case :standard "(defun foo (cmd)
         (destructuring-case cmd
           ((:start x) (start x))
           ((:stop) (stop))
           ((:restart x y) (restart x y))
-          (otherwise (error \"unknown\"))))" 4)))
-
-(deftest complexity-alexandria-destructuring-case-modified
-  (testing "Alexandria DESTRUCTURING-CASE with modified variant counts as +1 total"
-    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                                :max 1
-                                :variant :modified))
-           (code "(defun foo (cmd)
-                    (destructuring-case cmd
-                      ((:start x) (start x))
-                      ((:stop) (stop))
-                      ((:restart x y) (restart x y))
-                      (otherwise (error \"unknown\"))))")
-           (forms (parser:parse-forms code #P"test.lisp"))
-           (form (first forms))
-           (violations (base:check-form rule form #P"test.lisp")))
-      ;; Complexity = 1 (base) + 1 (destructuring-case) = 2
-      (ok (= 1 (length violations)))
-      (ok (message-contains-metric-p
-           (violation:violation-message (first violations))
-           2)))))
-
-(deftest complexity-alexandria-destructuring-ecase
-  (testing "Alexandria DESTRUCTURING-ECASE counts all clauses"
-    (test-complexity
-     "(defun foo (cmd)
+          (otherwise (error \"unknown\"))))" 4)
+    (:alexandria-destructuring-case :modified "(defun foo (cmd)
+        (destructuring-case cmd
+          ((:start x) (start x))
+          ((:stop) (stop))
+          ((:restart x y) (restart x y))
+          (otherwise (error \"unknown\"))))" 2)
+    (:alexandria-destructuring-ecase :standard "(defun foo (cmd)
         (destructuring-ecase cmd
           ((:start x) (start x))
           ((:stop) (stop))
-          ((:restart x y) (restart x y))))" 4)))
-
-;; Third-party macros: Trivia
-
-(deftest complexity-trivia-match-standard
-  (testing "Trivia MATCH with standard variant counts per clause"
-    (test-complexity
-     "(defun foo (x)
+          ((:restart x y) (restart x y))))" 4)
+    (:trivia-match :standard "(defun foo (x)
         (match x
           (0 'zero)
           (1 'one)
           (2 'two)
-          (_ 'other)))" 4)))
-
-(deftest complexity-trivia-match-modified
-  (testing "Trivia MATCH with modified variant counts as +1 total"
-    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                                :max 1
-                                :variant :modified))
-           (code "(defun foo (x)
-                    (match x
-                      (0 'zero)
-                      (1 'one)
-                      (2 'two)
-                      (_ 'other)))")
-           (forms (parser:parse-forms code #P"test.lisp"))
-           (form (first forms))
-           (violations (base:check-form rule form #P"test.lisp")))
-      ;; Complexity = 1 (base) + 1 (match) = 2
-      (ok (= 1 (length violations)))
-      (ok (message-contains-metric-p
-           (violation:violation-message (first violations))
-           2)))))
-
-(deftest complexity-trivia-ematch
-  (testing "Trivia EMATCH counts all clauses (no default)"
-    (test-complexity
-     "(defun foo (x)
+          (_ 'other)))" 4)
+    (:trivia-match :modified "(defun foo (x)
+        (match x
+          (0 'zero)
+          (1 'one)
+          (2 'two)
+          (_ 'other)))" 2)
+    (:trivia-ematch :standard "(defun foo (x)
         (ematch x
           (0 'zero)
           (1 'one)
-          (2 'two)))" 4)))
-
-(deftest complexity-trivia-if-match
-  (testing "Trivia IF-MATCH adds 1"
-    (test-complexity
-     "(defun foo (x)
+          (2 'two)))" 4)
+    (:trivia-if-match :standard "(defun foo (x)
         (if-match (cons a b) x
           (list a b)
-          nil))" 2)))
-
-(deftest complexity-trivia-when-match
-  (testing "Trivia WHEN-MATCH adds 1"
-    (test-complexity
-     "(defun foo (x)
+          nil))" 2)
+    (:trivia-when-match :standard "(defun foo (x)
         (when-match (cons a b) x
-          (list a b)))" 2)))
-
-(deftest complexity-trivia-unless-match
-  (testing "Trivia UNLESS-MATCH adds 1"
-    (test-complexity
-     "(defun foo (x)
+          (list a b)))" 2)
+    (:trivia-unless-match :standard "(defun foo (x)
         (unless-match nil x
-          (process x)))" 2)))
-
-(deftest complexity-trivia-match-star
-  (testing "Trivia MATCH* with standard variant counts per clause"
-    (test-complexity
-     "(defun foo (x y)
+          (process x)))" 2)
+    (:trivia-match-star :standard "(defun foo (x y)
         (match* (x y)
           ((0 0) 'origin)
           ((0 _) 'y-axis)
           ((_ 0) 'x-axis)
-          (_ 'elsewhere)))" 4)))
-
-(deftest complexity-trivia-multiple-value-match
-  (testing "Trivia MULTIPLE-VALUE-MATCH with standard variant counts per clause"
-    (test-complexity
-     "(defun foo (x)
+          (_ 'elsewhere)))" 4)
+    (:trivia-multiple-value-match :standard "(defun foo (x)
         (multiple-value-match (values-fn x)
           ((a b) (process a b))
           ((a) (process-one a))
-          (_ (error \"bad\"))))" 3)))
-
-(deftest complexity-trivia-multiple-value-ematch
-  (testing "Trivia MULTIPLE-VALUE-EMATCH counts all clauses"
-    (test-complexity
-     "(defun foo (x)
+          (_ (error \"bad\"))))" 3)
+    (:trivia-multiple-value-ematch :standard "(defun foo (x)
         (multiple-value-ematch (values-fn x)
           ((a b) (process a b))
-          ((a) (process-one a))))" 3)))
-
-;; Third-party macros: string-case
-
-(deftest complexity-string-case-standard
-  (testing "STRING-CASE with standard variant counts per clause"
-    (test-complexity
-     "(defun foo (cmd)
+          ((a) (process-one a))))" 3)
+    (:string-case :standard "(defun foo (cmd)
         (string-case cmd
           (\"start\" (start))
           (\"stop\" (stop))
           (\"restart\" (restart))
-          (otherwise (error \"unknown\"))))" 4)))
+          (otherwise (error \"unknown\"))))" 4)
+    (:string-case :modified "(defun foo (cmd)
+        (string-case cmd
+          (\"start\" (start))
+          (\"stop\" (stop))
+          (\"restart\" (restart))
+          (otherwise (error \"unknown\"))))" 2)))
+
+(defparameter *required-complexity-table-constructs*
+  '(:base
+    :if
+    :when
+    :unless
+    :multiple-ifs
+    :cond
+    :cond-no-else
+    :cond-otherwise
+    :case
+    :case-no-otherwise
+    :typecase
+    :ecase
+    :etypecase
+    :dotimes
+    :dolist
+    :do
+    :do-star
+    :loop-simple
+    :loop-when
+    :loop-multiple-conditionals
+    :and
+    :and-many-args
+    :or
+    :nested-and-or
+    :ignore-errors
+    :handler-case
+    :violation-example
+    :alexandria-if-let
+    :alexandria-when-let
+    :alexandria-when-let-star
+    :alexandria-xor
+    :alexandria-destructuring-case
+    :alexandria-destructuring-ecase
+    :trivia-match
+    :trivia-ematch
+    :trivia-if-match
+    :trivia-when-match
+    :trivia-unless-match
+    :trivia-match-star
+    :trivia-multiple-value-match
+    :trivia-multiple-value-ematch
+    :string-case))
+
+(defparameter *complexity-table-variant-constructs*
+  '(:case
+    :typecase
+    :alexandria-destructuring-case
+    :trivia-match
+    :string-case))
+
+(defun source-top-level-forms (pathname)
+  "Return all top-level forms read from PATHNAME."
+  (let ((*package* (find-package '#:mallet/tests/rules/metrics)))
+    (with-open-file (stream pathname)
+      (loop for form = (read stream nil nil)
+            while form
+            collect form))))
+
+(defun tree-contains-symbol-p (tree symbol)
+  "Return true when TREE contains SYMBOL."
+  (cond
+    ((eql tree symbol) t)
+    ((consp tree)
+     (or (tree-contains-symbol-p (car tree) symbol)
+         (tree-contains-symbol-p (cdr tree) symbol)))
+    (t nil)))
+
+(defun symbol-name-prefix-p (prefix symbol)
+  "Return true when SYMBOL's name starts with PREFIX."
+  (let ((name (symbol-name symbol)))
+    (and (<= (length prefix) (length name))
+         (string= prefix name :end2 (length prefix)))))
+
+(defun complexity-test-deftest-p (form)
+  "Return true when FORM is a deftest that directly exercises complexity."
+  (and (consp form)
+       (eq (first form) 'deftest)
+       (or (symbol-name-prefix-p "COMPLEXITY-" (second form))
+           (tree-contains-symbol-p form 'test-complexity)
+           (tree-contains-symbol-p form 'test-no-complexity-violation)
+           (tree-contains-symbol-p form 'rules:cyclomatic-complexity-rule))))
+
+(defun metrics-test-source-pathname ()
+  "Return the source pathname for this test file."
+  (merge-pathnames "tests/rules/metrics-test.lisp"
+                   (asdf:system-source-directory "mallet")))
+
+(deftest complexity-constructs-table
+  (dolist (case *complexity-construct-cases*)
+    (destructuring-bind (construct variant code expected-complexity) case
+      (testing (format nil "~A ~A complexity is ~D"
+                       construct variant expected-complexity)
+        (test-complexity code expected-complexity nil variant)
+        (test-no-complexity-violation code expected-complexity variant)))))
+
+(deftest complexity-constructs-table-contract
+  (testing "Every complexity row carries construct, variant, code, and expected complexity"
+    (dolist (case *complexity-construct-cases*)
+      (destructuring-bind (construct variant code expected-complexity) case
+        (ok (= 4 (length case)))
+        (ok (keywordp construct))
+        (ok (member variant '(:standard :modified)))
+        (ok (stringp code))
+        (ok (integerp expected-complexity)))))
+
+  (testing "Required construct scenarios stay in the shared table"
+    (let ((constructs (mapcar #'first *complexity-construct-cases*)))
+      (dolist (required-construct *required-complexity-table-constructs*)
+        (ok (member required-construct constructs)))))
+
+  (testing "Standard versus modified complexity stays in the variant column"
+    (dolist (construct *complexity-table-variant-constructs*)
+      (let* ((rows (remove-if-not (lambda (case)
+                                    (eql construct (first case)))
+                                  *complexity-construct-cases*))
+             (variants (mapcar #'second rows)))
+        (ok (member :standard variants))
+        (ok (member :modified variants))
+        (ok (= 2 (length (remove-duplicates variants))))
+        (ok (/= (fourth (find :standard rows :key #'second))
+                (fourth (find :modified rows :key #'second)))))))
+
+  (testing "Complexity cases are not split back into standalone deftests"
+    (let* ((allowed-tests '(complexity-constructs-table
+                            complexity-constructs-table-contract))
+           (offenders
+             (loop for form in (source-top-level-forms (metrics-test-source-pathname))
+                   when (and (complexity-test-deftest-p form)
+                             (not (member (second form) allowed-tests)))
+                     collect (second form))))
+      (ok (null offenders)))))
 
 ;;; Comment-ratio calculation tests
 
@@ -881,26 +768,6 @@
       (ok (= 0.2d0 (rules::max-ratio rule)))
       (ok (= 5 (rules::rule-min-lines rule))))))
 
-(deftest complexity-string-case-modified
-  (testing "STRING-CASE with modified variant counts as +1 total"
-    (let* ((rule (make-instance 'rules:cyclomatic-complexity-rule
-                                :max 1
-                                :variant :modified))
-           (code "(defun foo (cmd)
-                    (string-case cmd
-                      (\"start\" (start))
-                      (\"stop\" (stop))
-                      (\"restart\" (restart))
-                      (otherwise (error \"unknown\"))))")
-           (forms (parser:parse-forms code #P"test.lisp"))
-           (form (first forms))
-           (violations (base:check-form rule form #P"test.lisp")))
-      ;; Complexity = 1 (base) + 1 (string-case) = 2
-      (ok (= 1 (length violations)))
-      (ok (message-contains-metric-p
-           (violation:violation-message (first violations))
-           2)))))
-
 ;;; calculate-comment-ratio public API tests
 
 (deftest comment-ratio-rule-labels-inner
@@ -945,7 +812,7 @@
 (deftest comment-ratio-blank-lines-excluded
   (testing "Blank lines do not affect ratio calculation"
     (let ((result-with-blanks (test-comment-ratio
-                                "(defun foo (x)
+                               "(defun foo (x)
   ;; comment
 
   (print x)
