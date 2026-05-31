@@ -134,6 +134,7 @@
    (:file "format-stream-separation-test")
    (:file "public-api-docstrings-test")
    (:file "redundant-stub-guard-test")
+   (:file "docstring-test-utils")
    (:file "test-quality-regression-test")
 
    (:module "parser"

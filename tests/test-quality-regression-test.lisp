@@ -15,11 +15,23 @@
       (read-sequence string stream)
       string)))
 
+(defun project-file-string (relative-path)
+  (with-open-file (stream (merge-pathnames relative-path
+                                           (asdf:system-source-directory "mallet/tests"))
+                          :direction :input)
+    (let ((string (make-string (file-length stream))))
+      (read-sequence string stream)
+      string)))
+
 (defun source-package (relative-path)
   (or (cdr (assoc relative-path
                   '(("fixer-test.lisp" . "MALLET/TESTS/FIXER")
                     ("rules/unused-variables-test.lisp" . "MALLET/TESTS/RULES/UNUSED-VARIABLES")
-                    ("rules/rule-type-system-test.lisp" . "MALLET/TESTS/RULES/RULE-TYPE-SYSTEM"))
+                    ("rules/rule-type-system-test.lisp" . "MALLET/TESTS/RULES/RULE-TYPE-SYSTEM")
+                    ("rules/missing-docstring-test.lisp" . "MALLET/TESTS/RULES/MISSING-DOCSTRING")
+                    ("rules/missing-struct-docstring-test.lisp" . "MALLET/TESTS/RULES/MISSING-STRUCT-DOCSTRING")
+                    ("rules/missing-variable-docstring-test.lisp" . "MALLET/TESTS/RULES/MISSING-VARIABLE-DOCSTRING")
+                    ("rules/missing-package-docstring-test.lisp" . "MALLET/TESTS/RULES/MISSING-PACKAGE-DOCSTRING"))
                   :test #'string=))
       "MALLET/TESTS/TEST-QUALITY-REGRESSION"))
 
@@ -57,6 +69,9 @@
 
 (defun defmacro-sources (relative-path name)
   (top-level-source-matching relative-path 'defmacro name))
+
+(defun defun-sources (relative-path name)
+  (top-level-source-matching relative-path 'defun name))
 
 (defun all-deftest-names (relative-path)
   (loop for entry in (source-top-level-forms relative-path)
@@ -264,3 +279,158 @@
           (ng (form-contains-format-to-t-p
                (deftest-form "rules/unused-variables-test.lisp" name))
               (format nil "~A still contains FORMAT T debug output" name)))))))
+
+(defparameter *docstring-rule-test-files*
+  '("rules/missing-docstring-test.lisp"
+    "rules/missing-struct-docstring-test.lisp"
+    "rules/missing-variable-docstring-test.lisp"
+    "rules/missing-package-docstring-test.lisp"))
+
+(defparameter *docstring-rule-temp-file-test-files*
+  '("rules/missing-docstring-test.lisp"
+    "rules/missing-struct-docstring-test.lisp"
+    "rules/missing-variable-docstring-test.lisp"))
+
+(defparameter *docstring-rule-required-deftests*
+  '(("rules/missing-docstring-test.lisp"
+     "MISSING-DOCSTRING-VALID"
+     "MISSING-DOCSTRING-INVALID")
+    ("rules/missing-struct-docstring-test.lisp"
+     "MISSING-STRUCT-DOCSTRING-VALID"
+     "MISSING-STRUCT-DOCSTRING-INVALID")
+    ("rules/missing-variable-docstring-test.lisp"
+     "MISSING-VARIABLE-DOCSTRING-VALID"
+     "MISSING-VARIABLE-DOCSTRING-INVALID")
+    ("rules/missing-package-docstring-test.lisp"
+     "MISSING-PACKAGE-DOCSTRING-VALID"
+     "MISSING-PACKAGE-DOCSTRING-INVALID")))
+
+(defun test-lisp-files (&optional (directory (test-source-pathname "")))
+  (append
+   (mapcar (lambda (file)
+             (enough-namestring file (test-source-pathname "")))
+           (uiop:directory-files directory "*.lisp"))
+   (mapcan #'test-lisp-files
+           (uiop:subdirectories directory))))
+
+(defun source-contains-p (relative-path needle)
+  (search needle (file-string relative-path) :test #'char=))
+
+(defun source-contains-defun-p (relative-path name)
+  (cl-ppcre:scan (format nil "(?i)\\(\\s*defun\\s+~A\\b" name)
+                 (file-string relative-path)))
+
+(defun test-files-defining-defun (name)
+  (loop for file in (test-lisp-files)
+        when (source-contains-defun-p file name)
+          collect file))
+
+(defun project-top-level-forms (relative-path)
+  (let ((source (project-file-string relative-path))
+        (forms '())
+        (position 0))
+    (let ((*package* (find-package :asdf))
+          (*read-eval* nil))
+      (loop
+        (multiple-value-bind (form next-position)
+            (read-from-string source nil :eof :start position)
+          (when (eq form :eof)
+            (return (nreverse forms)))
+          (push form forms)
+          (setf position next-position))))))
+
+(defun defsystem-name-p (form name)
+  (and (consp form)
+       (symbolp (first form))
+       (string= "DEFSYSTEM" (symbol-name (first form)))
+       (string= name (string (second form)))))
+
+(defun active-defsystem-form (relative-path name)
+  (find-if (lambda (form)
+             (defsystem-name-p form name))
+           (project-top-level-forms relative-path)))
+
+(defun active-asdf-file-components (component-forms)
+  (loop for component in component-forms
+        when (and (consp component)
+                  (eq :file (first component))
+                  (stringp (second component)))
+          collect (second component)
+        when (and (consp component)
+                  (getf (cddr component) :components))
+          append (active-asdf-file-components (getf (cddr component) :components))))
+
+(defun active-defsystem-file-components (relative-path name)
+  (let ((form (active-defsystem-form relative-path name)))
+    (when form
+      (active-asdf-file-components (getf (cddr form) :components)))))
+
+(defun docstring-rule-deftest-owners (suffix)
+  (loop for file in *docstring-rule-test-files*
+        when (some (lambda (name)
+                     (and (<= (length suffix) (length name))
+                          (string= suffix name
+                                   :start1 0
+                                   :end1 (length suffix)
+                                   :start2 (- (length name) (length suffix)))))
+                   (all-deftest-names file))
+          collect file))
+
+(deftest docstring-test-temp-dir-helpers-remain-shared
+  (testing "temp-dir helpers are defined only in the shared docstring test utility"
+    (dolist (name '("MAKE-TEMP-DIR" "WRITE-TEMP-FILE" "CLEANUP-TEMP-DIR"))
+      (let ((owners (intersection (test-files-defining-defun name)
+                                  (cons "docstring-test-utils.lisp"
+                                        *docstring-rule-test-files*)
+                                  :test #'string=)))
+        (ok (equal '("docstring-test-utils.lisp") owners)
+            (format nil "~A must be defined only in docstring-test-utils.lisp, found in: ~{~A~^, ~}"
+                    name
+                    owners)))))
+
+  (testing "exported-only docstring tests exercise the shared helper package"
+    (dolist (file *docstring-rule-temp-file-test-files*)
+      (ok (source-contains-p file "doc-util:make-temp-dir")
+          (format nil "~A does not create temp dirs through the shared utility" file))
+      (ok (source-contains-p file "doc-util:write-temp-file")
+          (format nil "~A does not write temp files through the shared utility" file))
+      (ok (source-contains-p file "doc-util:cleanup-temp-dir")
+          (format nil "~A does not clean temp dirs through the shared utility" file)))))
+
+(deftest docstring-generic-behavior-tests-remain-singular
+  (testing "message-format coverage exists in exactly one docstring rule file"
+    (let ((owners (docstring-rule-deftest-owners "-MESSAGE-FORMAT")))
+      (ok (equal '("rules/missing-docstring-test.lisp") owners)
+          (format nil "message-format docstring deftests found in: ~{~A~^, ~}" owners))))
+
+  (testing "location coverage exists in exactly one docstring rule file"
+    (let ((owners (docstring-rule-deftest-owners "-LOCATION")))
+      (ok (equal '("rules/missing-docstring-test.lisp") owners)
+          (format nil "location docstring deftests found in: ~{~A~^, ~}" owners))))
+
+  (testing "multiple-form coverage exists in exactly one docstring rule file"
+    (let ((owners (docstring-rule-deftest-owners "-MULTIPLE-FORMS")))
+      (ok (equal '("rules/missing-docstring-test.lisp") owners)
+          (format nil "multiple-form docstring deftests found in: ~{~A~^, ~}" owners)))))
+
+(deftest docstring-rule-files-retain-valid-and-invalid-tests
+  (testing "each docstring rule file keeps its rule-specific valid and invalid deftests"
+    (dolist (entry *docstring-rule-required-deftests*)
+      (destructuring-bind (file &rest required-names) entry
+        (let* ((present (all-deftest-names file))
+               (missing (set-difference required-names present :test #'string=)))
+          (ok (null missing)
+              (format nil "~A is missing required deftests: ~{~A~^, ~}"
+                      file
+                      missing)))))))
+
+(deftest docstring-test-family-remains-registered
+  (testing "ASDF registers the shared utility and all docstring rule test files as active components"
+    (let ((components (active-defsystem-file-components "mallet.asd" "mallet/tests")))
+      (dolist (component '("docstring-test-utils"
+                           "missing-docstring-test"
+                           "missing-package-docstring-test"
+                           "missing-variable-docstring-test"
+                           "missing-struct-docstring-test"))
+        (ok (member component components :test #'string=)
+            (format nil "mallet/tests is missing active ASDF file component ~A" component))))))

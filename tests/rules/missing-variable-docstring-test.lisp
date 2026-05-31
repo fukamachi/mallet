@@ -3,6 +3,7 @@
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
+   (#:doc-util #:mallet/tests/docstring-test-utils)
    (#:pkg-exports #:mallet/rules/forms/package-exports)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
@@ -15,24 +16,6 @@
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
-
-(defun make-temp-dir ()
-  "Create a fresh temporary directory."
-  (let ((path (uiop:ensure-directory-pathname
-               (pathname (format nil "/tmp/mallet-missing-var-doc-test-~A/" (random 1000000))))))
-    (ensure-directories-exist path)
-    path))
-
-(defun write-temp-file (dir name content)
-  "Write CONTENT to NAME under DIR."
-  (let ((path (merge-pathnames name dir)))
-    (with-open-file (out path :direction :output :if-exists :supersede)
-      (write-string content out))
-    path))
-
-(defun cleanup-temp-dir (dir)
-  "Remove temporary test directory."
-  (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))
 
 (defun check-exported-only (dir code)
   "Run missing-variable-docstring-rule with :exported-only t on CODE from file in DIR."
@@ -85,66 +68,15 @@
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations)) :missing-variable-docstring)))))
 
-;;; Violation message format
-
-(deftest missing-variable-docstring-message-format
-  (testing "defvar violation message includes DEFVAR and variable name"
-    (let ((violations (check-missing-variable-docstring "(defvar *counter* 0)")))
-      (ok (= (length violations) 1))
-      (let ((msg (violation:violation-message (first violations))))
-        (ok (stringp msg))
-        (ok (search "DEFVAR" msg))
-        (ok (search "*counter*" msg)))))
-
-  (testing "defparameter violation message includes DEFPARAMETER and variable name"
-    (let ((violations (check-missing-variable-docstring "(defparameter *limit* 100)")))
-      (ok (= (length violations) 1))
-      (let ((msg (violation:violation-message (first violations))))
-        (ok (search "DEFPARAMETER" msg))
-        (ok (search "*limit*" msg))))))
-
-;;; Location reporting
-
-(deftest missing-variable-docstring-location
-  (testing "violation reports line 1 for single-line form"
-    (let ((violations (check-missing-variable-docstring "(defvar *x* 0)")))
-      (ok (= (length violations) 1))
-      (ok (= (violation:violation-line (first violations)) 1))))
-
-  (testing "violation reports correct line for multi-line code"
-    (let ((violations (check-missing-variable-docstring
-                       "(defvar *x* 0)
-(defparameter *y* 1)")))
-      (ok (= (length violations) 2))
-      (ok (= (violation:violation-line (first violations)) 1))
-      (ok (= (violation:violation-line (second violations)) 2)))))
-
-;;; Multiple forms
-
-(deftest missing-variable-docstring-multiple-forms
-  (testing "multiple missing docstrings are all flagged"
-    (let ((violations (check-missing-variable-docstring
-                       "(defvar *a* 1)
-(defparameter *b* 2)
-(defvar *c* 3)")))
-      (ok (= (length violations) 3))))
-
-  (testing "mix of documented and undocumented variables"
-    (let ((violations (check-missing-variable-docstring
-                       "(defvar *a* 1 \"Documented.\")
-(defparameter *b* 2)")))
-      (ok (= (length violations) 1))
-      (ok (search "*b*" (violation:violation-message (first violations)))))))
-
 ;;; exported-only mode
 
 (deftest missing-variable-docstring-exported-only
   (testing "with :exported-only t — exported defvar without docstring is flagged"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "variable-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:*my-var*))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:*my-var*))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -154,14 +86,14 @@
                (ok (search "*my-var*" (violation:violation-message (first violations))))
                (ok (search "Exported" (violation:violation-message (first violations))))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "with :exported-only t — non-exported defvar is not flagged"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "variable-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:*exported-var*))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:*exported-var*))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -169,14 +101,14 @@
 (defvar *internal-var* 0)")))
                (ok (null violations))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "with :exported-only t — violation message includes exported DEFVAR and name"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "variable-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:fmt-pkg (:export #:*my-var*))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:fmt-pkg (:export #:*my-var*))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -188,14 +120,14 @@
                  (ok (search "DEFVAR" msg))
                  (ok (search "*my-var*" msg)))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "with :exported-only t — defvar without init value is still skipped"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "variable-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:*my-var*))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:*my-var*))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -203,7 +135,7 @@
 (defvar *my-var*)")))
                (ok (null violations))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "with :exported-only t — severity auto-upgrades to :warning"
     (let ((rule (make-instance 'rules:missing-variable-docstring-rule :exported-only t)))

@@ -3,6 +3,7 @@
         #:rove)
   (:local-nicknames
    (#:rules #:mallet/rules)
+   (#:doc-util #:mallet/tests/docstring-test-utils)
    (#:pkg-exports #:mallet/rules/forms/package-exports)
    (#:parser #:mallet/parser)
    (#:violation #:mallet/violation)))
@@ -15,24 +16,6 @@
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
-
-(defun make-temp-dir ()
-  "Create a fresh temporary directory."
-  (let ((path (uiop:ensure-directory-pathname
-               (pathname (format nil "/tmp/mallet-missing-docstring-test-~A/" (random 1000000))))))
-    (ensure-directories-exist path)
-    path))
-
-(defun write-temp-file (dir name content)
-  "Write CONTENT to NAME under DIR."
-  (let ((path (merge-pathnames name dir)))
-    (with-open-file (out path :direction :output :if-exists :supersede)
-      (write-string content out))
-    path))
-
-(defun cleanup-temp-dir (dir)
-  "Remove temporary test directory."
-  (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))
 
 (defun check-exported-only (dir code)
   "Run missing-docstring-rule with :exported-only t on CODE from file in DIR."
@@ -232,11 +215,11 @@
 
 (deftest missing-docstring-exported-only
   (testing "with :exported-only t — exported definition without docstring is flagged"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "missing-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:my-fn))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:my-fn))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -246,14 +229,14 @@
                (ok (search "my-fn" (violation:violation-message (first violations))))
                (ok (search "Exported" (violation:violation-message (first violations))))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "with :exported-only t — non-exported definition is not flagged"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "missing-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:exported-fn))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:exported-fn))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -261,14 +244,14 @@
 (defun internal-fn (x) x)")))
                (ok (null violations))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "with :exported-only t — violation message includes exported DEFUN and name"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "missing-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:fmt-pkg (:export #:my-fn))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:fmt-pkg (:export #:my-fn))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -280,7 +263,7 @@
                  (ok (search "DEFUN" msg))
                  (ok (search "my-fn" msg)))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "severity auto-upgrade to :warning when :exported-only t"
     (let ((rule (make-instance 'rules:missing-docstring-rule :exported-only t)))
@@ -291,11 +274,11 @@
       (ok (eq :info (rules:rule-severity rule)))))
 
   (testing "with :exported-only t — in-package forms are skipped without error"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "missing-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:my-fn))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:my-fn))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-exported-only
                                 dir
@@ -303,4 +286,4 @@
 (defun my-fn (x) \"Documented.\" x)")))
                (ok (null violations))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir)))))
+        (doc-util:cleanup-temp-dir dir)))))

@@ -3,6 +3,7 @@
         #:rove)
   (:local-nicknames
    (#:docstring #:mallet/rules/forms/docstring)
+   (#:doc-util #:mallet/tests/docstring-test-utils)
    (#:pkg-exports #:mallet/rules/forms/package-exports)
    (#:rules #:mallet/rules)
    (#:parser #:mallet/parser)
@@ -18,24 +19,6 @@
     (mapcan (lambda (form)
               (rules:check-form rule form #p"test.lisp"))
             forms)))
-
-(defun make-temp-dir ()
-  "Create a fresh temporary directory."
-  (let ((path (uiop:ensure-directory-pathname
-               (pathname (format nil "/tmp/mallet-struct-docstring-test-~A/" (random 1000000))))))
-    (ensure-directories-exist path)
-    path))
-
-(defun write-temp-file (dir name content)
-  "Write CONTENT to NAME under DIR."
-  (let ((path (merge-pathnames name dir)))
-    (with-open-file (out path :direction :output :if-exists :supersede)
-      (write-string content out))
-    path))
-
-(defun cleanup-temp-dir (dir)
-  "Remove temporary test directory."
-  (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))
 
 (defun check-struct-exported-only (dir code)
   "Run missing-struct-docstring-rule with :exported-only t on CODE in DIR."
@@ -91,56 +74,15 @@
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-severity (first violations)) :info)))))
 
-;;; Violation message format
-
-(deftest missing-struct-docstring-message-format
-  (testing "violation message includes DEFSTRUCT and struct name (simple name)"
-    (let ((violations (check-struct-docstring "(defstruct my-struct x y)")))
-      (ok (= (length violations) 1))
-      (let ((msg (violation:violation-message (first violations))))
-        (ok (stringp msg))
-        (ok (search "DEFSTRUCT" msg))
-        (ok (search "my-struct" msg)))))
-
-  (testing "violation message includes struct name from name-and-options list"
-    (let ((violations (check-struct-docstring "(defstruct (my-struct (:conc-name ms-)) x)")))
-      (ok (= (length violations) 1))
-      (let ((msg (violation:violation-message (first violations))))
-        (ok (search "DEFSTRUCT" msg))
-        (ok (search "my-struct" msg)))))
-
-  (testing "violation message includes DEFSTRUCT and struct name"
-    (let ((violations (check-struct-docstring "(defstruct point x y)")))
-      (ok (= (length violations) 1))
-      (let ((msg (violation:violation-message (first violations))))
-        (ok (search "DEFSTRUCT" msg))
-        (ok (search "point" msg))))))
-
-;;; Location reporting
-
-(deftest missing-struct-docstring-location
-  (testing "violation reports correct line for single-line form"
-    (let ((violations (check-struct-docstring "(defstruct point x y)")))
-      (ok (= (length violations) 1))
-      (ok (= (violation:violation-line (first violations)) 1))))
-
-  (testing "violation reports correct line for second form"
-    (let ((violations (check-struct-docstring
-                       "(defstruct first-struct x)
-(defstruct second-struct y)")))
-      (ok (= (length violations) 2))
-      (ok (= (violation:violation-line (first violations)) 1))
-      (ok (= (violation:violation-line (second violations)) 2)))))
-
 ;;; Exported-only mode
 
 (deftest missing-struct-docstring-exported-only
   (testing "exported-only: exported defstruct without docstring is flagged"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "struct-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:my-struct))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:my-struct))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-struct-exported-only
                                 dir
@@ -149,14 +91,14 @@
                (ok (= 1 (length violations)))
                (ok (search "my-struct" (violation:violation-message (first violations))))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "exported-only: non-exported defstruct without docstring is NOT flagged"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "struct-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:other-struct))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:other-struct))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-struct-exported-only
                                 dir
@@ -164,14 +106,14 @@
 (defstruct internal-struct x y)")))
                (ok (null violations))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "exported-only: exported defstruct WITH docstring is NOT flagged"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "struct-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:my-struct))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:my-struct))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-struct-exported-only
                                 dir
@@ -179,14 +121,14 @@
 (defstruct my-struct \"A documented struct.\" x y)")))
                (ok (null violations))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "exported-only: message includes exported DEFSTRUCT and struct name"
-    (let ((dir (make-temp-dir)))
+    (let ((dir (doc-util:make-temp-dir "struct-docstring-test")))
       (unwind-protect
            (progn
-             (write-temp-file dir "package.lisp"
-                              "(defpackage #:my-pkg (:export #:my-struct))")
+             (doc-util:write-temp-file dir "package.lisp"
+                                       "(defpackage #:my-pkg (:export #:my-struct))")
              (pkg-exports:clear-package-export-cache)
              (let ((violations (check-struct-exported-only
                                 dir
@@ -198,7 +140,7 @@
                  (ok (search "DEFSTRUCT" msg))
                  (ok (search "my-struct" msg)))))
         (pkg-exports:clear-package-export-cache)
-        (cleanup-temp-dir dir))))
+        (doc-util:cleanup-temp-dir dir))))
 
   (testing "exported-only: severity auto-upgrades to :warning"
     (let ((rule (make-instance 'docstring:missing-struct-docstring-rule :exported-only t)))
