@@ -10,8 +10,8 @@
 ;;; Tests for WITH-* and DO-SYMBOLS family macros
 
 (defun check-unused-variables (code)
-  (let* ((forms (parser:parse-forms code #P"/tmp/test.lisp"))
-         (rule (make-instance 'rules:unused-variables-rule)))
+  (let ((forms (parser:parse-forms code #P"/tmp/test.lisp"))
+        (rule (make-instance 'rules:unused-variables-rule)))
     (rules:check-form rule (first forms) #P"/tmp/test.lisp")))
 
 (defparameter *with-macro-binding-cases*

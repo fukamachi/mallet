@@ -1168,21 +1168,6 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      ;; Debug: print violation info and position map
-      (when violations
-        (format t "~%Got ~D violation(s):~%" (length violations))
-        (dolist (v violations)
-          (format t "  ~A at ~D:~D - ~A~%"
-                  (violation:violation-rule v)
-                  (violation:violation-line v)
-                  (violation:violation-column v)
-                  (violation:violation-message v)))
-        ;; Print code lines to see what 5:42 actually points to
-        (let ((lines (uiop:split-string code :separator '(#\Newline))))
-          (format t "~%Code lines:~%")
-          (loop for line in lines
-                for i from 1
-                do (format t "  Line ~D: ~A~%" i line))))
       (ok (null violations)
           "LET variable used in nested LOOP should not be flagged as unused")))
   (testing "Bug: Same with bare LOOP keywords (no colons)"
@@ -1298,14 +1283,6 @@
       ;; 'name' from outer loop is used in nested loop's backquote: ,(list 'value i name)
       ;; Bug: Nested LOOP creates complete shadow, blocking search for outer variables
       ;; This should pass (no violations) but currently fails (reports name as unused)
-      (when violations
-        (format t "~%Got ~D violation(s):~%" (length violations))
-        (dolist (v violations)
-          (format t "  ~A at ~D:~D - ~A~%"
-                  (violation:violation-rule v)
-                  (violation:violation-line v)
-                  (violation:violation-column v)
-                  (violation:violation-message v))))
       (ok (null violations)
           "Outer LOOP variable used in nested LOOP should not be flagged as unused")))
 
@@ -1316,8 +1293,6 @@
            (forms (parser:parse-forms code #p"test.lisp"))
            (rule (make-instance 'rules:unused-variables-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
-      (when violations
-        (format t "~%Simple case violations: ~A~%" violations))
       (ok (null violations)
           "Outer name used in inner loop should not be unused"))))
 
@@ -1350,16 +1325,13 @@
           "All nested unused variables should be suppressed")))
 
   (testing "Mid-level suppression only affects its scope and children"
-    (let* ((code "(defun test-mid-suppression ()
-                     (let ((a 1))
-                       (let ((b 2))
-                         (declare (mallet:suppress unused-variables))
-                         (let ((c 3))
-                           nil))))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-mid-suppression ()
+  (let ((a 1))
+    (let ((b 2))
+      (declare (mallet:suppress unused-variables))
+      (let ((c 3))
+        nil))))
+" :unused-variables)
       ;; 'a' is not suppressed (outer scope), 'b' and 'c' are suppressed
       (ok (= (length violations) 1))
       (ok (search "Variable 'a' is unused"
@@ -1383,79 +1355,64 @@
                 violations))))
 
   (testing "Suppression in deeply nested LABELS with LET"
-    (let* ((code "(defun test-nested-labels ()
-                     (declare (mallet:suppress unused-variables))
-                     (let ((x 1))
-                       (labels ((f ()
-                                  (let ((y 2))
-                                    (let ((z 3))
-                                      nil))))
-                         nil)))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-nested-labels ()
+  (declare (mallet:suppress unused-variables))
+  (let ((x 1))
+    (labels ((f ()
+               (let ((y 2))
+                 (let ((z 3))
+                   nil))))
+      nil)))
+" :unused-variables)
       (ok (null violations)
           "Suppression should propagate through LABELS to nested LETs")))
 
   (testing "Suppression with MULTIPLE-VALUE-BIND and DESTRUCTURING-BIND"
-    (let* ((code "(defun test-mvb ()
-                     (declare (mallet:suppress unused-variables))
-                     (multiple-value-bind (a b c) (values 1 2 3)
-                       (destructuring-bind (x y z) '(1 2 3)
-                         nil)))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-mvb ()
+  (declare (mallet:suppress unused-variables))
+  (multiple-value-bind (a b c) (values 1 2 3)
+    (destructuring-bind (x y z) '(1 2 3)
+      nil)))
+" :unused-variables)
       (ok (null violations)
           "Suppression should work with multiple-value-bind and destructuring-bind")))
 
   (testing "Suppression with DO and DO*"
-    (let* ((code "(defun test-do ()
-                     (declare (mallet:suppress unused-variables))
-                     (do ((i 0 (1+ i))
-                          (j 0 (+ j 2)))
-                         ((>= i 10))
-                       (print 'done))
-                     (do* ((a 0)
-                           (b 0))
-                          ((>= a 10))
-                       (print 'done)))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-do ()
+  (declare (mallet:suppress unused-variables))
+  (do ((i 0 (1+ i))
+       (j 0 (+ j 2)))
+      ((>= i 10))
+    (print 'done))
+  (do* ((a 0)
+        (b 0))
+       ((>= a 10))
+    (print 'done)))
+" :unused-variables)
       (ok (null violations)
           "Suppression should work with do and do* bindings")))
 
   (testing "Suppression with DOLIST"
-    (let* ((code "(defun test-dolist ()
-                     (declare (mallet:suppress unused-variables))
-                     (let ((sum 0))
-                       (dolist (item '(1 2 3))
-                         (incf sum))
-                       sum))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-dolist ()
+  (declare (mallet:suppress unused-variables))
+  (let ((sum 0))
+    (dolist (item '(1 2 3))
+      (incf sum))
+    sum))
+" :unused-variables)
       (ok (null violations)
           "Suppression should work with dolist")))
 
   (testing "Partial suppression - mix of suppressed and non-suppressed"
-    (let* ((code "(defun test-partial ()
-                     (let ((a 1))
-                       (let ((b 2))
-                         (declare (mallet:suppress unused-variables))
-                         (let ((c 3))
-                           nil))
-                       (let ((d 4))
-                         nil)))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-partial ()
+  (let ((a 1))
+    (let ((b 2))
+      (declare (mallet:suppress unused-variables))
+      (let ((c 3))
+        nil))
+    (let ((d 4))
+      nil)))
+" :unused-variables)
       ;; 'a', 'd' not suppressed; 'b', 'c' suppressed
       (ok (= (length violations) 2))
       (ok (some (lambda (v) (search "Variable 'a' is unused"
@@ -1467,27 +1424,21 @@
 
 (deftest unused-loop-variables-suppression
   (testing "Outer scope suppression propagates to LOOP variables"
-    (let* ((code "(defun test-loop-suppression ()
-                     (declare (mallet:suppress unused-loop-variables))
-                     (loop for i from 1 to 10 collect 42)
-                     (loop with x = 10 for j from 1 to 5 collect j))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-loop-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-loop-suppression ()
+  (declare (mallet:suppress unused-loop-variables))
+  (loop for i from 1 to 10 collect 42)
+  (loop with x = 10 for j from 1 to 5 collect j))
+" :unused-loop-variables)
       (ok (null violations)
           "All unused loop variables should be suppressed")))
 
   (testing "Mid-level suppression in nested LOOPs"
-    (let* ((code "(defun test-nested-loops ()
-                     (loop for i from 1 to 3
-                           collect (progn
-                                     (declare (mallet:suppress unused-loop-variables))
-                                     (loop for j from 1 to 3 collect 42))))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-loop-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-nested-loops ()
+  (loop for i from 1 to 3
+        collect (let ()
+                  (declare (mallet:suppress unused-loop-variables))
+                  (loop for j from 1 to 3 collect 42))))
+" :unused-loop-variables)
       ;; Outer 'i' is not suppressed (used in collect), inner 'j' is suppressed
       (ok (= (length violations) 1))
       (ok (search "Variable 'i' is unused"
@@ -1504,114 +1455,43 @@
                   (violation:violation-message (first violations))))))
 
   (testing "Suppression with LOOP destructuring"
-    (let* ((code "(defun test-destructuring ()
-                     (declare (mallet:suppress unused-loop-variables))
-                     (loop for (a b) in '((1 2) (3 4)) collect a))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-loop-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-destructuring ()
+  (declare (mallet:suppress unused-loop-variables))
+  (loop for (a b) in '((1 2) (3 4)) collect a))
+" :unused-loop-variables)
       (ok (null violations)
           "Suppression should work with loop destructuring")))
 
   (testing "Suppression with LOOP WITH variable"
-    (let* ((code "(defun test-with ()
-                     (declare (mallet:suppress unused-loop-variables))
-                     (loop with x = 10
-                           for i from 1 to 5
-                           collect i))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-loop-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-with ()
+  (declare (mallet:suppress unused-loop-variables))
+  (loop with x = 10
+        for i from 1 to 5
+        collect i))
+" :unused-loop-variables)
       (ok (null violations)
           "Suppression should work with LOOP WITH variable")))
 
   (testing "Nested suppression in deeply nested LOOPs"
-    (let* ((code "(defun test-triple-nested ()
-                     (declare (mallet:suppress unused-loop-variables))
-                     (loop for i from 1 to 3
-                           collect (loop for j from 1 to 3
-                                         collect (loop for k from 1 to 3
-                                                       collect 42))))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-loop-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-triple-nested ()
+  (declare (mallet:suppress unused-loop-variables))
+  (loop for i from 1 to 3
+        collect (loop for j from 1 to 3
+                      collect (loop for k from 1 to 3
+                                    collect 42))))
+" :unused-loop-variables)
       (ok (null violations)
           "Suppression should propagate through all nesting levels")))
 
   (testing "LOOP inside LET with suppression"
-    (let* ((code "(defun test-loop-in-let ()
-                     (declare (mallet:suppress unused-loop-variables))
-                     (let ((sum 0))
-                       (loop for i from 1 to 10 do (incf sum))
-                       sum))")
-           (forms (let ((*features* (cons :mallet *features*)))
-                    (parser:parse-forms code #p"test.lisp")))
-           (rule (make-instance 'rules:unused-loop-variables-rule))
-           (violations (rules:check-form rule (first forms) #p"test.lisp")))
+    (with-temp-lint-file ("(defun test-loop-in-let ()
+  (declare (mallet:suppress unused-loop-variables))
+  (let ((sum 0))
+    (loop for i from 1 to 10 do (incf sum))
+    sum))
+" :unused-loop-variables)
       (ok (null violations)
           "Suppression should work for LOOP inside LET"))))
-
-;; Helper macro for testing suppression with the engine
-(defmacro with-temp-lint-file ((code rule-name
-                                &optional (file-name "test-suppression.lisp"))
-                               &body body)
-  `(let ((test-file (merge-pathnames ,file-name (uiop:temporary-directory)))
-         (config (mallet/config:make-config
-                  :rules (list (rules:make-rule ,rule-name)))))
-     (unwind-protect
-          (progn
-            (with-open-file (out test-file :direction :output :if-exists :supersede)
-              (write-string ,code out))
-            (let ((violations (mallet/engine:lint-file test-file :config config)))
-              ,@body))
-       (when (probe-file test-file)
-         (delete-file test-file)))))
-
-(deftest unused-variables-suppression
-  (testing "Suppression propagates through nested LETs"
-    (with-temp-lint-file ("(defun test ()
-  (declare (mallet:suppress unused-variables))
-  (let ((x 1))
-    (let ((y 2))
-      nil)))
-" :unused-variables)
-      (ok (null violations) "All nested variables should be suppressed")))
-
-  (testing "Mid-level suppression only affects children"
-    (with-temp-lint-file ("(defun test ()
-  (let ((a 1))
-    (let ((b 2))
-      (declare (mallet:suppress unused-variables))
-      (let ((c 3))
-        nil))))
-" :unused-variables)
-      (ok (= (length violations) 1) "Only outer variable should trigger")
-      (ok (search "Variable 'a'" (violation:violation-message (first violations))))))
-
-  (testing "No suppression - all reported"
-    (with-temp-lint-file ("(defun test ()
-  (let ((x 1))
-    (let ((y 2))
-      nil)))
-" :unused-variables)
-      (ok (= (length violations) 2) "Both variables should trigger"))))
-
-(deftest unused-loop-variables-suppression
-  (testing "Suppression propagates to loop variables"
-    (with-temp-lint-file ("(defun test ()
-  (declare (mallet:suppress unused-loop-variables))
-  (loop for i from 1 to 10 collect 42))
-" :unused-loop-variables)
-      (ok (null violations) "Loop variables should be suppressed")))
-
-  (testing "No suppression - loop violations reported"
-    (with-temp-lint-file ("(loop for i from 1 to 10 collect 42)
-" :unused-loop-variables)
-      (ok (= (length violations) 1) "Unused loop variable should trigger")
-      (ok (search "Variable 'i'" (violation:violation-message (first violations)))))))
 
 (deftest function-vs-variable-namespace
   ;; KNOWN LIMITATION: Cannot detect unused variables that shadow user-defined functions.

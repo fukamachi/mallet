@@ -115,43 +115,54 @@ keep me
 
 (deftest apply-fixes-ordering-test
   (testing "Multiple fixes applied bottom-to-top"
-    (let ((text "line 1
-line 2
+    (uiop:with-temporary-file (:pathname temp-file
+                               :type "lisp"
+                               :prefix "mallet-fixer-ordering"
+                               :keep t)
+      (unwind-protect
+           (progn
+             (with-open-file (out temp-file
+                                  :direction :output
+                                  :if-exists :supersede
+                                  :if-does-not-exist :create)
+               (write-string "line 1
+delete me
 line 3
-")
-          (v1 (make-instance 'violation:violation
-                              :rule :trailing-whitespace
-                              :file #P"/tmp/test.lisp"
-                              :line 1
-                              :column 0
-                              :severity :format
-                              :message "trailing"
-                              :fix (violation:make-violation-fix
-                                    :type :replace-line
-                                    :line-number 1
-                                    :replacement-content "line 1")))
-           (v2 (make-instance 'violation:violation
-                              :rule :trailing-whitespace
-                              :file #P"/tmp/test.lisp"
-                              :line 3
-                              :column 0
-                              :severity :format
-                              :message "trailing"
-                              :fix (violation:make-violation-fix
-                                    :type :replace-line
-                                    :line-number 3
-                                    :replacement-content "line 3"))))
-
-      ;; Apply fixes (should sort by line number descending)
-      (let ((fixed-text text))
-        ;; Simulate what fixer does: sort bottom-to-top, apply fixes
-        (dolist (v (sort (list v1 v2) #'> :key #'violation:violation-line))
-          (setf fixed-text (fixer::apply-fix fixed-text (violation:violation-fix v))))
-
-        (ok (string= fixed-text "line 1
-line 2
-line 3
-"))))))
+" out))
+             (let ((delete-line (make-instance 'violation:violation
+                                               :rule :trailing-whitespace
+                                               :file temp-file
+                                               :line 2
+                                               :column 0
+                                               :severity :format
+                                               :message "delete"
+                                               :fix (violation:make-violation-fix
+                                                     :type :delete-lines
+                                                     :start-line 2
+                                                     :end-line 2)))
+                   (replace-line (make-instance 'violation:violation
+                                                :rule :trailing-whitespace
+                                                :file temp-file
+                                                :line 3
+                                                :column 0
+                                                :severity :format
+                                                :message "replace"
+                                                :fix (violation:make-violation-fix
+                                                      :type :replace-line
+                                                      :line-number 3
+                                                      :replacement-content "line 3 fixed"))))
+               (multiple-value-bind (count fixed unfixed write-error-p)
+                   (fixer:apply-fixes (list delete-line replace-line))
+                 (ok (= count 2))
+                 (ok (= (length fixed) 2))
+                 (ok (null unfixed))
+                 (ng write-error-p)
+                 (ok (string= (uiop:read-file-string temp-file)
+                              "line 1
+line 3 fixed
+")))))
+        (when (probe-file temp-file)
+          (delete-file temp-file))))))
 
 (deftest apply-fixes-with-unfixable-test
   (testing "Separates fixable and unfixable violations"

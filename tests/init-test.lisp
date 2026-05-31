@@ -50,13 +50,13 @@
                  "Temporary test directory is below UIOP's temporary directory"))
         (cleanup-dir dir))))
   (testing "make-test-dir derives its base from uiop:temporary-directory"
-    (let* ((original-temporary-directory (symbol-function 'uiop:temporary-directory))
-           (base (uiop:ensure-directory-pathname
-                  (merge-pathnames
-                   (format nil ".cache/mallet-init-temp-base-probe-~A/"
-                           (random 1000000))
-                   (uiop:getcwd))))
-           dir)
+    (let ((original-temporary-directory (symbol-function 'uiop:temporary-directory))
+          (base (uiop:ensure-directory-pathname
+                 (merge-pathnames
+                  (format nil ".cache/mallet-init-temp-base-probe-~A/"
+                          (random 1000000))
+                  (uiop:getcwd))))
+          dir)
       (unwind-protect
            (progn
              (setf (symbol-function 'uiop:temporary-directory)
