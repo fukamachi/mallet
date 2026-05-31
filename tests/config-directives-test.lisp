@@ -113,16 +113,18 @@
         (error ()
           (ok nil "Expected config-parse-failed but got a different error")))))
 
-  (testing "error message contains no brace-delimited hex address"
-    ;; SBCL formats object addresses as {XXXXXXXXXX} in condition reports.
+  (testing "error message contains no hex address"
+    ;; Sanitized config parse reports must not include implementation object
+    ;; addresses in SBCL's brace form or common pointer-style hex forms.
     (with-temporary-config ("(:mallet-config (" path)
       (handler-case
           (progn
             (config:load-config path)
             (ok nil "Must have signaled an error"))
         (errors:config-parse-failed (e)
-          (ok (null (ppcre:scan "\\{[0-9A-Fa-f]{6,}\\}" (format nil "~A" e)))
-              "Error message must not contain brace-delimited hex addresses"))
+          (ok (null (ppcre:scan "(\\{[0-9A-Fa-f]{6,}\\}|0x[0-9A-Fa-f]{6,}|#x[0-9A-Fa-f]{6,})"
+                                (format nil "~A" e)))
+              "Error message must not contain hex addresses"))
         (error ()
           (ok nil "Expected config-parse-failed but got a different error"))))))
 

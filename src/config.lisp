@@ -213,6 +213,38 @@ Signals circular-preset-reference on cycles, unknown-preset when not found."
 
 ;;; Config parsing
 
+(define-condition config-validation-error (errors:cli-error)
+  ((message :initarg :message
+            :reader config-validation-error-message))
+  (:report (lambda (condition stream)
+             (format stream "~A" (config-validation-error-message condition))))
+  (:documentation "Signaled when a config form is syntactically valid but semantically invalid."))
+
+(defun config-validation-error (control &rest args)
+  "Signal a stable validation error for invalid config contents."
+  (error 'config-validation-error
+         :message (apply #'format nil control args)))
+
+(defun validate-ignore-patterns (patterns)
+  "Validate and return :ignore PATTERNS."
+  (dolist (pattern patterns patterns)
+    (unless (stringp pattern)
+      (config-validation-error
+       ":ignore expects string glob patterns, but got: ~S"
+       pattern))))
+
+(defun validate-path-patterns (patterns)
+  "Validate and return :for-paths PATTERNS."
+  (unless (listp patterns)
+    (config-validation-error
+     ":for-paths expects a list of string glob patterns, but got: ~S"
+     patterns))
+  (dolist (pattern patterns patterns)
+    (unless (stringp pattern)
+      (config-validation-error
+       ":for-paths expects string glob patterns, but got: ~S"
+       pattern))))
+
 (defun create-rule-from-spec (rule-spec)
   "Create a rule instance from a rule specification.
 RULE-SPEC is a cons of (rule-name . options-plist)."
@@ -282,12 +314,13 @@ falling back to built-in presets."
   (check-type sexp list)
 
   (unless (eq (first sexp) :mallet-config)
-    (error "Config must start with :mallet-config"))
+    (config-validation-error "Config must start with :mallet-config"))
 
   (flet ((resolve-extends (name)
            (unless (keywordp name)
-             (error "String paths for :extends are no longer supported. ~
-                     Use a preset name keyword instead of ~S." name))
+             (config-validation-error
+              "String paths for :extends are no longer supported. Use a preset name keyword instead of ~S."
+              name))
            (if preset-registry
                (resolve-preset name preset-registry)
                (get-built-in-config name))))
@@ -304,12 +337,16 @@ falling back to built-in presets."
           (let ((raw (loop for item in (rest sexp)
                            when (and (consp item) (eq (first item) :set-severity))
                              collect (let ((category (second item))
-                                          (severity (third item)))
+                                           (severity (third item)))
                                        (unless (member severity '(:error :warning :info))
-                                         (error ":set-severity expects :error, :warning, or :info, but got: ~S" severity))
+                                         (config-validation-error
+                                          ":set-severity expects :error, :warning, or :info, but got: ~S"
+                                          severity))
                                        (unless (member category '(:correctness :suspicious :cleanliness
                                                                   :style :practice :format :metrics))
-                                         (error ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :practice :format :metrics), but got: ~S" category))
+                                         (config-validation-error
+                                          ":set-severity expects a valid category (:correctness :suspicious :cleanliness :style :practice :format :metrics), but got: ~S"
+                                          category))
                                        (cons category severity)))))
             (nreverse raw))))
 
@@ -347,10 +384,10 @@ falling back to built-in presets."
                     nil)
                    (:ignore
                     ;; Ignore patterns: (:ignore "pattern1" "pattern2" ...)
-                    (setf ignore-patterns (rest item)))
+                    (setf ignore-patterns (validate-ignore-patterns (rest item))))
                    (:for-paths
                     ;; Path-specific overrides: (:for-paths (pattern...) (:enable ...) (:disable ...))
-                    (let ((patterns (second item))
+                    (let ((patterns (validate-path-patterns (second item)))
                           (override-forms (cddr item)))
                       ;; Build base for :for-paths by merging extends + project-wide settings
                       ;; This ensures :for-paths inherits project-wide :enable/:disable
@@ -474,12 +511,24 @@ Binds *read-eval* to nil for safety. Signals:
 (defun config-parse-failure-cause (condition)
   "Return a stable, user-facing parse failure message for CONDITION."
   (typecase condition
+    (config-validation-error
+     (config-validation-error-message condition))
     (end-of-file
      "Unexpected end of file while reading config")
     (reader-error
      "Reader error while reading config")
+    (stream-error
+     "Unable to read config file")
+    (type-error
+     "Invalid value in config file")
     (otherwise
      (format nil "~A" condition))))
+
+(defun config-parse-failed (path condition)
+  "Signal a config parse failure for CONDITION at PATH."
+  (error 'errors:config-parse-failed
+         :path path
+         :cause (config-parse-failure-cause condition)))
 
 (defun load-config (path &key preset-override)
   "Load configuration from file at PATH.
@@ -521,17 +570,25 @@ preset is resolved and returned."
             (setf (config-root-dir config) root-dir)
             config))
       (end-of-file (e)
-        (error 'errors:config-parse-failed
-               :path pathname
-               :cause (config-parse-failure-cause e)))
+        (config-parse-failed pathname e))
       (reader-error (e)
-        (error 'errors:config-parse-failed
-               :path pathname
-               :cause (config-parse-failure-cause e)))
+        (config-parse-failed pathname e))
+      (stream-error (e)
+        (config-parse-failed pathname e))
+      (type-error (e)
+        (config-parse-failed pathname e))
+      (config-validation-error (e)
+        (config-parse-failed pathname e))
+      (simple-error (e)
+        (config-parse-failed pathname e))
+      (errors:unknown-config-form (e)
+        (config-parse-failed pathname e))
+      (errors:multiple-config-forms (e)
+        (config-parse-failed pathname e))
+      (errors:duplicate-preset-name (e)
+        (config-parse-failed pathname e))
       (errors:unknown-config-directive (e)
-        (error 'errors:config-parse-failed
-               :path pathname
-               :cause (config-parse-failure-cause e))))))
+        (config-parse-failed pathname e)))))
 
 ;;; Rule selection
 
