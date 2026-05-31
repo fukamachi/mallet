@@ -12,6 +12,12 @@
   (let ((rule (make-instance 'rules:closing-paren-on-own-line-rule)))
     (rules:check-text rule text #p"test.lisp")))
 
+(defun all-closing-paren-violations-p (violations)
+  (every (lambda (violation)
+           (eq :closing-paren-on-own-line
+               (violation:violation-rule violation)))
+         violations))
+
 ;;; Valid cases — no violations
 
 (deftest closing-paren-valid
@@ -61,6 +67,7 @@
                        (format nil "(defun foo ()~%  (bar \"x~%  )\")~%  )"))))
       ;; Line 3 is inside the string (not flagged), line 4 is outside (flagged)
       (ok (= 1 (length violations)))
+      (ok (all-closing-paren-violations-p violations))
       (ok (= 4 (violation:violation-line (first violations))))))
 
   (testing "Line with paren and non-whitespace before it"
@@ -90,14 +97,16 @@
                        "(defun foo ()
   (bar)
   )")))
-      (ok (= 1 (length violations)))))
+      (ok (= 1 (length violations)))
+      (ok (all-closing-paren-violations-p violations))))
 
   (testing "Semicolon inside string is not treated as comment"
     (let ((violations (check-closing-paren
                        "(defun foo ()
   (bar \"has ; semicolon\")
   )")))
-      (ok (= 1 (length violations))))))
+      (ok (= 1 (length violations)))
+      (ok (all-closing-paren-violations-p violations)))))
 
 ;;; Invalid cases — violations expected
 
@@ -120,7 +129,8 @@
     z
     )
   )")))
-      (ok (= 2 (length violations)))))
+      (ok (= 2 (length violations)))
+      (ok (all-closing-paren-violations-p violations))))
 
   (testing "Indented single closing paren"
     (let ((violations (check-closing-paren
@@ -130,6 +140,7 @@
         )
     (+ x y)))")))
       (ok (= 1 (length violations)))
+      (ok (all-closing-paren-violations-p violations))
       (ok (= 4 (violation:violation-line (first violations))))))
 
   (testing "Multiple closing parens alone on line"
@@ -137,18 +148,21 @@
                        "(defun foo ()
   (bar
     ))")))
-      (ok (= 1 (length violations)))))
+      (ok (= 1 (length violations)))
+      (ok (all-closing-paren-violations-p violations))))
 
   (testing "Severity is :warning"
     (let ((violations (check-closing-paren
                        (format nil "(defun foo ()~%  )"))))
       (ok (= 1 (length violations)))
+      (ok (all-closing-paren-violations-p violations))
       (ok (eq :warning (violation:violation-severity (first violations))))))
 
   (testing "Violation message mentions closing paren"
     (let* ((violations (check-closing-paren
                         (format nil "(defun foo ()~%  )")))
            (msg (violation:violation-message (first violations))))
+      (ok (all-closing-paren-violations-p violations))
       (ok (search "closing" (string-downcase msg)))))
 
   (testing "Column points to start of paren content"
@@ -156,6 +170,7 @@
                        "(defun foo ()
   ))")))
       (ok (= 1 (length violations)))
+      (ok (all-closing-paren-violations-p violations))
       (ok (= 2 (violation:violation-column (first violations)))))))
 
 ;;; Registration tests

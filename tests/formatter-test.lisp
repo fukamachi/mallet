@@ -128,6 +128,12 @@
       (ok (search "warning" output))
       (ok (search "Variable 'x' is unused" output)))))
 
+(defun json-field (object field-name)
+  "Return FIELD-NAME from a CL-JSON decoded alist."
+  (cdr (assoc field-name object
+              :test (lambda (expected actual)
+                      (string= expected (string-downcase (string actual)))))))
+
 (deftest format-json-file-test
   (testing "format-json-file outputs JSON structure"
     (let* ((file (pathname "/path/to/file.lisp"))
@@ -144,17 +150,15 @@
                       (list v1)
                       t  ; first file
                       :stream stream))))
-      ;; Check JSON structure
-      (ok (search "\"file\":" output))
-      (ok (search "\"/path/to/file.lisp\"" output))
-      (ok (search "\"violations\":" output))
-      (ok (search "\"rule\": \"unused-variables\"" output))
-      (ok (search "\"severity\": \"warning\"" output))
-      (ok (search "\"line\": 10" output))
-      (ok (search "\"column\": 5" output))
-      (ok (search "\"message\": \"Variable 'x' is unused\"" output))
-      ;; No category when nil
-      (ok (search "\"category\": null" output))))
+      (let* ((decoded (cl-json:decode-json-from-string output))
+             (violation (first (json-field decoded "violations"))))
+        (ok (string= "/path/to/file.lisp" (json-field decoded "file")))
+        (ok (string= "unused-variables" (json-field violation "rule")))
+        (ok (string= "warning" (json-field violation "severity")))
+        (ok (= 10 (json-field violation "line")))
+        (ok (= 5 (json-field violation "column")))
+        (ok (string= "Variable 'x' is unused" (json-field violation "message")))
+        (ok (null (json-field violation "category"))))))
 
   (testing "format-json-file includes category when present"
     (let* ((file (pathname "/path/to/file.lisp"))
@@ -172,7 +176,9 @@
                       (list v1)
                       t
                       :stream stream))))
-      (ok (search "\"category\": \"style\"" output)))))
+      (let* ((decoded (cl-json:decode-json-from-string output))
+             (violation (first (json-field decoded "violations"))))
+        (ok (string= "style" (json-field violation "category")))))))
 
 (deftest format-with-info-severity
   (testing "format-line-file with :info severity"

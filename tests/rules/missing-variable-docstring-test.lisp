@@ -171,7 +171,7 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "with :exported-only t — violation message starts with 'Exported'"
+  (testing "with :exported-only t — violation message includes exported DEFVAR and name"
     (let ((dir (make-temp-dir)))
       (unwind-protect
            (progn
@@ -183,8 +183,10 @@
                                 "(in-package :fmt-pkg)
 (defvar *my-var* 0)")))
                (ok (= 1 (length violations)))
-               (ok (string= "Exported DEFVAR *my-var* is missing a docstring"
-                            (violation:violation-message (first violations))))))
+               (let ((msg (violation:violation-message (first violations))))
+                 (ok (search "Exported" msg))
+                 (ok (search "DEFVAR" msg))
+                 (ok (search "*my-var*" msg)))))
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 

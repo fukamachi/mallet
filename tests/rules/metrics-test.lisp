@@ -27,6 +27,26 @@
       (ok (search expected-message-fragment
                   (violation:violation-message (first violations)))))))
 
+(defun message-integers (message)
+  "Return all decimal integers present in MESSAGE."
+  (let ((numbers '()))
+    (loop with start = nil
+          for index from 0 below (length message)
+          for digitp = (digit-char-p (char message index))
+          do (cond
+               ((and digitp (null start))
+                (setf start index))
+               ((and (null digitp) start)
+                (push (parse-integer message :start start :end index) numbers)
+                (setf start nil)))
+          finally (when start
+                    (push (parse-integer message :start start) numbers)))
+    (nreverse numbers)))
+
+(defun message-contains-metric-p (message expected-value)
+  "Return true when MESSAGE contains EXPECTED-VALUE as a standalone number."
+  (member expected-value (message-integers message) :test #'=))
+
 ;;; Function-length tests
 
 (deftest function-length-one-line
@@ -37,7 +57,9 @@
            (form (first forms))
            (violations (base:check-form rule form #P"test.lisp")))
       (ok (= 1 (length violations)))
-      (ok (search "1 lines" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           1)))))
 
 (deftest function-length-empty
   (testing "Empty function should have length 1"
@@ -47,7 +69,9 @@
            (form (first forms))
            (violations (base:check-form rule form #P"test.lisp")))
       (ok (= 1 (length violations)))
-      (ok (search "1 lines" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           1)))))
 
 (deftest function-length-short-defun
   (testing "Short function (10 lines) should not violate"
@@ -73,7 +97,9 @@
            (form (first forms))
            (violations (base:check-form rule form #P"test.lisp")))
       (ok (= 1 (length violations)))
-      (ok (search "60 lines" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           60)))))
 
 (deftest function-length-at-limit
   (testing "Function exactly at limit (50 lines) should not violate"
@@ -118,7 +144,9 @@
       ;; Should have 1 violation for outer function (6 lines > 5 max)
       (ok (= 1 (length violations)))
       (ok (search "outer" (violation:violation-message (first violations))))
-      (ok (search "6 lines" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           6)))))
 
 (deftest function-length-custom-max
   (testing "Custom max configuration"
@@ -145,8 +173,9 @@
          (violations (base:check-form rule form #P"test.lisp")))
     (ok (= 1 (length violations)))
     (when (first violations)
-      (ok (search (format nil "complexity of ~D" expected-complexity)
-                  (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           expected-complexity)))))
 
 (defun test-no-complexity-violation (code max &optional (variant :standard))
   "Test that CODE does not violate with given MAX.
@@ -389,7 +418,9 @@
            (violations (base:check-form rule form #P"test.lisp")))
       ;; Complexity = 1 (base) + 1 (case) = 2 with modified variant
       (ok (= 1 (length violations)))
-      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           2)))))
 
 (deftest complexity-case-standard-variant
   (testing "CASE with standard variant counts per clause"
@@ -407,7 +438,9 @@
            (violations (base:check-form rule form #P"test.lisp")))
       ;; Complexity = 1 (base) + 3 (case clauses) = 4 with standard variant
       (ok (= 1 (length violations)))
-      (ok (search "complexity of 4" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           4)))))
 
 (deftest complexity-typecase-modified-variant
   (testing "TYPECASE with modified variant counts as +1 total"
@@ -424,7 +457,9 @@
            (violations (base:check-form rule form #P"test.lisp")))
       ;; Complexity = 1 (base) + 1 (typecase) = 2 with modified variant
       (ok (= 1 (length violations)))
-      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           2)))))
 
 ;; Third-party macros: Alexandria
 
@@ -483,7 +518,9 @@
            (violations (base:check-form rule form #P"test.lisp")))
       ;; Complexity = 1 (base) + 1 (destructuring-case) = 2
       (ok (= 1 (length violations)))
-      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           2)))))
 
 (deftest complexity-alexandria-destructuring-ecase
   (testing "Alexandria DESTRUCTURING-ECASE counts all clauses"
@@ -522,7 +559,9 @@
            (violations (base:check-form rule form #P"test.lisp")))
       ;; Complexity = 1 (base) + 1 (match) = 2
       (ok (= 1 (length violations)))
-      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           2)))))
 
 (deftest complexity-trivia-ematch
   (testing "Trivia EMATCH counts all clauses (no default)"
@@ -858,7 +897,9 @@
            (violations (base:check-form rule form #P"test.lisp")))
       ;; Complexity = 1 (base) + 1 (string-case) = 2
       (ok (= 1 (length violations)))
-      (ok (search "complexity of 2" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           2)))))
 
 ;;; calculate-comment-ratio public API tests
 
@@ -1137,7 +1178,9 @@
            (violations (mapcan (lambda (f) (base:check-form rule f #P"test.lisp")) forms)))
       (ok (= 1 (length violations)))
       (ok (search "FOO" (violation:violation-message (first violations))))
-      (ok (search "3 lines" (violation:violation-message (first violations)))))))
+      (ok (message-contains-metric-p
+           (violation:violation-message (first violations))
+           3)))))
 
 (deftest function-length-coalton-nested-let
   (testing "Coalton define with nested let counts correctly"

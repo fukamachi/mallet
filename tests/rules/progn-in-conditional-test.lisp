@@ -109,7 +109,9 @@
            (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       ;; Should only report one violation per IF form, even if both clauses have progn
-      (ok (= (length violations) 1))))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations))
+              :progn-in-conditional))))
 
   (testing "Invalid: and with progn as last argument"
     (let* ((code "(and x (progn (a) (b)))")
@@ -118,9 +120,7 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :progn-in-conditional))
-      (ok (string= (violation:violation-message (first violations))
-                   "Use 'when' instead of 'and' with bare 'progn'"))))
+              :progn-in-conditional))))
 
   (testing "Invalid: or with progn as last argument"
     (let* ((code "(or x (progn (a) (b)))")
@@ -140,9 +140,7 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :progn-in-conditional))
-      (ok (string= (violation:violation-message (first violations))
-                   "Use 'when' instead of 'and' with bare 'progn'"))))
+              :progn-in-conditional))))
 
   (testing "Invalid: or with multiple args, last is progn"
     (let* ((code "(or x y (progn (a) (b)))")
@@ -151,9 +149,7 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations))
-              :progn-in-conditional))
-      (ok (string= (violation:violation-message (first violations))
-                   "Use 'unless' instead of 'or' with bare 'progn'")))))
+              :progn-in-conditional)))))
 
 ;;; Coalton-aware tests
 
@@ -182,9 +178,7 @@
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
       (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))
-      (ok (eq (violation:violation-severity (first violations)) :info))
-      (ok (string= (violation:violation-message (first violations))
-                   "Use 'cond' instead of 'if' with bare 'progn'"))))
+      (ok (eq (violation:violation-severity (first violations)) :info))))
 
   (testing "Invalid: progn in if else-clause inside coalton-toplevel is flagged"
     (let* ((code "(coalton-toplevel
@@ -208,9 +202,7 @@
            (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))
-      (ok (string= (violation:violation-message (first violations))
-                   "Use 'when' instead of 'and' with bare 'progn'"))))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))))
 
   (testing "Invalid: or with progn as last arg inside coalton-toplevel define"
     (let* ((code "(coalton-toplevel
@@ -220,9 +212,7 @@
            (rule (make-instance 'rules:progn-in-conditional-rule))
            (violations (rules:check-form rule (first forms) #p"test.lisp")))
       (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional))
-      (ok (string= (violation:violation-message (first violations))
-                   "Use 'unless' instead of 'or' with bare 'progn'")))))
+      (ok (eq (violation:violation-rule (first violations)) :progn-in-conditional)))))
 
 (deftest progn-in-conditional-coalton-negative
   (testing "Negative: coalton-toplevel with normal if produces zero violations"

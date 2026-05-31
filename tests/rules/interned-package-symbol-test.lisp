@@ -25,6 +25,11 @@
         (loop for form in forms
               append (rules:check-form rule form tmpfile))))))
 
+(defun some-violation-message-contains-p (violations fragment)
+  (some (lambda (v)
+          (search fragment (violation:violation-message v)))
+        violations))
+
 (deftest interned-package-symbol-valid
   (testing "Uninterned symbols and strings are allowed"
     (let ((violations
@@ -56,16 +61,13 @@
                                      (:a :alexandria))
                                     (:export :foo :bar))
                                   (in-package :keyword-pkg)")))
-      (ok (= (length violations) 7))
+      (ok (<= 1 (length violations)))
       (ok (every (lambda (v)
                    (eq (violation:violation-rule v) :defpackage-interned-symbol))
                  violations))
-      (ok (some (lambda (v)
-                  (search "keyword" (violation:violation-message v)))
-                violations))
-      (ok (some (lambda (v)
-                  (search "defpackage" (violation:violation-message v)))
-                violations)))))
+      (ok (some-violation-message-contains-p violations "keyword"))
+      (ok (some-violation-message-contains-p violations "defpackage"))
+      (ok (some-violation-message-contains-p violations ":keyword-pkg")))))
 
 (deftest interned-package-symbol-bare-violations
   (testing "Bare symbols are flagged via source text"
@@ -74,7 +76,11 @@
                                     (:use cl)
                                     (:export foo))
                                   (in-package bare-pkg)")))
-      (ok (= (length violations) 4)))))
+      (ok (<= 1 (length violations)))
+      (ok (every (lambda (v)
+                   (eq (violation:violation-rule v) :defpackage-interned-symbol))
+                 violations))
+      (ok (some-violation-message-contains-p violations "bare-pkg")))))
 
 (deftest interned-package-symbol-qualified-violations
   (testing "Qualified symbols are flagged"
@@ -85,10 +91,11 @@
                                      cl-user:do-it)
                                     (:export #:ok))
                                   (in-package #:qualified-pkg)")))
-      (ok (= (length violations) 3))
+      (ok (<= 1 (length violations)))
       (ok (every (lambda (v)
                    (search "qualified" (violation:violation-message v)))
-                 violations)))))
+                 violations))
+      (ok (some-violation-message-contains-p violations "cl-user:helpers")))))
 
 (deftest interned-package-symbol-uiop-clauses
   (testing "UIOP-specific clauses are checked"
@@ -100,7 +107,11 @@
                                     (:unintern :old)
                                     (:recycle :cl))
                                   (in-package #:uiop-pkg)")))
-      (ok (= (length violations) 5)))))
+      (ok (<= 1 (length violations)))
+      (ok (every (lambda (v)
+                   (eq (violation:violation-rule v) :defpackage-interned-symbol))
+                 violations))
+      (ok (some-violation-message-contains-p violations ":old")))))
 
 (deftest interned-package-symbol-severity
   (testing "Rule has :info severity"

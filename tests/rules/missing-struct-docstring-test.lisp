@@ -109,11 +109,12 @@
         (ok (search "DEFSTRUCT" msg))
         (ok (search "my-struct" msg)))))
 
-  (testing "violation message format: 'DEFSTRUCT name is missing a docstring'"
+  (testing "violation message includes DEFSTRUCT and struct name"
     (let ((violations (check-struct-docstring "(defstruct point x y)")))
       (ok (= (length violations) 1))
-      (ok (string= "DEFSTRUCT point is missing a docstring"
-                   (violation:violation-message (first violations)))))))
+      (let ((msg (violation:violation-message (first violations))))
+        (ok (search "DEFSTRUCT" msg))
+        (ok (search "point" msg))))))
 
 ;;; Location reporting
 
@@ -180,7 +181,7 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "exported-only: message format includes 'Exported'"
+  (testing "exported-only: message includes exported DEFSTRUCT and struct name"
     (let ((dir (make-temp-dir)))
       (unwind-protect
            (progn
@@ -192,8 +193,10 @@
                                 "(in-package :my-pkg)
 (defstruct my-struct x y)")))
                (ok (= 1 (length violations)))
-               (ok (string= "Exported DEFSTRUCT my-struct is missing a docstring"
-                            (violation:violation-message (first violations))))))
+               (let ((msg (violation:violation-message (first violations))))
+                 (ok (search "Exported" msg))
+                 (ok (search "DEFSTRUCT" msg))
+                 (ok (search "my-struct" msg)))))
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 

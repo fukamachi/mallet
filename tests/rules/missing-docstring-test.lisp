@@ -263,7 +263,7 @@
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
-  (testing "with :exported-only t — violation message starts with 'Exported'"
+  (testing "with :exported-only t — violation message includes exported DEFUN and name"
     (let ((dir (make-temp-dir)))
       (unwind-protect
            (progn
@@ -275,8 +275,10 @@
                                 "(in-package :fmt-pkg)
 (defun my-fn (x) x)")))
                (ok (= 1 (length violations)))
-               (ok (string= "Exported DEFUN my-fn is missing a docstring"
-                            (violation:violation-message (first violations))))))
+               (let ((msg (violation:violation-message (first violations))))
+                 (ok (search "Exported" msg))
+                 (ok (search "DEFUN" msg))
+                 (ok (search "my-fn" msg)))))
         (pkg-exports:clear-package-export-cache)
         (cleanup-temp-dir dir))))
 
