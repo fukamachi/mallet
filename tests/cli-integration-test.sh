@@ -216,7 +216,7 @@ echo ""
 
 # Text-level rules
 test_start "Line-length rule detects violations"
-OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c "Line exceeds maximum length" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/line-length.lisp" 2>&1 | grep -c "line-length" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -225,7 +225,7 @@ fi
 
 # Form-level rules
 test_start "missing-else rule detects violations"
-OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "when.*unless" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "missing-else" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -233,7 +233,7 @@ else
 fi
 
 test_start "Progn-in-conditional rule detects violations"
-OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "cond.*progn" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "progn-in-conditional" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -241,7 +241,7 @@ else
 fi
 
 test_start "Missing-otherwise rule detects violations"
-OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should have 'otherwise' clause" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "missing-otherwise" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
@@ -249,7 +249,7 @@ else
 fi
 
 test_start "Wrong-otherwise rule detects violations"
-OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "should not have 'otherwise'" || true)
+OUTPUT=$("$CLI" --config "$FIXTURES_CONFIG" "$VIOLATIONS_DIR/form-rules.lisp" 2>&1 | grep -c "wrong-otherwise" || true)
 if [ "$OUTPUT" -ge 1 ]; then
     test_pass
 else
