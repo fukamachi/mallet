@@ -386,8 +386,9 @@ If ignored-p is T, the file was ignored and violations will be NIL."
                  contents))
          (violations '())
          (file-type (let ((type-string (pathname-type file)))
-                      (when type-string
-                        (intern (string-upcase type-string) :keyword))))
+                      (if type-string
+                          (intern (string-upcase type-string) :keyword)
+                          :lisp)))
          ;; Parse comment directives once — used by both text/token and form processing
          (all-directives (suppression:parse-comment-directives text))
          ;; Count lines for unclosed :disable interval handling

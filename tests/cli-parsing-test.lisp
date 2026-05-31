@@ -510,6 +510,27 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
       (ok (eq :fix-dry-run fix-mode)
           "--fix-dry-run alone must not be rejected"))))
 
+(deftest parse-args-end-of-options-treats-remaining-args-as-files
+  (testing "dash-leading filename after -- is a file argument"
+    (multiple-value-bind (format config-path preset debug no-color fix-mode
+                          cli-rules fail-on init-mode force files)
+        (parse-args '("--" "-dash.lisp"))
+      (declare (ignore format config-path preset debug no-color fix-mode
+                       cli-rules fail-on init-mode force))
+      (ok (equal '("-dash.lisp") files)
+          "arguments after -- must be returned as file paths")))
+
+  (testing "--fix after -- is a file argument, not fix mode"
+    (multiple-value-bind (format config-path preset debug no-color fix-mode
+                          cli-rules fail-on init-mode force files)
+        (parse-args '("--" "--fix" "f.lisp"))
+      (declare (ignore format config-path preset debug no-color
+                       cli-rules fail-on init-mode force))
+      (ok (null fix-mode)
+          "--fix after -- must not enable fix mode")
+      (ok (equal '("--fix" "f.lisp") files)
+          "all arguments after -- must be returned as file paths"))))
+
 ;;; End-to-end: colon-prefixed rule names actually enable rules and produce violations
 
 (deftest colon-prefixed-enable-rule-lints-file

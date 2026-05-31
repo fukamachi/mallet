@@ -216,8 +216,12 @@
   ((form :initarg :form
          :reader unknown-config-form-form))
   (:report (lambda (condition stream)
-             (format stream "Unknown config form: ~A"
-                     (unknown-config-form-form condition))))
+             (let* ((form (unknown-config-form-form condition))
+                    (head (if (consp form) (first form) form)))
+               (format stream "Unknown config form: ~S"
+                       (if (consp head)
+                           :malformed-form
+                           head)))))
   (:documentation "Signaled when an unrecognized keyword appears at the config top level."))
 
 (define-condition unknown-config-directive (cli-error)

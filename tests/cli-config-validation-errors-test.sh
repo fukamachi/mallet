@@ -129,6 +129,52 @@ assert_binary_config_usage_error() {
     pass "non-UTF-8 config exits 3 and hides SBCL stream internals"
 }
 
+assert_unknown_config_form_reports_keyword_only() {
+    local work_dir config_file source_file output exit_code
+
+    run_test "unknown top-level config form reports directive keyword only"
+    work_dir=$(mktemp -d)
+    config_file="$work_dir/mallet-config.lisp"
+    source_file="$work_dir/source.lisp"
+    printf '(:k "secret")\n(:mallet-config)\n' > "$config_file"
+    write_source_file "$source_file"
+
+    exit_code=0
+    output=$("$CLI" --config "$config_file" "$source_file" 2>&1) || exit_code=$?
+    rm -rf "$work_dir"
+
+    if [ "$exit_code" -ne 3 ]; then
+        fail "unknown config form exits $exit_code; expected 3" "$output"
+        return
+    fi
+
+    case "$output" in
+        Error:*)
+            ;;
+        *)
+            fail "unknown config form output does not begin with Error:" "$output"
+            return
+            ;;
+    esac
+
+    if ! echo "$output" | grep -q "Unknown config form:"; then
+        fail "unknown config form output omits the error kind" "$output"
+        return
+    fi
+
+    if ! echo "$output" | grep -Eq '(:K|:k|[( ]K|[( ]k)'; then
+        fail "unknown config form output does not name offending keyword K" "$output"
+        return
+    fi
+
+    if echo "$output" | grep -q "secret"; then
+        fail "unknown config form output leaks form payload" "$output"
+        return
+    fi
+
+    pass "unknown config form names K without leaking the payload"
+}
+
 assert_valid_config_still_loads() {
     local work_dir config_file source_file output exit_code
 
@@ -177,6 +223,7 @@ assert_usage_error \
     'TRIVIAL-GLOB|::'
 
 assert_binary_config_usage_error
+assert_unknown_config_form_reports_keyword_only
 assert_valid_config_still_loads
 
 echo ""

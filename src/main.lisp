@@ -450,6 +450,9 @@ Signals specific error conditions for invalid input."
           ((string= arg "--version")
            (format t "Mallet version ~A~%" *version*)
            (uiop:quit 0))
+          ((string= arg "--")
+           (setf files (append (reverse args) files))
+           (setf args nil))
           ((and (> (length arg) 0) (char= (char arg 0) #\-))
            (error 'errors:unknown-option :option arg))
           (t
