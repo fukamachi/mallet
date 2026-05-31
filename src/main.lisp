@@ -684,6 +684,148 @@ Returns (values has-errors-p has-warnings-p has-any-p write-error-p)."
         (track-violation-severity unfixed-violations)
       (values has-errors-p has-warnings-p has-any-p write-error-p))))
 
+(defun collect-init-ignored-flags (config-path cli-rules fix-mode)
+  "Return CLI flags that do not affect --init mode."
+  (let ((ignored-flags '()))
+    (when config-path
+      (push "--config" ignored-flags))
+    (when (has-cli-rules-p cli-rules)
+      (when (getf cli-rules :enable-rules)
+        (push "--enable" ignored-flags))
+      (when (getf cli-rules :disable-rules)
+        (push "--disable" ignored-flags)))
+    (when fix-mode
+      (push "--fix" ignored-flags))
+    (nreverse ignored-flags)))
+
+(defun warn-init-ignored-flags (config-path cli-rules fix-mode)
+  "Warn about CLI flags that do not affect --init mode."
+  (let ((ignored-flags (collect-init-ignored-flags config-path cli-rules fix-mode)))
+    (when ignored-flags
+      (format *error-output*
+              "Warning: ~{~A~^, ~} ~:[has~;have~] no effect in --init mode.~%"
+              ignored-flags
+              (< 1 (length ignored-flags))))))
+
+(defun run-init-mode (config-path cli-rules fix-mode file-args preset force)
+  "Run --init mode and exit."
+  (warn-init-ignored-flags config-path cli-rules fix-mode)
+  (let ((files (expand-file-args file-args))
+        (effective-preset (or preset :default)))
+    (init:run-init file-args files
+                   :preset effective-preset
+                   :force force))
+  (uiop:quit 0))
+
+(defun merge-severity-counts (severity-counts file-counts)
+  "Merge FILE-COUNTS into SEVERITY-COUNTS and return SEVERITY-COUNTS."
+  (loop for (severity count) on file-counts by #'cddr
+        do (setf (getf severity-counts severity 0)
+                 (+ (getf severity-counts severity 0) count)))
+  severity-counts)
+
+(defun format-normal-file (format file violations severity-counts first-file-with-violations)
+  "Format one file in non-fix mode and return updated count and JSON state."
+  (ecase format
+    (:text
+     (setf severity-counts
+           (merge-severity-counts
+            severity-counts
+            (formatter:format-text-file file violations))))
+    (:line
+     (setf severity-counts
+           (merge-severity-counts
+            severity-counts
+            (formatter:format-line-file file violations))))
+    (:json
+     (setf severity-counts
+           (accumulate-severity-counts severity-counts violations))
+     (when (formatter:format-json-file file violations first-file-with-violations)
+       (setf first-file-with-violations nil))))
+  (values severity-counts first-file-with-violations))
+
+(defun update-violation-flags (violations has-errors has-warnings has-any-violations)
+  "Return updated exit-code tracking flags after VIOLATIONS."
+  (multiple-value-bind (errors warnings any)
+      (track-violation-severity violations)
+    (values (or has-errors errors)
+            (or has-warnings warnings)
+            (or has-any-violations any))))
+
+(defun print-normal-summary (format severity-counts)
+  "Print the closing output for non-fix mode."
+  (ecase format
+    (:text
+     (formatter:format-text-summary severity-counts))
+    (:line
+     (formatter:format-text-summary severity-counts :stream *error-output*))
+    (:json
+     (formatter:format-json-end)
+     (formatter:format-text-summary severity-counts :stream *error-output*))))
+
+(defun exit-for-lint-result (fail-on runtime-io-error-p has-errors has-warnings has-any-violations)
+  "Exit with the status implied by lint results."
+  (cond
+    (runtime-io-error-p
+     (uiop:quit 2))
+    ((should-fail-p fail-on has-errors has-warnings has-any-violations)
+     (uiop:quit 1))
+    (t
+     (uiop:quit 0))))
+
+(defun run-lint-mode (format config-path preset cli-rules fail-on fail-on-option-seen fix-mode file-args)
+  "Run normal linting or fix mode and exit."
+  (when (null file-args)
+    (print-help)
+    (uiop:quit 0))
+
+  (let* ((files (expand-file-args file-args))
+         ;; Discover config from first file's directory
+         (start-directory (when files
+                            (uiop:pathname-directory-pathname (first files))))
+         (base-config (load-configuration config-path preset start-directory))
+         ;; Apply CLI overrides if any
+         (config (if (has-cli-rules-p cli-rules)
+                     (config:apply-cli-overrides base-config cli-rules)
+                     base-config))
+         (severity-counts '())
+         (has-errors nil)
+         (has-warnings nil)
+         (has-any-violations nil)
+         (runtime-io-error-p nil)
+         (first-file-with-violations t)
+         (all-violations '())
+         (effective-fail-on (if (eq preset :all)
+                                (apply-all-preset-defaults fail-on fail-on-option-seen)
+                                fail-on)))
+    (when (eq format :json)
+      (formatter:format-json-start))
+
+    (dolist (file files)
+      (multiple-value-bind (violations ignored-p)
+          (engine:lint-file file :config config)
+        (unless ignored-p
+          (if fix-mode
+              (setf all-violations (nconc all-violations violations))
+              (multiple-value-setq (severity-counts first-file-with-violations)
+                (format-normal-file format file violations severity-counts
+                                    first-file-with-violations)))
+
+          (when violations
+            (multiple-value-setq (has-errors has-warnings has-any-violations)
+              (update-violation-flags violations has-errors has-warnings
+                                      has-any-violations))))))
+
+    (when fix-mode
+      (multiple-value-setq (has-errors has-warnings has-any-violations runtime-io-error-p)
+        (process-fix-mode all-violations fix-mode format)))
+
+    (unless fix-mode
+      (print-normal-summary format severity-counts))
+
+    (exit-for-lint-result effective-fail-on runtime-io-error-p has-errors
+                          has-warnings has-any-violations)))
+
 (defun main ()
   "Main entry point for the Mallet CLI.
 Lints files specified in ARGS and exits with appropriate status code."
@@ -717,10 +859,6 @@ Lints files specified in ARGS and exits with appropriate status code."
             (when no-color
               (setf formatter:*no-color* t))
 
-            (setf fail-on (if (eq preset :all)
-                              (apply-all-preset-defaults fail-on fail-on-option-seen)
-                              fail-on))
-
             ;; Handle --list-rules mode
             (when list-rules-mode
               (print-list-rules)
@@ -728,124 +866,10 @@ Lints files specified in ARGS and exits with appropriate status code."
 
             ;; Handle --init mode
             (when init-mode
-              ;; Warn about flags that have no effect in --init mode
-              (let ((ignored-flags '()))
-                (when config-path (push "--config" ignored-flags))
-                (when (has-cli-rules-p cli-rules)
-                  (when (getf cli-rules :enable-rules) (push "--enable" ignored-flags))
-                  (when (getf cli-rules :disable-rules) (push "--disable" ignored-flags)))
-                (when fix-mode (push "--fix" ignored-flags))
-                (when ignored-flags
-                  (format *error-output*
-                          "Warning: ~{~A~^, ~} ~:[has~;have~] no effect in --init mode.~%"
-                          (nreverse ignored-flags)
-                          (< 1 (length ignored-flags)))))
-              (let ((files (expand-file-args file-args))
-                    (effective-preset (or preset :default)))
-                (init:run-init file-args files
-                               :preset effective-preset
-                               :force force))
-              (uiop:quit 0))
+              (run-init-mode config-path cli-rules fix-mode file-args preset force))
 
-            ;; Validate we have files to lint
-            (when (null file-args)
-              (print-help)
-              (uiop:quit 0))
-
-            (let* ((files (expand-file-args file-args))
-                   ;; Discover config from first file's directory
-                   (start-directory (when files
-                                      (uiop:pathname-directory-pathname (first files))))
-                   (base-config (load-configuration config-path preset start-directory))
-                   ;; Apply CLI overrides if any
-                   (config (if (has-cli-rules-p cli-rules)
-                               (config:apply-cli-overrides base-config cli-rules)
-                               base-config))
-                   (severity-counts '())
-                   (has-errors nil)
-                   (has-warnings nil)
-                   (has-any-violations nil)
-                   (runtime-io-error-p nil)
-                   (first-file-with-violations t)
-                   (all-violations '()))
-
-              ;; For JSON, print opening bracket
-              (when (eq format :json)
-                (formatter:format-json-start))
-
-              ;; Process files one at a time
-              (dolist (file files)
-                (multiple-value-bind (violations ignored-p)
-                    (engine:lint-file file :config config)
-                  (unless ignored-p
-                    (cond
-                      ;; Fix mode: collect violations, apply fixes later
-                      (fix-mode
-                       (setf all-violations (nconc all-violations violations)))
-
-                      ;; Normal mode: format and output immediately
-                      (t
-                       (ecase format
-                         (:text
-                          ;; Output violations and accumulate counts
-                          (let ((file-counts (formatter:format-text-file file violations)))
-                            ;; Merge counts into accumulated counts
-                            (loop for (severity count) on file-counts by #'cddr
-                                  do (setf (getf severity-counts severity 0)
-                                           (+ (getf severity-counts severity 0) count)))))
-                         (:line
-                          ;; Output violations in line format and accumulate counts
-                          (let ((file-counts (formatter:format-line-file file violations)))
-                            ;; Merge counts into accumulated counts
-                            (loop for (severity count) on file-counts by #'cddr
-                                  do (setf (getf severity-counts severity 0)
-                                           (+ (getf severity-counts severity 0) count)))))
-                         (:json
-                          ;; Output JSON for this file
-                          (setf severity-counts
-                                (accumulate-severity-counts severity-counts violations))
-                          (when (formatter:format-json-file file violations
-                                                            first-file-with-violations)
-                            (setf first-file-with-violations nil))))))
-
-                    ;; Track violations for exit code
-                    (when violations
-                      (multiple-value-bind (errors warnings any)
-                          (track-violation-severity violations)
-                        (when errors (setf has-errors t))
-                        (when warnings (setf has-warnings t))
-                        (when any (setf has-any-violations t)))))))
-
-              ;; Apply fixes if in fix mode
-              (when fix-mode
-                (multiple-value-bind (errors warnings any write-error)
-                    (process-fix-mode all-violations fix-mode format)
-                  (setf has-errors errors)
-                  (setf has-warnings warnings)
-                  (setf has-any-violations any)
-                  (setf runtime-io-error-p write-error)))
-
-              ;; Print summary/closing (only for normal mode)
-              (unless fix-mode
-                (ecase format
-                  (:text
-                   (formatter:format-text-summary severity-counts))
-                  (:line
-                   (formatter:format-text-summary severity-counts
-                                                  :stream *error-output*))
-                  (:json
-                   (formatter:format-json-end)
-                   (formatter:format-text-summary severity-counts
-                                                  :stream *error-output*))))
-
-              ;; Exit with appropriate status.
-              (cond
-                (runtime-io-error-p
-                 (uiop:quit 2))
-                ((should-fail-p fail-on has-errors has-warnings has-any-violations)
-                 (uiop:quit 1))
-                (t
-                 (uiop:quit 0))))))
+            (run-lint-mode format config-path preset cli-rules fail-on
+                           fail-on-option-seen fix-mode file-args)))
       ;; Catch explicit exit to ensure we don't suppress intentional quits
       (#+sbcl sb-sys:interactive-interrupt
         #-sbcl error ()

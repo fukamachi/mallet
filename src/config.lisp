@@ -706,26 +706,26 @@ Style preferences are disabled to keep output clean."
 (defun make-strict-config ()
   "Create the strict configuration - everything in :default plus opinionated best-practice rules.
 Suitable for new projects and AI-assisted coding where stricter checking is desirable."
-  (let* ((base (make-default-config))
-         (extra-rules
-           '(;; Opinionated practice rules (removed from :default)
-             :no-package-use
-             :closing-paren-on-own-line
-             :redundant-progn
-             ;; Additional practice rules
-             :no-allow-other-keys
-             :error-without-custom-condition
-             :bare-float-literal
-             :asdf-redundant-package-prefix
-             :asdf-reader-conditional
-             :runtime-intern
-             :runtime-unintern
-             ;; Cleanliness
-             :unused-loop-variables
-             ;; Style
-             :progn-in-conditional
-             :defpackage-interned-symbol
-             :missing-otherwise)))
+  (let ((base (make-default-config))
+        (extra-rules
+         '(;; Opinionated practice rules (removed from :default)
+           :no-package-use
+           :closing-paren-on-own-line
+           :redundant-progn
+           ;; Additional practice rules
+           :no-allow-other-keys
+           :error-without-custom-condition
+           :bare-float-literal
+           :asdf-redundant-package-prefix
+           :asdf-reader-conditional
+           :runtime-intern
+           :runtime-unintern
+           ;; Cleanliness
+           :unused-loop-variables
+           ;; Style
+           :progn-in-conditional
+           :defpackage-interned-symbol
+           :missing-otherwise)))
     (make-config
      :rules (append (config-rules base)
                     (mapcar #'rules:make-rule extra-rules))

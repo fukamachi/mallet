@@ -46,8 +46,8 @@ PRESET is a keyword (:default, :strict, etc.)."
 
 (defun collect-all-violations (files preset)
   "Run the linting engine on FILES (list of pathnames) using PRESET and return all violations."
-  (let* ((base-config (config:get-built-in-config preset))
-         (all-violations '()))
+  (let ((base-config (config:get-built-in-config preset))
+        (all-violations '()))
     (dolist (file files)
       (multiple-value-bind (violations ignored-p)
           (engine:lint-file file :config base-config)
