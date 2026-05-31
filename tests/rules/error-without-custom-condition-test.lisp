@@ -145,30 +145,17 @@
 ;;; Invalid cases (violations expected) — quoted unqualified known CL condition names
 
 (deftest error-without-custom-condition-invalid-unqualified
-  (testing "(error 'simple-error) is flagged"
-    (let ((violations (check-error-custom "(error 'simple-error \"bad\")")))
-      (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :error-without-custom-condition))))
-
-  (testing "(error 'error) is flagged"
-    (let ((violations (check-error-custom "(error 'error \"something\")")))
-      (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :error-without-custom-condition))))
-
-  (testing "(error 'condition) is flagged"
-    (let ((violations (check-error-custom "(error 'condition \"base condition\")")))
-      (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :error-without-custom-condition))))
-
-  (testing "(error 'type-error) unqualified is flagged"
-    (let ((violations (check-error-custom "(error 'type-error :datum x :expected-type 'string)")))
-      (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :error-without-custom-condition))))
-
-  (testing "(error 'program-error) unqualified is flagged"
-    (let ((violations (check-error-custom "(error 'program-error \"bad\")")))
-      (ok (= (length violations) 1))
-      (ok (eq (violation:violation-rule (first violations)) :error-without-custom-condition)))))
+  (dolist (case '(("simple-error" "(error 'simple-error \"bad\")")
+                  ("error" "(error 'error \"something\")")
+                  ("condition" "(error 'condition \"base condition\")")
+                  ("type-error" "(error 'type-error :datum x :expected-type 'string)")
+                  ("program-error" "(error 'program-error \"bad\")")))
+    (destructuring-bind (condition-name code) case
+      (testing (format nil "(error '~A) unqualified is flagged" condition-name)
+        (let ((violations (check-error-custom code)))
+          (ok (= (length violations) 1))
+          (ok (eq (violation:violation-rule (first violations))
+                  :error-without-custom-condition)))))))
 
 ;;; Edge cases
 

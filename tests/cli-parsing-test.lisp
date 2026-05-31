@@ -407,49 +407,25 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
 
 ;;; Tests for handle-preset-option
 
-(deftest handle-preset-option-built-ins
-  (testing "Built-in 'default' returns :default"
-    (multiple-value-bind (preset remaining)
-        (handle-preset-option '("default" "file.lisp"))
-      (ok (eq :default preset))
-      (ok (equal '("file.lisp") remaining))))
-
-  (testing "Built-in 'all' returns :all"
-    (multiple-value-bind (preset remaining)
-        (handle-preset-option '("all"))
-      (ok (eq :all preset))
-      (ok (null remaining))))
-
-  (testing "Built-in 'none' returns :none"
-    (multiple-value-bind (preset remaining)
-        (handle-preset-option '("none"))
-      (ok (eq :none preset))
-      (ok (null remaining)))))
-
-(deftest handle-preset-option-user-defined
-  (testing "User-defined name 'strict' returns :strict keyword"
-    (multiple-value-bind (preset remaining)
-        (handle-preset-option '("strict"))
-      (ok (eq :strict preset))
-      (ok (null remaining))))
-
-  (testing "User-defined name 'my-ci' returns :my-ci keyword"
-    (multiple-value-bind (preset _)
-        (handle-preset-option '("my-ci"))
-      (declare (ignore _))
-      (ok (eq :my-ci preset))))
-
-  (testing "User-defined name is uppercased to keyword"
-    (multiple-value-bind (preset _)
-        (handle-preset-option '("MY-PRESET"))
-      (declare (ignore _))
-      (ok (eq :my-preset preset))))
-
-  (testing "Remaining args are returned unchanged"
-    (multiple-value-bind (preset remaining)
-        (handle-preset-option '("strict" "src/" "--format" "json"))
-      (ok (eq :strict preset))
-      (ok (equal '("src/" "--format" "json") remaining)))))
+(deftest handle-preset-option-converts-token-to-keyword
+  (dolist (case '(("default" :default ("file.lisp"))
+                  ("all" :all nil)
+                  ("none" :none nil)
+                  ("strict" :strict nil)
+                  ("my-ci" :my-ci nil)
+                  ("MY-PRESET" :my-preset nil)
+                  ("strict" :strict ("src/" "--format" "json"))
+                  ("my-strict-preset" :my-strict-preset ("src/"))
+                  ("v2" :v2 nil)))
+    (destructuring-bind (input-string expected-keyword expected-remaining) case
+      (testing (format nil "~A converts to ~S and leaves ~S"
+                       input-string
+                       expected-keyword
+                       expected-remaining)
+        (multiple-value-bind (preset remaining)
+            (handle-preset-option (cons input-string expected-remaining))
+          (ok (eq expected-keyword preset))
+          (ok (equal expected-remaining remaining)))))))
 
 (deftest handle-preset-option-errors
   (testing "Missing preset name signals missing-option-value"
@@ -513,22 +489,6 @@ Returns truename so comparisons work on macOS where /tmp -> /private/tmp."
                     (let ((*standard-output* s))
                       (print-help)))))
       (ok (search "--preset" output)))))
-
-;;; Edge case tests for --preset
-
-(deftest handle-preset-option-hyphenated-name
-  (testing "Hyphenated preset name 'my-strict-preset' returns correct keyword"
-    (multiple-value-bind (preset remaining)
-        (handle-preset-option '("my-strict-preset" "src/"))
-      (ok (eq :my-strict-preset preset))
-      (ok (equal '("src/") remaining)))))
-
-(deftest handle-preset-option-numeric-name
-  (testing "Numeric preset name 'v2' returns :v2 keyword"
-    (multiple-value-bind (preset remaining)
-        (handle-preset-option '("v2"))
-      (ok (eq :v2 preset))
-      (ok (null remaining)))))
 
 (deftest parse-args-all-alias-sets-preset
   (testing "--all sets preset to :all"
