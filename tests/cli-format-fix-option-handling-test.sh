@@ -43,6 +43,21 @@ write_fixable_file() {
     printf '(defun f () nil)   \n' > "$path"
 }
 
+# Strip a leading SBCL compiler preamble from captured output.
+#
+# Under the roswell `ros run` shim used in CI, the first invocation on a cold
+# FASL cache prints compiler notes (`; file: ...`, `; note: ...`, `;
+# compilation unit finished`) before our program runs. That output originates
+# outside the mallet process and cannot be muted from bin/mallet. Mallet's own
+# diagnostics never begin with `;`, so drop the leading run of comment/blank
+# lines and assert against the program's actual output.
+strip_compiler_preamble() {
+    awk 'started { print; next }
+         /^[[:space:]]*$/ { next }
+         /^;/ { next }
+         { started = 1; print }'
+}
+
 assert_conflict_error() {
     local name="$1"
     local expected_fix_option="$2"
@@ -58,15 +73,17 @@ assert_conflict_error() {
 
     exit_code=0
     "$CLI" "$@" "$file" >"$stdout_file" 2>"$stderr_file" || exit_code=$?
-    stderr_text=$(cat "$stderr_file")
+    local stdout_text
+    stdout_text=$(strip_compiler_preamble < "$stdout_file")
+    stderr_text=$(strip_compiler_preamble < "$stderr_file")
 
     if [ "$exit_code" -ne 3 ]; then
         fail "$name exits $exit_code; expected 3" "$stderr_text"
         return
     fi
 
-    if [ -s "$stdout_file" ]; then
-        fail "$name wrote to stdout; expected no stdout for usage errors" "$(cat "$stdout_file")"
+    if [ -n "$stdout_text" ]; then
+        fail "$name wrote to stdout; expected no stdout for usage errors" "$stdout_text"
         return
     fi
 
@@ -185,6 +202,7 @@ assert_bad_rule_option_is_usage_error() {
 
     exit_code=0
     output=$("$CLI" --enable line-length:max=abc "$file" 2>&1) || exit_code=$?
+    output=$(printf '%s\n' "$output" | strip_compiler_preamble)
 
     if [ "$exit_code" -ne 3 ]; then
         fail "bad rule option exits $exit_code; expected 3" "$output"

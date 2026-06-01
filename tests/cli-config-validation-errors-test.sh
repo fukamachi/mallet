@@ -44,6 +44,22 @@ write_source_file() {
     printf '(defun clean () t)\n' > "$path"
 }
 
+# Strip a leading SBCL compiler preamble from captured output.
+#
+# Under the roswell `ros run` shim used in CI, the first invocation on a cold
+# FASL cache bootstraps roswell's global Quicklisp and prints compiler notes
+# (`; file: ...`, `; note: ...`, `; compilation unit finished`, `; printed N
+# notes`) before our program runs. That output originates outside the mallet
+# process, so it cannot be muted from bin/mallet. Mallet's own diagnostics never
+# begin with `;`, so drop the leading run of comment/blank lines and assert
+# against the program's actual first line.
+strip_compiler_preamble() {
+    awk 'started { print; next }
+         /^[[:space:]]*$/ { next }
+         /^;/ { next }
+         { started = 1; print }'
+}
+
 assert_binary_config_usage_error() {
     local work_dir config_file source_file output exit_code
 
@@ -56,6 +72,7 @@ assert_binary_config_usage_error() {
 
     exit_code=0
     output=$("$CLI" --config "$config_file" "$source_file" 2>&1) || exit_code=$?
+    output=$(printf '%s\n' "$output" | strip_compiler_preamble)
     rm -rf "$work_dir"
 
     if [ "$exit_code" -ne 3 ]; then
@@ -98,6 +115,7 @@ assert_for_paths_config_usage_error() {
 
     exit_code=0
     output=$("$CLI" --config "$config_file" "$source_file" 2>&1) || exit_code=$?
+    output=$(printf '%s\n' "$output" | strip_compiler_preamble)
     rm -rf "$work_dir"
 
     if [ "$exit_code" -ne 3 ]; then
