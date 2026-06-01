@@ -43,19 +43,28 @@ write_fixable_file() {
     printf '(defun f () nil)   \n' > "$path"
 }
 
-# Strip a leading SBCL compiler preamble from captured output.
+# Strip a leading SBCL/Quicklisp diagnostic preamble from captured output.
 #
-# Under the roswell `ros run` shim used in CI, the first invocation on a cold
-# FASL cache prints compiler notes (`; file: ...`, `; note: ...`, `;
-# compilation unit finished`) before our program runs. That output originates
-# outside the mallet process and cannot be muted from bin/mallet. Mallet's own
-# diagnostics never begin with `;`, so drop the leading run of comment/blank
-# lines and assert against the program's actual output.
+# CI runs the CLI through roswell's `ros run` shim, which bootstraps roswell's
+# global Quicklisp before mallet runs. That emits noise ahead of the program's
+# own output — compiler notes on a cold cache (`; note: ...`, `; compilation
+# unit finished`) and, on every run, a `WARNING:` block ("redefining
+# QL-DIST:INSTALL ...") whose detail continues on an indented line. None of it
+# comes from the mallet process, so it cannot be muted from bin/mallet. Drop the
+# leading run of such diagnostic lines — comment lines (`;...`), blank lines,
+# `WARNING:`/`WARN`/`STYLE-WARNING:` headers, and their indented continuation
+# lines — and assert against the program's real first line. Mallet's own output
+# is never indented and never starts with these markers, so it survives intact.
 strip_compiler_preamble() {
-    awk 'started { print; next }
-         /^[[:space:]]*$/ { next }
-         /^;/ { next }
-         { started = 1; print }'
+    awk '
+        started { print; next }
+        /^[[:space:]]*$/ { next }                 # blank line
+        /^;/ { next }                             # SBCL compiler note / comment
+        /^[[:space:]]/ { next }                   # indented continuation of a warning
+        /^(WARNING|WARN|STYLE-WARNING|CAUTION|NOTE|debugger invoked):?/ { next }
+        /redefining/ { next }                     # "redefining X ... in DEFMETHOD"
+        { started = 1; print }
+    '
 }
 
 assert_conflict_error() {
