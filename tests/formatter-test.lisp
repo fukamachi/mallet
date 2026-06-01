@@ -129,10 +129,8 @@
       (ok (search "Variable 'x' is unused" output)))))
 
 (defun json-field (object field-name)
-  "Return FIELD-NAME from a CL-JSON decoded alist."
-  (cdr (assoc field-name object
-              :test (lambda (expected actual)
-                      (string= expected (string-downcase (string actual)))))))
+  "Return FIELD-NAME from a yason-decoded hash-table (JSON object)."
+  (gethash field-name object))
 
 (deftest format-json-file-test
   (testing "format-json-file outputs JSON structure"
@@ -150,7 +148,7 @@
                       (list v1)
                       t  ; first file
                       :stream stream))))
-      (let* ((decoded (cl-json:decode-json-from-string output))
+      (let* ((decoded (yason:parse output))
              (violation (first (json-field decoded "violations"))))
         (ok (string= "/path/to/file.lisp" (json-field decoded "file")))
         (ok (string= "unused-variables" (json-field violation "rule")))
@@ -176,7 +174,7 @@
                       (list v1)
                       t
                       :stream stream))))
-      (let* ((decoded (cl-json:decode-json-from-string output))
+      (let* ((decoded (yason:parse output))
              (violation (first (json-field decoded "violations"))))
         (ok (string= "style" (json-field violation "category")))))))
 
