@@ -14,7 +14,7 @@
   (let ((stream (make-string-input-stream string)))
     (handler-case
       (progn
-        (cl-json:decode-json stream)
+        (yason:parse stream)
         (uiop:emptyp (string-trim '(#\Space #\Newline #\Tab #\Return)
                                   (read-remaining-from-stream stream))))
       (error () nil))))
@@ -132,7 +132,7 @@
         "summary must not appear on stdout")
 
     ;; Parse the complete stdout as JSON and verify nothing trails the document.
-    ;; cl-json:decode-json-from-string alone silently ignores trailing garbage such as
+    ;; yason:parse alone silently ignores trailing garbage such as
     ;; "[] trailing"; json-consumed-fully-p reads from a stream and asserts nothing
     ;; non-whitespace remains after the JSON document ends.
     (ok (json-consumed-fully-p stdout)
@@ -151,7 +151,7 @@
                      (fixture +clean-file+)))
 
     ;; stdout must still be a valid JSON array (empty).
-    (ok (handler-case (progn (cl-json:decode-json-from-string stdout) t)
+    (ok (handler-case (progn (yason:parse stdout) t)
           (error () nil))
         "stdout must be parseable as a JSON document (empty array)")
 

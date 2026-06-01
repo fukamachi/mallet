@@ -222,6 +222,16 @@ assert_usage_error \
     '(:mallet-config (:ignore :keyword))' \
     'TRIVIAL-GLOB|::'
 
+assert_usage_error \
+    ":for-paths rejects a non-list selector without leaking glob internals" \
+    '(:mallet-config (:for-paths :keyword (:enable :line-length)))' \
+    'TRIVIAL-GLOB|::'
+
+assert_usage_error \
+    ":for-paths rejects a non-string selector element without leaking glob internals" \
+    '(:mallet-config (:for-paths ("ok" :keyword) (:enable :line-length)))' \
+    'TRIVIAL-GLOB|::'
+
 assert_binary_config_usage_error
 assert_unknown_config_form_reports_keyword_only
 assert_valid_config_still_loads

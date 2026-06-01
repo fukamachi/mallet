@@ -1,4 +1,4 @@
-.PHONY: all help test test-unit test-cli test-cli-config-for-paths-validation bundle build clean docker-build docker-publish
+.PHONY: all help test test-unit test-cli bundle build clean docker-build docker-publish
 
 VERSION ?= latest
 IMAGE_NAME ?= fukamachi/mallet
@@ -45,37 +45,6 @@ test-cli:
 	@./tests/cli-config-validation-errors-test.sh
 	@./tests/cli-end-of-options-separator-test.sh
 	@./tests/cli-format-fix-option-handling-test.sh
-	@$(MAKE) --no-print-directory test-cli-config-for-paths-validation
-
-test-cli-config-for-paths-validation:
-	@echo ""
-	@echo "Running CLI config :for-paths validation tests..."
-	@work_dir=$$(mktemp -d); \
-	trap 'rm -rf "$$work_dir"' EXIT; \
-	config_file="$$work_dir/mallet-config.lisp"; \
-	source_file="$$work_dir/source.lisp"; \
-	printf '(defun clean () t)\n' > "$$source_file"; \
-	for config_content in \
-		'(:mallet-config (:for-paths :keyword (:enable :line-length)))' \
-		'(:mallet-config (:for-paths ("ok" :keyword) (:enable :line-length)))'; do \
-		printf '%s\n' "$$config_content" > "$$config_file"; \
-		exit_code=0; \
-		output=$$(./bin/mallet --config "$$config_file" "$$source_file" 2>&1) || exit_code=$$?; \
-		if [ "$$exit_code" -ne 3 ]; then \
-			echo "Expected exit 3 for invalid :for-paths config, got $$exit_code"; \
-			echo "$$output"; \
-			exit 1; \
-		fi; \
-		case "$$output" in \
-			Error:*) ;; \
-			*) echo "Expected output to begin with Error:"; echo "$$output"; exit 1 ;; \
-		esac; \
-		if echo "$$output" | grep -Eq 'Fatal error:|TRIVIAL-GLOB|::'; then \
-			echo "Output leaked an internal error detail"; \
-			echo "$$output"; \
-			exit 1; \
-		fi; \
-	done
 
 bundle:
 	@qlot bundle --exclude mallet/tests

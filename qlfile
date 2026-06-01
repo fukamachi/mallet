@@ -5,5 +5,5 @@
 # - eclector
 github fukamachi/trivial-glob
 github fukamachi/rove
-ql cl-json
+ql yason
 asdf 3.3.7.4

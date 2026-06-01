@@ -315,8 +315,17 @@ Returns updated violations list."
 
 (defun regular-file-p (file)
   "Return (values regular-p error-condition) for FILE without opening it."
+  #+sbcl
   (handler-case
       (values (sb-posix:s-isreg (sb-posix:stat-mode (sb-posix:stat file))) nil)
+    (error (condition)
+      (values nil condition)))
+  #-sbcl
+  (handler-case
+      (values (and (probe-file file)
+                   (not (uiop:directory-exists-p file))
+                   t)
+              nil)
     (error (condition)
       (values nil condition))))
 

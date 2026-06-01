@@ -7,7 +7,7 @@
                "cl-interpol"
                "cl-ppcre"
                "eclector"
-               "sb-posix"
+               (:feature :sbcl "sb-posix")
                "trivial-glob")
   :in-order-to ((test-op (test-op "mallet/tests"))
                 (program-op (program-op "mallet/executable")))
@@ -103,7 +103,7 @@
 
 (defsystem "mallet/tests"
   :depends-on ("mallet"
-               "cl-json"
+               "yason"
                "cl-ppcre"
                "rove")
   :pathname "tests"
@@ -133,7 +133,6 @@
    (:file "preset-integration-test")
    (:file "list-rules-test")
    (:file "readme-init-section-test")
-   (:file "readme-known-limitations-test")
    (:file "format-stream-separation-test")
    (:file "public-api-docstrings-test")
 

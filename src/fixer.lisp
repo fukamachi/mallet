@@ -182,16 +182,16 @@ Returns list of violations that were successfully fixed."
                                 :if-does-not-exist :create)
              (write-string content out)
              (finish-output out))
-           (when mode
-             (sb-posix:chmod temp-file mode))
+           (when mode #+sbcl (sb-posix:chmod temp-file mode) #-sbcl nil)
            (uiop:rename-file-overwriting-target temp-file file))
       (when (probe-file temp-file)
         (delete-file-if-present temp-file)))))
 
 (defun file-permission-mode (file)
-  "Return FILE's permission bits, or NIL when FILE does not exist."
+  "Return FILE's permission bits, or NIL when FILE does not exist or the platform cannot report permission bits."
   (when (probe-file file)
-    (logand (sb-posix:stat-mode (sb-posix:stat file)) #o7777)))
+    #+sbcl (logand (sb-posix:stat-mode (sb-posix:stat file)) #o7777)
+    #-sbcl nil))
 
 (defun delete-file-if-present (file)
   "Delete FILE when possible, ignoring only file-system cleanup failures."
