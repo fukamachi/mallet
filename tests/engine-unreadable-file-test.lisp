@@ -60,11 +60,23 @@
       (sb-thread:terminate-thread thread))
     (values done-p result-values captured-condition)))
 
+(defun canonical-namestrings (path)
+  "Return the namestrings PATH may appear as in results.
+Includes the truename form because EXPAND-FILE-ARGS resolves directory
+arguments through TRUENAME, which on platforms where the temp dir is a
+symlink (e.g. macOS /var -> /private/var) differs from the raw path."
+  (remove-duplicates
+   (list (namestring path)
+         (ignore-errors (namestring (truename path))))
+   :test #'equal))
+
 (defun find-result-for-file (file results)
-  "Find FILE's entry in lint-files RESULTS using namestring equality."
-  (find (namestring file) results
-        :key (lambda (entry) (namestring (car entry)))
-        :test #'string=))
+  "Find FILE's entry in lint-files RESULTS, tolerant of symlink-resolved paths."
+  (let ((wanted (canonical-namestrings file)))
+    (find-if (lambda (entry)
+               (intersection wanted (canonical-namestrings (car entry))
+                             :test #'string=))
+             results)))
 
 (defun violations-for-rule (rule violations)
   "Return violations whose rule is RULE."
