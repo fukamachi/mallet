@@ -46,6 +46,7 @@ test-cli:
 	@./tests/cli-end-of-options-separator-test.sh
 	@./tests/cli-format-fix-option-handling-test.sh
 	@./tests/cli-src-zero-violations-test.sh
+	@./tests/test-infrastructure-hygiene-test.sh
 
 bundle:
 	@qlot bundle --exclude mallet/tests

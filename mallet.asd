@@ -107,6 +107,7 @@
                "cl-ppcre"
                "rove")
   :pathname "tests"
+  :serial t
   :components
   ((:file "errors-test")
    (:file "utils-test")
