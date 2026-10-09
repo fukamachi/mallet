@@ -139,15 +139,14 @@ Excludes defmethod (methods inherit docs from the generic function)."
        (stringp (second option))))
 
 (defun defun-body-has-docstring-p (body)
-  "Return T if BODY (forms after lambda list in defun/defmacro) starts with a docstring.
-Per the CL spec, a string is only a docstring when additional body forms follow it.
+  "Return T if BODY (forms after lambda list in defun/defmacro) has a docstring.
+Per CLHS 3.4.11, the docstring may appear after leading declare forms, and a string
+is only a docstring when a declare form or another body form follows it.
 Note: The parser represents unqualified symbols as plain strings (no colon), so a bare
 symbol as the first body form (e.g., a variable reference) will pass (stringp ...) here.
 This is an accepted limitation: such patterns are rare in practice and the rule layer
 should not flag something it cannot confirm is truly missing a docstring."
-  (and (consp body)
-       (stringp (first body))
-       (consp (rest body))))
+  (and (base:body-docstring body) t))
 
 (defun options-have-documentation-p (options)
   "Return T if OPTIONS list contains a (:documentation \"string\") entry."
@@ -157,7 +156,8 @@ should not flag something it cannot confirm is truly missing a docstring."
 
 (defun has-docstring-p (expr)
   "Return T if EXPR (a definition form) has a docstring.
-For defun/defmacro/deftype: first form after lambda list is a string AND more body forms follow.
+For defun/defmacro/deftype: a string after the lambda list and any leading declare forms,
+followed by at least one more form.
 For defgeneric/defclass/define-condition: body options contain (:documentation \"string\").
 For defmethod: always returns T (not checked).
 Returns NIL for non-definition forms or definitions without docstrings."

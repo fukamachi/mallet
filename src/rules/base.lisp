@@ -20,6 +20,7 @@
            #:disable-rule
            #:symbol-name-from-string
            #:symbol-matches-p
+           #:body-docstring
            #:keyword-symbol-string-p
            #:coalton-form-p
            #:check-text
@@ -306,6 +307,16 @@ This :around method:
        (or (eq (first form) 'declare)
            (and (stringp (first form))
                 (string-equal (symbol-name-from-string (first form)) "DECLARE")))))
+
+(defun body-docstring (body)
+  "Return the docstring in BODY, the forms following a lambda list, or NIL.
+Per CLHS 3.4.11, the docstring may appear among the leading declare forms, and a
+string is only a docstring when a declare form or another body form follows it."
+  (let ((body (member-if-not #'declare-form-p body)))
+    (when (and (consp body)
+               (stringp (first body))
+               (consp (rest body)))
+      (first body))))
 
 (defun mallet-suppress-declaration-p (decl-head)
   "Check if DECL-HEAD represents a mallet:suppress declaration."

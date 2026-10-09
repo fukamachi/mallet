@@ -284,21 +284,20 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
              position-map)
 
     ;; Detect docstring position and span (file-relative)
-    ;; Docstring is right after lambda-list in defun/defmethod/defmacro
+    ;; Docstring follows the lambda-list (and any leading declares) in defun/defmethod/defmacro
     (let ((docstring-start-line nil)
           (docstring-end-line nil))
-      (when (has-docstring-p expr)
-        ;; Find the docstring in position-map
-        (let ((docstring (get-docstring expr)))
-          (when (stringp docstring)
-            (maphash (lambda (k v)
-                       (when (and (stringp k)
-                                  (string= k docstring))
-                         (setf docstring-start-line (car v))
-                         ;; Calculate end line by counting newlines in docstring
-                         (let ((newline-count (count #\Newline docstring)))
-                           (setf docstring-end-line (+ docstring-start-line newline-count)))))
-                     position-map))))
+      ;; Find the docstring in position-map
+      (let ((docstring (get-docstring expr)))
+        (when docstring
+          (maphash (lambda (k v)
+                     (when (and (stringp k)
+                                (string= k docstring))
+                       (setf docstring-start-line (car v))
+                       ;; Calculate end line by counting newlines in docstring
+                       (let ((newline-count (count #\Newline docstring)))
+                         (setf docstring-end-line (+ docstring-start-line newline-count)))))
+                   position-map)))
 
       ;; Find block comment ranges and disabled reader conditional lines (form-relative indices)
       (values max-line
@@ -432,52 +431,23 @@ Flags defun, defmethod, and defmacro forms whose body exceeds :max lines
     (t (or (eq-subexpr-p needle (car haystack))
            (eq-subexpr-p needle (cdr haystack))))))
 
-(defun has-docstring-p (expr)
-  "Check if function definition EXPR has a docstring."
-  (when (consp expr)
-    (let ((head (first expr)))
-      (cond
-        ;; defun/defmacro: (defun name lambda-list [docstring] . body)
-        ((or (base:symbol-matches-p head "DEFUN")
-             (base:symbol-matches-p head "DEFMACRO"))
-         (and (consp (cdddr expr))
-              (stringp (fourth expr))))
-
-        ;; defmethod: (defmethod name [qualifiers] lambda-list [docstring] . body)
-        ((base:symbol-matches-p head "DEFMETHOD")
-         ;; Skip past name and qualifiers to find lambda-list
-         (let ((rest (cddr expr)))
-           ;; Skip qualifiers
-           (loop while (and rest (not (consp (first rest))))
-                 do (setf rest (cdr rest)))
-           ;; Now rest starts with lambda-list, check for docstring after
-           (and (consp (cdr rest))
-                (stringp (second rest)))))
-
-        (t nil)))))
-
 (defun get-docstring (expr)
   "Extract docstring from function definition EXPR, or nil if none."
   (when (consp expr)
     (let ((head (first expr)))
       (cond
-        ;; defun/defmacro: (defun name lambda-list [docstring] . body)
+        ;; defun/defmacro: (defun name lambda-list . body)
         ((or (base:symbol-matches-p head "DEFUN")
              (base:symbol-matches-p head "DEFMACRO"))
-         (when (and (consp (cdddr expr))
-                    (stringp (fourth expr)))
-           (fourth expr)))
+         (base:body-docstring (cdddr expr)))
 
-        ;; defmethod: (defmethod name [qualifiers] lambda-list [docstring] . body)
+        ;; defmethod: (defmethod name [qualifiers] lambda-list . body)
         ((base:symbol-matches-p head "DEFMETHOD")
          (let ((rest (cddr expr)))
            ;; Skip qualifiers
            (loop while (and rest (not (consp (first rest))))
                  do (setf rest (cdr rest)))
-           ;; Check for docstring after lambda-list
-           (when (and (consp (cdr rest))
-                      (stringp (second rest)))
-             (second rest))))
+           (base:body-docstring (cdr rest))))
 
         (t nil)))))
 
