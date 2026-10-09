@@ -25,9 +25,12 @@ Rules must report only definite, unambiguous issues. No subjective style prefere
 # FASL cache isolation (use ASDF_OUTPUT_TRANSLATIONS, NOT XDG_CACHE_HOME — see critical-rules.md)
 _cache="$(pwd)/.cache"
 _aot='(:output-translations (t ("'"$_cache"'/" :implementation)) :ignore-inherited-configuration)'
+# rove finds a system's tests only when its FASLs are under asdf:*user-cache*;
+# without this, test-system silently runs 0 tests
+_uc='(setf asdf:*user-cache* (uiop:subpathname* (uiop:getcwd) (format nil ".cache/~A/" (uiop:implementation-identifier))))'
 
 ASDF_OUTPUT_TRANSLATIONS="$_aot" qlot exec sbcl --noinform --non-interactive \
-  --eval '(asdf:test-system "mallet")'        # Run all tests
+  --eval "$_uc" --eval '(asdf:test-system "mallet")'  # Run all tests
 ASDF_OUTPUT_TRANSLATIONS="$_aot" qlot exec sbcl --noinform --non-interactive \
   --eval '(asdf:load-system "mallet/tests")' \
   --eval '(rove:run-suite :mallet/tests/rules/<name>)'  # Run specific test suite
