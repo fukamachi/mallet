@@ -59,6 +59,41 @@
     (ok (null (check-missing-docstring
                "(defvar *x* 42)")))))
 
+;;; Docstrings interleaved with declarations (CLHS 3.4.11)
+
+(deftest missing-docstring-declarations
+  (testing "defun with docstring after declare is not flagged"
+    (ok (null (check-missing-docstring
+               "(defun foo () (declare (optimize speed)) \"Doc.\" 42)"))))
+
+  (testing "defun with docstring after multiple declares is not flagged"
+    (ok (null (check-missing-docstring
+               "(defun foo (x) (declare (ignore x)) (declare (optimize speed)) \"Doc.\" 42)"))))
+
+  (testing "defun with docstring followed only by declare is not flagged"
+    (ok (null (check-missing-docstring
+               "(defun foo () \"Doc.\" (declare (optimize speed)))"))))
+
+  (testing "defmacro with docstring after declare is not flagged"
+    (ok (null (check-missing-docstring
+               "(defmacro foo (x) (declare (ignorable x)) \"Doc.\" x)"))))
+
+  (testing "deftype with docstring after declare is not flagged"
+    (ok (null (check-missing-docstring
+               "(deftype foo () (declare (optimize speed)) \"Doc.\" 'integer)"))))
+
+  (testing "defun whose last form is a string after declare is flagged (return value)"
+    (let ((violations (check-missing-docstring
+                       "(defun foo () (declare (optimize speed)) \"value\")")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :missing-docstring))))
+
+  (testing "defun with only declarations is flagged"
+    (let ((violations (check-missing-docstring
+                       "(defun foo () (declare (optimize speed)) 42)")))
+      (ok (= (length violations) 1))
+      (ok (eq (violation:violation-rule (first violations)) :missing-docstring)))))
+
 ;;; Invalid cases (violations expected)
 
 (deftest missing-docstring-invalid

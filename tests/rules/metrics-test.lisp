@@ -159,6 +159,35 @@
       ;; 71 lines, max 75 - should not violate
       (ok (null violations)))))
 
+(defun function-length-of (code)
+  "Return the length reported by function-length-rule for the first form in CODE."
+  (let* ((rule (make-instance 'rules:function-length-rule :max 0))
+         (form (first (parser:parse-forms code #P"test.lisp")))
+         (violations (base:check-form rule form #P"test.lisp")))
+    (first (message-integers (violation:violation-message (first violations))))))
+
+(deftest function-length-docstring-after-declare
+  (testing "Docstring following a declare form is excluded"
+    (ok (= 3 (function-length-of "(defun foo (x)
+  (declare (type fixnum x))
+  \"Doc.\"
+  (+ x 1))"))))
+
+  (testing "defmethod docstring following a declare form is excluded"
+    (ok (= 3 (function-length-of "(defmethod foo ((x integer))
+  (declare (ignorable x))
+  \"Doc.\"
+  (+ x 1))"))))
+
+  (testing "Sole string body is the return value, not a docstring"
+    (ok (= 2 (function-length-of "(defun foo ()
+  \"value\")"))))
+
+  (testing "String after declare as the last form is the return value"
+    (ok (= 3 (function-length-of "(defun foo ()
+  (declare (optimize speed))
+  \"value\")")))))
+
 ;;; Cyclomatic-complexity tests
 
 (defun test-complexity (code expected-complexity &optional (max nil) (variant :standard))
@@ -561,8 +590,8 @@
                    :min-lines 1)))
       (ok (not (null result)))
       (ok (= 3 (getf result :comment-lines)))
-      ;; ratio = 3/(3+1) = 0.75
-      (ok (< (abs (- (getf result :ratio) 0.75d0)) 0.001d0)))))
+      ;; ratio = 3/(3+2) = 0.6 (the trailing nil is code, not a docstring)
+      (ok (< (abs (- (getf result :ratio) 0.6d0)) 0.001d0)))))
 
 (deftest comment-ratio-mixed
   (testing "Function with mixed comments and code"
@@ -637,6 +666,19 @@
       (ok (not (null result)))
       ;; 3 docstring lines counted as comments
       (ok (= 3 (getf result :comment-lines)))
+      (ok (= 4 (getf result :code-lines))))))
+
+(deftest comment-ratio-docstring-after-declare-included
+  (testing "Docstring following a declare form is counted as a comment when included"
+    (let ((result (test-comment-ratio
+                   "(defun foo (x)
+  (declare (type fixnum x))
+  \"This is a docstring.\"
+  (print x)
+  (+ x 1))"
+                   :include-docstrings t)))
+      (ok (not (null result)))
+      (ok (= 1 (getf result :comment-lines)))
       (ok (= 4 (getf result :code-lines))))))
 
 (deftest comment-ratio-block-comments

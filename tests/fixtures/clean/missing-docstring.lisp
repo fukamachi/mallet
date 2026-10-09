@@ -32,3 +32,9 @@
 (define-condition app-error (error)
   ()
   (:documentation "Base class for application errors."))
+
+;; docstring may follow declarations (CLHS 3.4.11)
+(defun scale (x)
+  (declare (type fixnum x))
+  "Double X."
+  (* x 2))
